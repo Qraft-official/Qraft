@@ -1,0 +1,112 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+:root {
+  --bg: #000000;
+  --panel: #15202b;
+  --line: #1f2937;
+  --purple: #a855f7;
+  --lime: #ccff00;
+  --muted: #8b98a5;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-aha: var(--lime);
+  --color-neon: var(--purple);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-sans-jp), var(--font-geist-sans), ui-sans-serif, system-ui;
+  --font-mono: var(--font-geist-mono), ui-monospace;
+}
+
+html,
+body {
+  background: #000;
+  color: #e7e9ea;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+.katex {
+  color: #f8fafc;
+  font-size: 1.05em;
+}
+
+.aha-scroll::-webkit-scrollbar {
+  height: 0;
+  width: 0;
+}
+
+.paper-grid {
+  background-image:
+    linear-gradient(rgba(168, 85, 247, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(168, 85, 247, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.glow-lime {
+  box-shadow: 0 0 24px rgba(204, 255, 0, 0.35);
+}
+
+.glow-purple {
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.4);
+}
+
+.safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.aha-mathfield {
+  display: block;
+  box-sizing: border-box;
+  border: 1px solid #1f2937;
+  border-radius: 0.75rem;
+  background: #15202b;
+  color: #f8fafc;
+  font-size: 1.35rem;
+  padding: 0.75rem 0.85rem;
+  outline: none;
+  --hue: 270;
+  --contains-highlight-background-color: rgba(168, 85, 247, 0.25);
+}
+
+.aha-mathfield-visual {
+  font-size: 1.65rem;
+  line-height: 1.6;
+  min-height: 10rem;
+}
+
+.aha-mathfield-visual::part(virtual-keyboard-toggle) {
+  display: none;
+}
+
+.aha-ml-kb {
+  position: relative;
+  width: 100%;
+  min-height: 12rem;
+  --keyboard-background: #151c24;
+  --keyboard-background2: #1c2732;
+  --keycap-background: #2f3d4a;
+  --keycap-background-hover: #3d4d5c;
+  --keycap-background-active: #a855f7;
+  --keycap-text: #f8fafc;
+  --keyboard-text: #e7e9ea;
+  --keycap-shift-text: #ccff00;
+  --keyboard-border: #1f2937;
+}
+
+.aha-ml-kb .ML__keyboard,
+.aha-ml-kb math-virtual-keyboard {
+  position: relative !important;
+  inset: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-shadow: none !important;
+  z-index: 1 !important;
+}

@@ -4,6 +4,7 @@ import { PREMIUM_PERKS, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import { Crown, X } from "lucide-react";
+import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
 
 export function PremiumModal() {
   const {
@@ -12,7 +13,6 @@ export function PremiumModal() {
     hasPremium,
     isDeveloper,
     subscribed,
-    subscribe,
     unsubscribe,
   } = useApp();
 
@@ -82,12 +82,9 @@ export function PremiumModal() {
             </div>
 
             {!hasPremium && (
-              <button
-                onClick={subscribe}
-                className="mt-5 w-full rounded-full bg-amber-400 py-3 text-sm font-black text-black"
-              >
-                ¥{PREMIUM_PRICE_JPY}/月で加入する
-              </button>
+              <div className="mt-5">
+                <PremiumCheckoutButton />
+              </div>
             )}
             {hasPremium && !isDeveloper && subscribed && (
               <button
@@ -110,7 +107,7 @@ export function PremiumModal() {
 }
 
 export function PaywallModal() {
-  const { paywallOpen, paywallReason, closePaywall, openPremium, subscribe, isDeveloper } =
+  const { paywallOpen, paywallReason, closePaywall, openPremium, isDeveloper } =
     useApp();
 
   return (
@@ -137,12 +134,7 @@ export function PaywallModal() {
               <p className="mt-3 text-xs text-aha">開発者は無料で利用できます。</p>
             ) : (
               <div className="mt-4 grid gap-2">
-                <button
-                  onClick={subscribe}
-                  className="rounded-full bg-amber-400 py-3 text-sm font-black text-black"
-                >
-                  ¥{PREMIUM_PRICE_JPY}/月で解除する
-                </button>
+                <PremiumCheckoutButton label="プレミアムプランに登録する" />
                 <button
                   onClick={() => {
                     closePaywall();

@@ -9,6 +9,7 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import { useMemo, useState } from "react";
+import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
 type Tab = "posts" | "solutions" | "analytics" | "titles";
@@ -73,6 +74,12 @@ export default function ProfilePage() {
             >
               {hasPremium ? "Premium 特典" : "Premium ¥300"}
             </button>
+            {!hasPremium && !isDeveloper && (
+              <PremiumCheckoutButton
+                label="プレミアムプランに登録する"
+                className="rounded-full bg-amber-400 px-3 py-1.5 text-[11px] font-black text-black disabled:opacity-50"
+              />
+            )}
           </div>
         </div>
         <p className="mt-2 text-sm">{me.bio}</p>

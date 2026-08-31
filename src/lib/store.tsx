@@ -600,6 +600,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setOnboarded(false);
     setAge(null);
     setProfileHydrated(true);
+  }, []);
 
   const toggleFollow = useCallback((userId: string) => {
     if (userId === me.id) return;

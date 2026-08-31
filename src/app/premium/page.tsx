@@ -3,16 +3,49 @@
 import { PREMIUM_PERKS, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import { ArrowLeft, Crown } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
 
-export default function PremiumPage() {
-  const router = useRouter();
-  const { openPremium, hasPremium, isDeveloper, subscribe } = useApp();
+function PremiumCheckoutResult() {
+  const params = useSearchParams();
+  const { subscribe } = useApp();
+  const success = params.get("success") === "true";
+  const canceled = params.get("canceled") === "true";
 
   useEffect(() => {
+    if (success) subscribe();
+  }, [success, subscribe]);
+
+  if (success) {
+    return (
+      <div className="mb-4 rounded-2xl border border-aha/40 bg-aha/10 px-4 py-3">
+        <p className="text-sm font-black text-aha">プレミアムプランへの登録が完了しました</p>
+        <p className="mt-1 text-xs text-muted">特典はすぐに利用できます。</p>
+      </div>
+    );
+  }
+  if (canceled) {
+    return (
+      <div className="mb-4 rounded-2xl border border-gray-700 bg-panel px-4 py-3">
+        <p className="text-sm font-bold text-white">決済はキャンセルされました</p>
+        <p className="mt-1 text-xs text-muted">いつでも下のボタンから再登録できます。</p>
+      </div>
+    );
+  }
+  return null;
+}
+
+function PremiumPageInner() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { openPremium, hasPremium, isDeveloper } = useApp();
+  const justSucceeded = params.get("success") === "true";
+
+  useEffect(() => {
+    if (justSucceeded) return;
     openPremium();
-  }, [openPremium]);
+  }, [openPremium, justSucceeded]);
 
   return (
     <div className="px-4 py-6">
@@ -24,6 +57,9 @@ export default function PremiumPage() {
         Qraft Premium
       </p>
       <p className="mt-1 text-sm text-muted">月額 ¥{PREMIUM_PRICE_JPY}</p>
+      <div className="mt-4">
+        <PremiumCheckoutResult />
+      </div>
       {isDeveloper && (
         <p className="mt-3 text-xs font-bold text-aha">開発者アカウントは全機能無料です。</p>
       )}
@@ -37,14 +73,23 @@ export default function PremiumPage() {
           </div>
         ))}
       </div>
-      {!hasPremium && (
-        <button
-          onClick={subscribe}
-          className="mt-6 w-full rounded-full bg-amber-400 py-3 text-sm font-black text-black"
-        >
-          ¥{PREMIUM_PRICE_JPY}/月で加入
-        </button>
+      {!hasPremium && !isDeveloper && (
+        <div className="mt-6">
+          <PremiumCheckoutButton />
+        </div>
       )}
     </div>
+  );
+}
+
+export default function PremiumPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="px-4 py-10 text-sm text-muted">読み込み中…</div>
+      }
+    >
+      <PremiumPageInner />
+    </Suspense>
   );
 }

@@ -65,7 +65,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between px-3 py-3">
           <span className="w-8" />
           <h1 className="text-lg font-black tracking-tight">
-            Aha!<span className="ml-1 text-aha">アハ！</span>
+            Qraft<span className="ml-1 text-aha">クラフト</span>
           </h1>
           <button
             onClick={openPremium}
@@ -81,7 +81,7 @@ export default function HomePage() {
               key={t.id}
               onClick={() => {
                 if (t.id === "lounge" && !hasPremium) {
-                  openPaywall("プライベートコミュニティは Aha! Premium（月額¥300）限定です。");
+                  openPaywall("プライベートコミュニティは Qraft Premium（月額¥300）限定です。");
                   return;
                 }
                 setTab(t.id);

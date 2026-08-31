@@ -50,7 +50,7 @@ export const OFFICIAL_BANK: {
   },
   {
     subject: "chemistry",
-    title: "平衡のアハ",
+    title: "平衡のQraft",
     text: "反応 $2\\mathrm{SO}_2 + \\mathrm{O}_2 \\rightleftharpoons 2\\mathrm{SO}_3$ で $K_p=4.0$ (圧力は atm)。\n\n初期が $\\mathrm{SO}_2:2.0,\\;\\mathrm{O}_2:1.0,\\;\\mathrm{SO}_3:0$ のとき平衡分圧を求めよ。温度一定、体積一定。",
   },
 ];

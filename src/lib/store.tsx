@@ -15,7 +15,10 @@ import {
   ensureProfile,
   formatAuthError,
   handleFromUser,
+  fetchLearningProfile,
+  saveLearningProfile,
   sessionUserFields,
+  tiersFromProfile,
 } from "./auth";
 import { ME_ID, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
 import { isVerifiedCreator, LOUNGE_POSTS } from "./premium";
@@ -80,7 +83,7 @@ type Store = {
   sprintUnlocked: boolean;
   composer: Composer;
   activities: ActivityItem[];
-  completeOnboarding: (tiers: Tiers) => void;
+  completeOnboarding: (input: { age: number; tiers: Tiers }) => Promise<{ error?: string }>;
   toggleFollow: (userId: string) => void;
   toggleLike: (postId: string) => void;
   toggleRepost: (postId: string) => void;
@@ -102,6 +105,8 @@ type Store = {
   officialPost: Post;
   community: Post[];
   updateProfile: (patch: ProfilePatch) => void;
+  updateLearningSettings: (input: { age: number; tiers: Tiers }) => Promise<{ error?: string }>;
+  profileHydrated: boolean;
   openComposer: (next: Exclude<Composer, { open: false }>) => void;
   closeComposer: () => void;
   userOf: (id: string) => User;
@@ -155,8 +160,10 @@ const emptyComposer: Composer = { open: false };
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
+  const [profileHydrated, setProfileHydrated] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [tiers, setTiers] = useState<Tiers>(USER_MAP[ME_ID].tiers);
+  const [age, setAge] = useState<number | null>(null);
   const [follows, setFollows] = useState<string[]>(INITIAL_FOLLOWS);
   const [likes, setLikes] = useState<string[]>([]);
   const [reposts, setReposts] = useState<string[]>([]);
@@ -184,7 +191,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const dayId = getSprintDayId();
-    setOnboarded(load(STORAGE_KEYS.onboarded, false));
     setTiers(load(STORAGE_KEYS.tiers, USER_MAP[ME_ID].tiers));
     setFollows(load(STORAGE_KEYS.follows, INITIAL_FOLLOWS));
     setLikes(load(STORAGE_KEYS.likes, [] as string[]));
@@ -224,16 +230,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } else {
         setAuthenticated(false);
         setIsAdmin(false);
+        setOnboarded(false);
+        setProfileHydrated(true);
       }
     };
 
-    const afterSignIn = (user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null }) => {
+    const hydrateLearning = (user: {
+      id: string;
+      email?: string | null;
+      user_metadata?: Record<string, unknown> | null;
+    }) => {
       window.setTimeout(() => {
-        void ensureProfile(user);
-        void checkIsAdmin().then((admin) => {
+        void (async () => {
+          await ensureProfile(user);
+          const { data } = await fetchLearningProfile(user.id);
+          if (cancelled) return;
+          if (data) {
+            setOnboarded(!!data.onboarded);
+            setTiers(tiersFromProfile(data));
+            setAge(typeof data.age === "number" ? data.age : null);
+            setProfile((p) => ({
+              ...p,
+              ...(data.name ? { name: data.name } : {}),
+              ...(data.handle ? { handle: data.handle } : {}),
+            }));
+          } else {
+            setOnboarded(false);
+          }
+          setProfileHydrated(true);
+          const admin = await checkIsAdmin();
           if (!cancelled) setIsAdmin(admin);
-        });
+        })();
       }, 0);
+    };
+
+    const afterSignIn = (user: {
+      id: string;
+      email?: string | null;
+      user_metadata?: Record<string, unknown> | null;
+    }) => {
+      setProfileHydrated(false);
+      hydrateLearning(user);
     };
 
     void (async () => {
@@ -246,6 +283,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           afterSignIn(user);
         } else {
           setAuthenticated(false);
+          setProfileHydrated(true);
         }
         const remote = await fetchProblems();
         if (cancelled) return;
@@ -364,13 +402,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: supabaseUid ?? ME_ID,
       accent: accentColor || base.accent,
       tiers,
+      age: profile.age ?? age ?? base.age ?? null,
       followingCount: follows.length,
       followerCount: INITIAL_FOLLOWERS.length,
       titles,
       activeTitles,
       verified: premium || isVerifiedCreator(base.id) || !!base.verified,
     };
-  }, [tiers, follows.length, profile, subscribed, accentColor, supabaseUid, remoteUsers, isDeveloper]);
+  }, [tiers, age, follows.length, profile, subscribed, accentColor, supabaseUid, remoteUsers, isDeveloper]);
 
   const userOf = useCallback(
     (id: string) => {
@@ -439,10 +478,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [catalog],
   );
 
-  const completeOnboarding = useCallback((next: Tiers) => {
-    setTiers(next);
-    setOnboarded(true);
-  }, []);
+  const completeOnboarding = useCallback(
+    async (input: { age: number; tiers: Tiers }) => {
+      setAge(input.age);
+      setTiers(input.tiers);
+      if (supabaseUid) {
+        const { error } = await saveLearningProfile(supabaseUid, { ...input, onboarded: true });
+        if (error) return { error };
+      }
+      setOnboarded(true);
+      return {};
+    },
+    [supabaseUid],
+  );
+
+  const updateLearningSettings = useCallback(
+    async (input: { age: number; tiers: Tiers }) => {
+      setAge(input.age);
+      setTiers(input.tiers);
+      setOnboarded(true);
+      if (!supabaseUid) return {};
+      const { error } = await saveLearningProfile(supabaseUid, { ...input, onboarded: true });
+      return error ? { error } : {};
+    },
+    [supabaseUid],
+  );
 
   const signUpWithEmail = useCallback(
     async (input: {
@@ -472,6 +532,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setSupabaseUid(data.user.id);
           setSessionEmail(data.user.email ?? null);
           setAuthenticated(true);
+          setOnboarded(false);
+          setProfileHydrated(true);
           setProfile((p) => ({
             ...p,
             ...(input.name ? { name: input.name.trim() } : {}),
@@ -504,7 +566,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(fields.handle ? { handle: fields.handle } : {}),
         }));
         window.setTimeout(() => {
+          setProfileHydrated(false);
           void ensureProfile(data.user);
+          void fetchLearningProfile(data.user.id).then(({ data: row }) => {
+            if (row) {
+              setOnboarded(!!row.onboarded);
+              setTiers(tiersFromProfile(row));
+              setAge(typeof row.age === "number" ? row.age : null);
+            } else {
+              setOnboarded(false);
+            }
+            setProfileHydrated(true);
+          });
           void checkIsAdmin().then(setIsAdmin);
         }, 0);
       }
@@ -524,7 +597,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSessionEmail(null);
     setIsAdmin(false);
     setAuthenticated(false);
-  }, []);
+    setOnboarded(false);
+    setAge(null);
+    setProfileHydrated(true);
 
   const toggleFollow = useCallback((userId: string) => {
     if (userId === me.id) return;
@@ -721,7 +796,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const openPremium = useCallback(() => setPremiumOpen(true), []);
   const closePremium = useCallback(() => setPremiumOpen(false), []);
   const openPaywall = useCallback((reason?: string) => {
-    setPaywallReason(reason || "この機能は Aha! Premium（月額¥300）限定です");
+    setPaywallReason(reason || "この機能は Qraft Premium（月額¥300）限定です");
     setPaywallOpen(true);
   }, []);
   const closePaywall = useCallback(() => setPaywallOpen(false), []);
@@ -774,6 +849,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: Store = {
     ready,
     onboarded,
+    profileHydrated,
     authenticated,
     signUpWithEmail,
     signInWithEmail,
@@ -799,6 +875,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     composer,
     activities,
     completeOnboarding,
+    updateLearningSettings,
     toggleFollow,
     toggleLike,
     toggleRepost,

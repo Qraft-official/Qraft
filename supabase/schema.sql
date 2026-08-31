@@ -1,4 +1,4 @@
--- Aha! problems + profiles
+-- Qraft problems + profiles
 -- Run this in the Supabase SQL Editor (Dashboard → SQL).
 -- Enables Auth-backed posting, public timeline reads, and the 21:00 sprint flag.
 
@@ -6,6 +6,11 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   name text not null default '',
   handle text unique,
+  age integer check (age is null or age >= 0),
+  onboarded boolean not null default false,
+  math_tier smallint not null default 1 check (math_tier between 1 and 5),
+  physics_tier smallint not null default 1 check (physics_tier between 1 and 5),
+  chemistry_tier smallint not null default 1 check (chemistry_tier between 1 and 5),
   created_at timestamptz not null default now()
 );
 

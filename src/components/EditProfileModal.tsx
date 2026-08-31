@@ -8,11 +8,13 @@ import {
   PREMIUM_TITLES,
   TITLE_CATALOG,
 } from "@/lib/constants";
+import type { Tiers } from "@/lib/types";
 import { isImageSrc, useApp } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ImageUploadSection } from "./ImageUploadSection";
+import { AgePicker, SubjectLevelPickers } from "./LearningSettings";
 import { UserAvatar } from "./UserAvatar";
 
 export function EditProfileModal({
@@ -22,7 +24,7 @@ export function EditProfileModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const { me, updateProfile, hasPremium, accentColor, setAccentColor, openPaywall } = useApp();
+  const { me, updateProfile, updateLearningSettings, hasPremium, accentColor, setAccentColor, openPaywall } = useApp();
   const [name, setName] = useState(me.name);
   const [handle, setHandle] = useState(me.handle);
   const [bio, setBio] = useState(me.bio);
@@ -30,6 +32,9 @@ export function EditProfileModal({
   const [avatar, setAvatar] = useState(me.avatar);
   const [banner, setBanner] = useState(me.banner);
   const [activeTitles, setActiveTitles] = useState<string[]>(me.activeTitles);
+  const [age, setAge] = useState<number | null>(me.age);
+  const [tiers, setTiers] = useState<Tiers>(me.tiers);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -40,6 +45,9 @@ export function EditProfileModal({
     setAvatar(me.avatar);
     setBanner(me.banner);
     setActiveTitles(me.activeTitles);
+    setAge(me.age);
+    setTiers(me.tiers);
+    setSaveError("");
   }, [open, me]);
 
   const readFile = (file: File, cb: (url: string) => void) => {
@@ -121,7 +129,7 @@ export function EditProfileModal({
                   key={b}
                   onClick={() => {
                     if (!hasPremium) {
-                      openPaywall("上級バナーは Aha! Premium（月額¥300）限定です。");
+                      openPaywall("上級バナーは Qraft Premium（月額¥300）限定です。");
                       return;
                     }
                     setBanner(b);
@@ -141,7 +149,7 @@ export function EditProfileModal({
                   key={c}
                   onClick={() => {
                     if (!hasPremium) {
-                      openPaywall("アクセントカラーは Aha! Premium（月額¥300）限定です。");
+                      openPaywall("アクセントカラーは Qraft Premium（月額¥300）限定です。");
                       return;
                     }
                     setAccentColor(c);
@@ -185,7 +193,7 @@ export function EditProfileModal({
                     key={t}
                     onClick={() => {
                       if (gold && !hasPremium) {
-                        openPaywall("ゴールド称号は Aha! Premium（月額¥300）限定です。");
+                        openPaywall("ゴールド称号は Qraft Premium（月額¥300）限定です。");
                         return;
                       }
                       toggleTitle(t);
@@ -206,15 +214,28 @@ export function EditProfileModal({
             {!hasPremium && (
               <button
                 type="button"
-                onClick={() => openPaywall("限定ゴールド称号は Aha! Premium（月額¥300）です。")}
+                onClick={() => openPaywall("限定ゴールド称号は Qraft Premium（月額¥300）です。")}
                 className="mb-4 text-left text-[11px] text-amber-300"
               >
                 👑 ゴールド称号を解除する
               </button>
             )}
 
+            {saveError && <p className="mb-3 text-xs text-red-400">{saveError}</p>}
+
+            <div className="mb-4 space-y-4">
+              <p className="text-sm font-bold">学習設定</p>
+              <AgePicker age={age} onChange={setAge} />
+              <SubjectLevelPickers tiers={tiers} onChange={setTiers} />
+            </div>
+
             <button
               onClick={() => {
+                if (age === null) {
+                  setSaveError("年齢を入力してください");
+                  return;
+                }
+                setSaveError("");
                 updateProfile({
                   name: name.trim() || me.name,
                   handle: handle.trim() || me.handle,
@@ -224,8 +245,15 @@ export function EditProfileModal({
                   banner,
                   activeTitles,
                   titles: Array.from(new Set([...me.titles, ...activeTitles])),
+                  age,
                 });
-                onClose();
+                void updateLearningSettings({ age, tiers }).then((res) => {
+                  if (res.error) {
+                    setSaveError(res.error);
+                    return;
+                  }
+                  onClose();
+                });
               }}
               className="w-full rounded-full bg-white py-3 text-sm font-bold text-black"
             >

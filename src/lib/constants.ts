@@ -72,7 +72,7 @@ export const STORAGE_KEYS = {
 
 export const TITLE_CATALOG = [
   "夜21時の求道者",
-  "初回アハ達成",
+  "初回Qraft達成",
   "論理マスター",
   "計算力ゴリラ",
   "エレガント職人",
@@ -83,7 +83,7 @@ export const TITLE_CATALOG = [
 
 export const PREMIUM_TITLES = [
   "👑 ゴールド求解者",
-  "💎 プレミアムアハ",
+  "💎 プレミアムQraft",
   "🎪 限定イベント覇者",
   "🤖 AI共創者",
 ];

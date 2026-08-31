@@ -85,7 +85,7 @@ export function AuthScreen() {
         <div className="mt-8">
           <p className="text-5xl">✨</p>
           <h1 className="mt-4 text-4xl font-black tracking-tight">
-            Aha!<span className="ml-1 text-aha">アハ！</span>
+            Qraft<span className="ml-1 text-aha">クラフト</span>
           </h1>
           <p className="mt-4 text-2xl font-black leading-snug">
             いま、起きている
@@ -113,7 +113,7 @@ export function AuthScreen() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-gray-800 bg-panel px-3 py-3 text-sm text-white outline-none"
-                  placeholder="アハ太郎"
+                  placeholder="クラフト太郎"
                   autoComplete="name"
                 />
               </label>
@@ -125,7 +125,7 @@ export function AuthScreen() {
                     value={handle}
                     onChange={(e) => setHandle(e.target.value.replace(/^@/, ""))}
                     className="w-full bg-transparent py-3 text-sm text-white outline-none"
-                    placeholder="aha_taro"
+                    placeholder="qraft_taro"
                     autoComplete="username"
                   />
                 </div>

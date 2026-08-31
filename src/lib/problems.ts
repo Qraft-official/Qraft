@@ -49,12 +49,13 @@ export function fallbackUser(id: string, profile?: ProfileRow | null): User {
   return {
     ...base,
     id,
-    name: typeof profile?.name === "string" && profile.name.trim() ? profile.name.trim() : "Aha! ユーザー",
+    name: typeof profile?.name === "string" && profile.name.trim() ? profile.name.trim() : "Qraft ユーザー",
     handle,
     bio: "",
     school: "",
     titles: [],
     activeTitles: [],
+    age: null,
     verified: false,
   };
 }

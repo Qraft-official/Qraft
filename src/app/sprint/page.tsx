@@ -128,7 +128,7 @@ export default function SprintPage() {
           type="button"
           onClick={() => {
             if (!hasPremium) {
-              openPaywall("フォーカス BGM は Aha! Premium（月額¥300）限定です。");
+              openPaywall("フォーカス BGM は Qraft Premium（月額¥300）限定です。");
               return;
             }
             setBgmOn(!bgmOn);
@@ -165,7 +165,7 @@ export default function SprintPage() {
         type="button"
         onClick={() => {
           if (!hasPremium) {
-            openPaywall("フォーカス BGM は Aha! Premium（月額¥300）限定です。");
+            openPaywall("フォーカス BGM は Qraft Premium（月額¥300）限定です。");
             return;
           }
           setBgmOn(!bgmOn);

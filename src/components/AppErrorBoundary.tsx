@@ -16,7 +16,7 @@ export class AppErrorBoundary extends Component<Props, State> {
     if (!this.state.error) return this.props.children;
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center bg-black px-6 text-center">
-        <p className="text-2xl font-black text-aha">Aha!</p>
+        <p className="text-2xl font-black text-aha">Qraft</p>
         <p className="mt-3 text-sm text-muted">画面の読み込みで問題が起きました。</p>
         <p className="mt-2 max-w-sm text-[11px] text-red-400">{this.state.error}</p>
         <button

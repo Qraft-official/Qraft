@@ -1,3 +1,4 @@
+import type { Tier, Tiers } from "./types";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
@@ -27,7 +28,7 @@ export function displayNameFromUser(user: {
   const name = asText(meta.name) || asText(meta.full_name);
   if (name.trim()) return name.trim();
   const email = asText(user.email);
-  return email.split("@")[0] || "Aha! ユーザー";
+  return email.split("@")[0] || "Qraft ユーザー";
 }
 
 export function handleFromUser(user: {
@@ -73,6 +74,55 @@ export async function ensureProfile(user: {
   } catch (err) {
     console.warn("ensureProfile failed:", err);
   }
+}
+
+export type LearningProfile = {
+  id: string;
+  name: string;
+  handle: string | null;
+  age: number | null;
+  onboarded: boolean;
+  math_tier: number;
+  physics_tier: number;
+  chemistry_tier: number;
+};
+
+export function asTier(value: unknown): Tier {
+  const n = Number(value);
+  if (n >= 1 && n <= 5) return n as Tier;
+  return 1;
+}
+
+export function tiersFromProfile(row: Pick<LearningProfile, "math_tier" | "physics_tier" | "chemistry_tier">): Tiers {
+  return {
+    math: asTier(row.math_tier),
+    physics: asTier(row.physics_tier),
+    chemistry: asTier(row.chemistry_tier),
+  };
+}
+
+export async function fetchLearningProfile(userId: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,name,handle,age,onboarded,math_tier,physics_tier,chemistry_tier")
+    .eq("id", userId)
+    .maybeSingle();
+  return { data: data as LearningProfile | null, error };
+}
+
+export async function saveLearningProfile(
+  userId: string,
+  input: { age: number; tiers: Tiers; onboarded?: boolean },
+) {
+  const patch: Record<string, unknown> = {
+    age: input.age,
+    math_tier: input.tiers.math,
+    physics_tier: input.tiers.physics,
+    chemistry_tier: input.tiers.chemistry,
+  };
+  if (input.onboarded !== undefined) patch.onboarded = input.onboarded;
+  const { error } = await supabase.from("profiles").update(patch).eq("id", userId);
+  return { error: error?.message };
 }
 
 export function sessionUserFields(user: User) {

@@ -47,9 +47,12 @@ export default function ProfilePage() {
             <p className="mt-1 text-xs text-aha">{me.school}</p>
             {(hasPremium || isDeveloper) && (
               <p className="mt-1 text-[11px] font-bold text-amber-300">
-                {isDeveloper ? "開発者 · Premium 無料" : "Aha! Premium"}
+                {isDeveloper ? "開発者 · Premium 無料" : "Qraft Premium"}
               </p>
             )}
+            <p className="mt-1 text-xs text-muted">
+              {me.age !== null && me.age !== undefined ? `${me.age}歳` : "年齢未設定"}
+            </p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <button
@@ -150,7 +153,7 @@ export default function ProfilePage() {
       {tab === "analytics" && (
         <div className="px-2 py-4">
           <ProfileRadar {...me.stats} />
-          <p className="mb-2 px-2 text-xs font-bold text-muted">週間アハ出力</p>
+          <p className="mb-2 px-2 text-xs font-bold text-muted">週間アクティビティ</p>
           <div className="h-40">
             <ResponsiveContainer>
               <BarChart data={me.analytics}>
@@ -180,7 +183,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               <p className="text-[11px] text-muted">
-                2026年累計アハ {me.analytics.reduce((s, d) => s + d.aha, 0)} · 解法{" "}
+                2026年累計リアクション {me.analytics.reduce((s, d) => s + d.aha, 0)} · 解法{" "}
                 {me.analytics.reduce((s, d) => s + d.solves, 0)} · 習熟ピークは週末
               </p>
             </div>

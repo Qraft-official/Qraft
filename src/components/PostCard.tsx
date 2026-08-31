@@ -291,7 +291,7 @@ export function PostCard({
               <button
                 type="button"
                 onClick={() =>
-                  openPaywall("特別リアクションは Aha! Premium（月額¥300）限定です。")
+                  openPaywall("特別リアクションは Qraft Premium（月額¥300）限定です。")
                 }
                 className="text-[11px] text-muted"
               >
@@ -332,7 +332,7 @@ export function PostCard({
                 />
               ) : (
                 <StarRating
-                  label="アハレベル (Aha! Level)"
+                  label="Qraft レベル"
                   value={ratings[post.id]?.aha ?? 0}
                   onChange={(n) => rate(post.id, "aha", n)}
                   accent="purple"

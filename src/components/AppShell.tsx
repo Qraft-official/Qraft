@@ -12,7 +12,7 @@ import { useApp } from "@/lib/store";
 import { usePathname } from "next/navigation";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { ready, onboarded, authenticated, openComposer, accentColor } = useApp();
+  const { ready, onboarded, profileHydrated, authenticated, openComposer, accentColor } = useApp();
   const path = usePathname();
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
@@ -21,10 +21,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  if (!ready) {
+  if (!ready || (authenticated && !profileHydrated)) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-black">
-        <p className="text-2xl font-black text-aha">Aha!</p>
+        <p className="text-2xl font-black text-aha">Qraft</p>
       </div>
     );
   }

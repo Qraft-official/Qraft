@@ -37,7 +37,7 @@ export function PremiumModal() {
               <div>
                 <p className="flex items-center gap-2 text-lg font-black">
                   <Crown size={20} className="text-amber-400" />
-                  Aha! Premium
+                  Qraft Premium
                 </p>
                 <p className="mt-1 text-sm text-muted">月額 ¥{PREMIUM_PRICE_JPY} · いつでも解約可</p>
               </div>
@@ -130,7 +130,7 @@ export function PaywallModal() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-lg rounded-t-3xl border border-amber-500/40 bg-black p-5 sm:rounded-3xl"
           >
-            <p className="text-lg font-black">Aha! Premium が必要です</p>
+            <p className="text-lg font-black">Qraft Premium が必要です</p>
             <p className="mt-2 text-sm text-muted">{paywallReason}</p>
             <p className="mt-3 text-2xl font-black text-amber-300">月額 ¥{PREMIUM_PRICE_JPY}</p>
             {isDeveloper ? (

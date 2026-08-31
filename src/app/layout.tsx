@@ -22,7 +22,7 @@ const noto = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "Aha! アハ！",
+  title: "Qraft",
   description: "STEM creators のためのドパミン SNS",
 };
 

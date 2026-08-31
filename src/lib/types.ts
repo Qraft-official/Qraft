@@ -16,6 +16,7 @@ export type User = {
   banner: string;
   accent: string;
   tiers: Tiers;
+  age: number | null;
   stats: { calc: number; insight: number; proof: number };
   followerCount: number;
   followingCount: number;
@@ -28,7 +29,7 @@ export type User = {
 export type ProfilePatch = Partial<
   Pick<
     User,
-    "name" | "handle" | "bio" | "school" | "avatar" | "banner" | "titles" | "activeTitles"
+    "name" | "handle" | "bio" | "school" | "avatar" | "banner" | "titles" | "activeTitles" | "age"
   >
 >;
 

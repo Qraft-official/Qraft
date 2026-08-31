@@ -59,7 +59,7 @@ export default function AuthCallbackPage() {
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-black px-6">
-      <p className="text-2xl font-black text-aha">Aha!</p>
+      <p className="text-2xl font-black text-aha">Qraft</p>
       <p className="mt-3 text-center text-sm text-muted">
         {error || "ログインを完了しています…"}
       </p>

@@ -21,7 +21,7 @@ export default function PremiumPage() {
       </button>
       <p className="flex items-center gap-2 text-2xl font-black">
         <Crown className="text-amber-400" size={22} />
-        Aha! Premium
+        Qraft Premium
       </p>
       <p className="mt-1 text-sm text-muted">月額 ¥{PREMIUM_PRICE_JPY}</p>
       {isDeveloper && (

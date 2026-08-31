@@ -22,7 +22,7 @@ import {
 } from "./auth";
 import { isValidHandle, sanitizeHandleInput } from "./handle";
 import { ME_ID, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
-import { isVerifiedCreator, LOUNGE_POSTS } from "./premium";
+import { isVerifiedCreator, isComplimentaryPremiumAccount, LOUNGE_POSTS } from "./premium";
 import {
   communityForDay,
   INITIAL_FOLLOWERS,
@@ -400,13 +400,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (sessionEmail && emails.includes(sessionEmail.toLowerCase())) return true;
     return false;
   }, [isAdmin, sessionEmail]);
-  const hasPremium = isDeveloper || subscribed;
+  const complimentaryPremium = useMemo(() => {
+    const base = supabaseUid
+      ? (remoteUsers[supabaseUid] ?? fallbackUser(supabaseUid))
+      : USER_MAP[ME_ID];
+    return isComplimentaryPremiumAccount({
+      id: supabaseUid ?? ME_ID,
+      handle: typeof profile.handle === "string" ? profile.handle : base.handle,
+      name: typeof profile.name === "string" ? profile.name : base.name,
+      email: sessionEmail,
+    });
+  }, [supabaseUid, remoteUsers, profile.handle, profile.name, sessionEmail]);
+  const hasPremium = isDeveloper || subscribed || complimentaryPremium;
 
   const me: User = useMemo(() => {
     const base = supabaseUid
       ? (remoteUsers[supabaseUid] ?? fallbackUser(supabaseUid))
       : USER_MAP[ME_ID];
-    const premium = isDeveloper || subscribed;
+    const premium = hasPremium;
     const titles = Array.from(
       new Set([
         ...(Array.isArray(profile.titles) ? profile.titles : base.titles),
@@ -431,7 +442,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       activeTitles,
       verified: premium || isVerifiedCreator(base.id) || !!base.verified,
     };
-  }, [tiers, age, follows.length, profile, subscribed, accentColor, supabaseUid, remoteUsers, isDeveloper]);
+  }, [tiers, age, follows.length, profile, hasPremium, accentColor, supabaseUid, remoteUsers]);
 
   const userOf = useCallback(
     (id: string) => {
@@ -864,7 +875,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (userId: string) => {
       const u = userId === me.id ? me : USER_MAP[userId] ?? remoteUsers[userId];
       if (!u) return false;
-      if (userId === me.id && isDeveloper) return true;
+      if (isComplimentaryPremiumAccount(u)) return true;
       if (isVerifiedCreator(u.id)) return true;
       if (userId === me.id && hasPremium) return true;
       return !!u.verified;

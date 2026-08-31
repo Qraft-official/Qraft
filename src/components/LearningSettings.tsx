@@ -18,9 +18,9 @@ export function AgePicker({
   onChange,
 }: {
   age: number | null;
-  onChange: (n: number) => void;
+  onChange: (n: number | null) => void;
 }) {
-  const value = age ?? 16;
+  const sliderValue = Math.min(100, age ?? 0);
   return (
     <div className="rounded-3xl border border-gray-800 bg-panel p-4">
       <p className="text-lg font-bold">年齢</p>
@@ -32,10 +32,15 @@ export function AgePicker({
           type="number"
           min={0}
           max={130}
-          value={age ?? ""}
-          placeholder="例: 16"
+          value={age === null ? "" : age}
+          placeholder="任意"
           onChange={(e) => {
-            const n = Number(e.target.value);
+            const raw = e.target.value;
+            if (raw === "") {
+              onChange(null);
+              return;
+            }
+            const n = Number(raw);
             if (Number.isFinite(n)) onChange(Math.max(0, Math.min(130, Math.floor(n))));
           }}
           className="w-24 rounded-xl border border-gray-800 bg-black px-3 py-2 text-lg font-black text-white outline-none"
@@ -46,7 +51,7 @@ export function AgePicker({
         type="range"
         min={0}
         max={100}
-        value={Math.min(100, value)}
+        value={sliderValue}
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-4 w-full accent-aha"
       />

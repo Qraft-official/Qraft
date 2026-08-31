@@ -1,4 +1,5 @@
 import {
+  COMPLIMENTARY_PREMIUM_IDENTIFIERS,
   DEV_HANDLES,
   DEV_USER_IDS,
   VERIFIED_CREATOR_IDS,
@@ -9,6 +10,41 @@ export function isDeveloperAccount(id?: string, handle?: string) {
   if (id && DEV_USER_IDS.includes(id as (typeof DEV_USER_IDS)[number])) return true;
   if (handle && DEV_HANDLES.includes(handle as (typeof DEV_HANDLES)[number])) return true;
   return false;
+}
+
+function normalizeAccountToken(raw?: string | null) {
+  return (raw ?? "").trim().toLowerCase().replace(/^@+/, "");
+}
+
+function tokenIsComplimentaryPremium(token: string) {
+  if (!token) return false;
+  const local = token.includes("@") ? token.slice(0, token.indexOf("@")) : token;
+  return COMPLIMENTARY_PREMIUM_IDENTIFIERS.some((id) => token === id || local === id);
+}
+
+export type PremiumIdentity = {
+  id?: string | null;
+  handle?: string | null;
+  name?: string | null;
+  email?: string | null;
+};
+
+/** id / ユーザー名 / handle / メールが qrafter なら Stripe 契約なしで Premium */
+export function isComplimentaryPremiumAccount(identity: PremiumIdentity) {
+  return [identity.id, identity.handle, identity.name, identity.email]
+    .map(normalizeAccountToken)
+    .some(tokenIsComplimentaryPremium);
+}
+
+export function accountHasPremium(identity: PremiumIdentity & {
+  subscribed?: boolean;
+  isDeveloper?: boolean;
+}) {
+  return Boolean(
+    identity.isDeveloper ||
+      identity.subscribed ||
+      isComplimentaryPremiumAccount(identity),
+  );
 }
 
 export function isVerifiedCreator(id: string) {

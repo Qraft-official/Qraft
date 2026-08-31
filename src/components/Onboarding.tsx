@@ -2,6 +2,7 @@
 
 import { AgePicker, SubjectLevelPickers } from "@/components/LearningSettings";
 import { GuardianConsentCheckbox } from "@/components/GuardianConsentCheckbox";
+import { ageForSave, needsGuardianConsent } from "@/lib/guardian-consent";
 import { useApp } from "@/lib/store";
 import type { Tiers } from "@/lib/types";
 import { motion } from "framer-motion";
@@ -30,24 +31,31 @@ export function Onboarding() {
 
         <div className="mt-8 space-y-6">
           <AgePicker age={age} onChange={setAge} />
-          <GuardianConsentCheckbox
-            id="onboarding-guardian-consent"
-            checked={consent}
-            onChange={setConsent}
-          />
+          {needsGuardianConsent(age) && (
+            <GuardianConsentCheckbox
+              id="onboarding-guardian-consent"
+              checked={consent}
+              onChange={setConsent}
+            />
+          )}
           <SubjectLevelPickers tiers={tiers} onChange={setTiers} />
         </div>
 
         {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
 
         <motion.button
+          type="button"
           whileTap={{ scale: 0.97 }}
-          disabled={age === null || !consent || busy}
+          disabled={busy || (needsGuardianConsent(age) && !consent)}
           onClick={() => {
-            if (age === null || !consent) return;
+            if (needsGuardianConsent(age) && !consent) {
+              setError("15歳未満の方は、保護者の同意確認にチェックしてください");
+              return;
+            }
+            const nextAge = ageForSave(age);
             setBusy(true);
             setError("");
-            void completeOnboarding({ age, tiers }).then((res) => {
+            void completeOnboarding({ age: nextAge, tiers }).then((res) => {
               setBusy(false);
               if (res?.error) setError(res.error);
             });

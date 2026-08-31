@@ -10,6 +10,7 @@ import {
 } from "@/lib/constants";
 import type { Tiers } from "@/lib/types";
 import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
+import { ageForSave, needsGuardianConsent } from "@/lib/guardian-consent";
 import { isImageSrc, useApp } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -236,30 +237,30 @@ export function EditProfileModal({
             <div className="mb-4 space-y-4">
               <p className="text-sm font-bold">学習設定</p>
               <AgePicker age={age} onChange={setAge} />
-              <GuardianConsentCheckbox
-                id="edit-profile-guardian-consent"
-                checked={consent}
-                onChange={setConsent}
-              />
+              {needsGuardianConsent(age) && (
+                <GuardianConsentCheckbox
+                  id="edit-profile-guardian-consent"
+                  checked={consent}
+                  onChange={setConsent}
+                />
+              )}
               <SubjectLevelPickers tiers={tiers} onChange={setTiers} />
             </div>
 
             <button
-              disabled={!consent}
+              type="button"
+              disabled={needsGuardianConsent(age) && !consent}
               onClick={() => {
-                if (age === null) {
-                  setSaveError("年齢を入力してください");
+                if (needsGuardianConsent(age) && !consent) {
+                  setSaveError("15歳未満の方は、保護者の同意確認にチェックしてください");
                   return;
                 }
-                if (!consent) {
-                  setSaveError("保護者の同意確認にチェックしてください");
-                  return;
-                }
-                const nextHandle = sanitizeHandleInput(handle.trim());
-                if (!nextHandle || !isValidHandle(nextHandle)) {
+                const nextHandle = sanitizeHandleInput(handle.trim()) || me.handle;
+                if (nextHandle && !isValidHandle(nextHandle)) {
                   setSaveError(HANDLE_HINT);
                   return;
                 }
+                const nextAge = ageForSave(age);
                 setSaveError("");
                 updateProfile({
                   name: name.trim() || me.name,
@@ -270,9 +271,9 @@ export function EditProfileModal({
                   banner,
                   activeTitles,
                   titles: Array.from(new Set([...me.titles, ...activeTitles])),
-                  age,
+                  age: nextAge,
                 });
-                void updateLearningSettings({ age, tiers }).then((res) => {
+                void updateLearningSettings({ age: nextAge, tiers }).then((res) => {
                   if (res.error) {
                     setSaveError(res.error);
                     return;

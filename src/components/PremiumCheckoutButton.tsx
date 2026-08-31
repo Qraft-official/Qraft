@@ -17,7 +17,7 @@ export function PremiumCheckoutButton({
   const consentId = useId();
 
   return (
-    <div>
+    <div className="relative z-0" onClick={(e) => e.stopPropagation()}>
       <div className="mb-3">
         <GuardianConsentCheckbox
           id={consentId}
@@ -28,7 +28,9 @@ export function PremiumCheckoutButton({
       <button
         type="button"
         disabled={busy || !consent}
-        onClick={() => {
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
           setError("");
           setBusy(true);
           void startStripeCheckout().catch((err) => {

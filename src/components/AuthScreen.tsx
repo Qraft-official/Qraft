@@ -1,6 +1,5 @@
 "use client";
 
-import { GuardianConsentCheckbox } from "@/components/GuardianConsentCheckbox";
 import { formatAuthError } from "@/lib/auth";
 import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
 import { useApp } from "@/lib/store";
@@ -21,7 +20,6 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
-  const [consent, setConsent] = useState(false);
 
   useEffect(() => {
     try {
@@ -53,10 +51,6 @@ export function AuthScreen() {
     }
     if (mode === "signup" && handle.trim() && !isValidHandle(handle.trim())) {
       setError(HANDLE_HINT);
-      return;
-    }
-    if (mode === "signup" && !consent) {
-      setError("保護者の同意確認にチェックしてください");
       return;
     }
     setBusy(true);
@@ -185,11 +179,9 @@ export function AuthScreen() {
           </label>
 
           {mode === "signup" && (
-            <GuardianConsentCheckbox
-              id="signup-guardian-consent"
-              checked={consent}
-              onChange={setConsent}
-            />
+            <p className="text-[11px] leading-relaxed text-muted">
+              15歳未満の方は、保護者の同意を得てご利用ください。年齢は次の画面で入力します。
+            </p>
           )}
 
           {error && <p className="text-xs text-red-400">{error}</p>}
@@ -198,7 +190,7 @@ export function AuthScreen() {
           <motion.button
             whileTap={{ scale: 0.98 }}
             type="submit"
-            disabled={busy || (mode === "signup" && !consent)}
+            disabled={busy}
             className="w-full rounded-full bg-aha py-3 text-sm font-black text-black disabled:opacity-50"
           >
             {busy

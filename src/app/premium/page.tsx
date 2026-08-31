@@ -2,6 +2,7 @@
 
 import { PREMIUM_PERKS, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { ensurePremiumThanksNotification } from "@/lib/notifications";
+import { goBackFromPremium } from "@/lib/premium-navigation";
 import { useApp } from "@/lib/store";
 import { ArrowLeft, Crown } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -45,18 +46,20 @@ function PremiumCheckoutResult() {
 
 function PremiumPageInner() {
   const router = useRouter();
-  const params = useSearchParams();
-  const { openPremium, hasPremium, isDeveloper } = useApp();
-  const justSucceeded = params.get("success") === "true";
-
-  useEffect(() => {
-    if (justSucceeded) return;
-    openPremium();
-  }, [openPremium, justSucceeded]);
+  const { hasPremium, isDeveloper } = useApp();
 
   return (
     <div className="px-4 py-6">
-      <button onClick={() => router.back()} className="mb-6 text-muted">
+      <button
+        type="button"
+        aria-label="戻る"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          goBackFromPremium(router);
+        }}
+        className="relative z-20 mb-6 text-muted"
+      >
         <ArrowLeft size={20} />
       </button>
       <p className="flex items-center gap-2 text-2xl font-black">

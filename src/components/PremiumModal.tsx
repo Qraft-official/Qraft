@@ -3,7 +3,7 @@
 import { PREMIUM_PERKS, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
-import { Crown, X } from "lucide-react";
+import { ArrowLeft, Crown } from "lucide-react";
 import { FeedbackEntryButton } from "@/components/FeedbackModal";
 import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
 import { PremiumDevMessage } from "@/components/PremiumDevMessage";
@@ -35,7 +35,19 @@ export function PremiumModal() {
             onClick={(e) => e.stopPropagation()}
             className="h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-amber-500/30 bg-black p-4 sm:rounded-3xl"
           >
-            <div className="mb-4 flex items-start justify-between">
+            <div className="mb-4 flex items-start gap-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  closePremium();
+                }}
+                className="relative z-20 mt-0.5 shrink-0 text-muted"
+                aria-label="戻る"
+              >
+                <ArrowLeft size={20} />
+              </button>
               <div>
                 <p className="flex items-center gap-2 text-lg font-black">
                   <Crown size={20} className="text-amber-400" />
@@ -43,9 +55,6 @@ export function PremiumModal() {
                 </p>
                 <p className="mt-1 text-sm text-muted">月額 ¥{PREMIUM_PRICE_JPY} · いつでも解約可</p>
               </div>
-              <button onClick={closePremium} className="text-muted" aria-label="閉じる">
-                <X size={18} />
-              </button>
             </div>
 
             {isDeveloper && (

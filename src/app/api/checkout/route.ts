@@ -1,4 +1,6 @@
-import { userFromRequest } from "@/lib/api-auth";
+import { bearerTokenFromRequest, userFromRequest } from "@/lib/api-auth";
+import { isComplimentaryPremiumAccount } from "@/lib/premium";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
@@ -22,22 +24,54 @@ async function resolvePriceId(stripe: Stripe, priceOrProductId: string) {
 }
 
 export async function POST(request: Request) {
-  const secret = process.env.STRIPE_SECRET_KEY;
-  const priceEnv = process.env.STRIPE_PRICE_ID;
-  if (!secret || !priceEnv) {
-    return NextResponse.json(
-      { error: "Stripe の環境変数が未設定です（STRIPE_SECRET_KEY / STRIPE_PRICE_ID）。" },
-      { status: 500 },
-    );
-  }
+  const origin =
+    request.headers.get("origin") ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "http://localhost:3000";
 
   try {
     const user = await userFromRequest(request);
+    let handle =
+      typeof user?.user_metadata?.handle === "string" ? user.user_metadata.handle : undefined;
+    let name =
+      typeof user?.user_metadata?.name === "string" ? user.user_metadata.name : undefined;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (user && url && anon) {
+      const token = bearerTokenFromRequest(request);
+      const sb = createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+      });
+      const { data } = await sb.from("profiles").select("handle, name").eq("id", user.id).maybeSingle();
+      if (data?.handle) handle = String(data.handle);
+      if (data?.name) name = String(data.name);
+    }
+
+    if (
+      isComplimentaryPremiumAccount({
+        id: user?.id,
+        email: user?.email,
+        handle,
+        name,
+      })
+    ) {
+      return NextResponse.json({
+        url: `${origin}/premium?success=true`,
+        alreadyPremium: true,
+      });
+    }
+
+    const secret = process.env.STRIPE_SECRET_KEY;
+    const priceEnv = process.env.STRIPE_PRICE_ID;
+    if (!secret || !priceEnv) {
+      return NextResponse.json(
+        { error: "Stripe の環境変数が未設定です（STRIPE_SECRET_KEY / STRIPE_PRICE_ID）。" },
+        { status: 500 },
+      );
+    }
+
     const stripe = new Stripe(secret);
-    const origin =
-      request.headers.get("origin") ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "http://localhost:3000";
     const price = await resolvePriceId(stripe, priceEnv);
 
     const session = await stripe.checkout.sessions.create({

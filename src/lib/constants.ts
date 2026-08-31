@@ -3,6 +3,9 @@ import type { Subject, Tier } from "./types";
 export const ME_ID = "u-me";
 export const DEV_USER_IDS = ["u-me"] as const;
 export const DEV_HANDLES = ["aha_taro"] as const;
+/** Stripe 契約なしで常時 Premium にする識別子（id / handle / 表示名 / メール） */
+export const COMPLIMENTARY_PREMIUM_IDENTIFIERS = ["qrafter"] as const;
+export const GUARDIAN_CONSENT_AGE = 15;
 export const VERIFIED_CREATOR_IDS = ["u-official", "u-mirai"] as const;
 export const PREMIUM_PRICE_JPY = 300;
 

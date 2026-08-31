@@ -3,6 +3,7 @@ import { ME_ID } from "./constants";
 import { ensureProfile } from "./auth";
 import { supabase } from "./supabase";
 import { getSprintDayId } from "./sprint";
+import { isComplimentaryPremiumAccount } from "./premium";
 import type { NotePage, Post, Subject, User } from "./types";
 
 export type ProblemRow = {
@@ -50,7 +51,7 @@ export function fallbackUser(id: string, profile?: ProfileRow | null): User {
     typeof rawHandle === "string" && rawHandle.replace(/^@/, "")
       ? rawHandle.replace(/^@/, "")
       : id.replace(/-/g, "").slice(0, 8);
-  return {
+  const user: User = {
     ...base,
     id,
     name: typeof profile?.name === "string" && profile.name.trim() ? profile.name.trim() : "Qraft ユーザー",
@@ -62,6 +63,10 @@ export function fallbackUser(id: string, profile?: ProfileRow | null): User {
     age: null,
     verified: false,
   };
+  if (isComplimentaryPremiumAccount({ id, handle: user.handle, name: user.name })) {
+    user.verified = true;
+  }
+  return user;
 }
 
 function asNotePages(value: unknown): NotePage[] | undefined {

@@ -9,12 +9,14 @@ import {
   TITLE_CATALOG,
 } from "@/lib/constants";
 import type { Tiers } from "@/lib/types";
+import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
 import { isImageSrc, useApp } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ImageUploadSection } from "./ImageUploadSection";
 import { AgePicker, SubjectLevelPickers } from "./LearningSettings";
+import { GuardianConsentCheckbox } from "./GuardianConsentCheckbox";
 import { UserAvatar } from "./UserAvatar";
 
 export function EditProfileModal({
@@ -35,6 +37,7 @@ export function EditProfileModal({
   const [age, setAge] = useState<number | null>(me.age);
   const [tiers, setTiers] = useState<Tiers>(me.tiers);
   const [saveError, setSaveError] = useState("");
+  const [consent, setConsent] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -48,6 +51,7 @@ export function EditProfileModal({
     setAge(me.age);
     setTiers(me.tiers);
     setSaveError("");
+    setConsent(false);
   }, [open, me]);
 
   const readFile = (file: File, cb: (url: string) => void) => {
@@ -172,7 +176,13 @@ export function EditProfileModal({
             </div>
 
             <Field label="表示名" value={name} onChange={setName} />
-            <Field label="ハンドル" value={handle} onChange={(v) => setHandle(v.replace(/^@/, ""))} prefix="@" />
+            <Field
+              label="アカウントID"
+              value={handle}
+              onChange={(v) => setHandle(sanitizeHandleInput(v))}
+              prefix="@"
+              hint={HANDLE_HINT}
+            />
             <Field label="学校 / クラス" value={school} onChange={setSchool} placeholder="明星高専 2年B組" />
             <label className="mb-3 block text-xs text-muted">
               自己紹介
@@ -226,19 +236,34 @@ export function EditProfileModal({
             <div className="mb-4 space-y-4">
               <p className="text-sm font-bold">学習設定</p>
               <AgePicker age={age} onChange={setAge} />
+              <GuardianConsentCheckbox
+                id="edit-profile-guardian-consent"
+                checked={consent}
+                onChange={setConsent}
+              />
               <SubjectLevelPickers tiers={tiers} onChange={setTiers} />
             </div>
 
             <button
+              disabled={!consent}
               onClick={() => {
                 if (age === null) {
                   setSaveError("年齢を入力してください");
                   return;
                 }
+                if (!consent) {
+                  setSaveError("保護者の同意確認にチェックしてください");
+                  return;
+                }
+                const nextHandle = sanitizeHandleInput(handle.trim());
+                if (!nextHandle || !isValidHandle(nextHandle)) {
+                  setSaveError(HANDLE_HINT);
+                  return;
+                }
                 setSaveError("");
                 updateProfile({
                   name: name.trim() || me.name,
-                  handle: handle.trim() || me.handle,
+                  handle: nextHandle,
                   bio,
                   school,
                   avatar,
@@ -255,7 +280,7 @@ export function EditProfileModal({
                   onClose();
                 });
               }}
-              className="w-full rounded-full bg-white py-3 text-sm font-bold text-black"
+              className="w-full rounded-full bg-white py-3 text-sm font-bold text-black disabled:opacity-40"
             >
               保存
             </button>
@@ -272,12 +297,14 @@ function Field({
   onChange,
   prefix,
   placeholder,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   prefix?: string;
   placeholder?: string;
+  hint?: string;
 }) {
   return (
     <label className="mb-3 block text-xs text-muted">
@@ -288,9 +315,11 @@ function Field({
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
+          spellCheck={false}
           className="w-full bg-transparent py-2 text-sm text-white outline-none"
         />
       </div>
+      {hint && <span className="mt-1 block text-[10px] text-muted">{hint}</span>}
     </label>
   );
 }

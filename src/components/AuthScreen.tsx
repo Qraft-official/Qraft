@@ -1,6 +1,8 @@
 "use client";
 
+import { GuardianConsentCheckbox } from "@/components/GuardianConsentCheckbox";
 import { formatAuthError } from "@/lib/auth";
+import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
@@ -19,6 +21,7 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [consent, setConsent] = useState(false);
 
   useEffect(() => {
     try {
@@ -48,6 +51,14 @@ export function AuthScreen() {
       setError("パスワードは6文字以上にしてください");
       return;
     }
+    if (mode === "signup" && handle.trim() && !isValidHandle(handle.trim())) {
+      setError(HANDLE_HINT);
+      return;
+    }
+    if (mode === "signup" && !consent) {
+      setError("保護者の同意確認にチェックしてください");
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "signup") {
@@ -56,7 +67,7 @@ export function AuthScreen() {
             email,
             password,
             name: name.trim() || undefined,
-            handle: handle.trim().replace(/^@/, "") || undefined,
+            handle: handle.trim() ? sanitizeHandleInput(handle) : undefined,
           })) ?? {};
         if (res.error) {
           setError(formatAuthError(res.error));
@@ -118,17 +129,22 @@ export function AuthScreen() {
                 />
               </label>
               <label className="block text-xs text-muted">
-                ハンドル
+                アカウントID
                 <div className="mt-1 flex items-center rounded-xl border border-gray-800 bg-panel px-3">
                   <span className="text-muted">@</span>
                   <input
                     value={handle}
-                    onChange={(e) => setHandle(e.target.value.replace(/^@/, ""))}
+                    onChange={(e) => setHandle(sanitizeHandleInput(e.target.value))}
                     className="w-full bg-transparent py-3 text-sm text-white outline-none"
                     placeholder="qraft_taro"
                     autoComplete="username"
+                    inputMode="email"
+                    spellCheck={false}
+                    pattern="[a-zA-Z0-9_.-]+"
+                    title={HANDLE_HINT}
                   />
                 </div>
+                <span className="mt-1 block text-[10px] text-muted">{HANDLE_HINT}</span>
               </label>
             </>
           )}
@@ -168,13 +184,21 @@ export function AuthScreen() {
             </div>
           </label>
 
+          {mode === "signup" && (
+            <GuardianConsentCheckbox
+              id="signup-guardian-consent"
+              checked={consent}
+              onChange={setConsent}
+            />
+          )}
+
           {error && <p className="text-xs text-red-400">{error}</p>}
           {info && <p className="text-xs text-aha">{info}</p>}
 
           <motion.button
             whileTap={{ scale: 0.98 }}
             type="submit"
-            disabled={busy}
+            disabled={busy || (mode === "signup" && !consent)}
             className="w-full rounded-full bg-aha py-3 text-sm font-black text-black disabled:opacity-50"
           >
             {busy

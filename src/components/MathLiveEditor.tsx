@@ -1,6 +1,12 @@
 "use client";
 
+import {
+  attachMultilineMathfield,
+  attachPlainTextMenu,
+  insertPlainTextIntoMathfield,
+} from "@/lib/mathlive";
 import type { MathfieldElement } from "mathlive";
+import { Menu } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 export function MathLiveEditor({
@@ -20,6 +26,7 @@ export function MathLiveEditor({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const [ready, setReady] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +49,8 @@ export function MathLiveEditor({
     if (!mf || !host) return;
 
     mf.mathVirtualKeyboardPolicy = "manual";
-    mf.smartFence = true;
+    attachPlainTextMenu(mf);
+    const detachMultiline = attachMultilineMathfield(mf);
     const kb = window.mathVirtualKeyboard;
     if (kb) {
       kb.container = host;
@@ -57,6 +65,7 @@ export function MathLiveEditor({
     mf.focus();
 
     return () => {
+      detachMultiline();
       mf.removeEventListener("focusin", onIn);
       mf.removeEventListener("input", onInput);
     };
@@ -85,11 +94,44 @@ export function MathLiveEditor({
           : "flex min-w-0 flex-col"
       }
     >
+      <div className="mb-1 flex justify-end">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
+            aria-label="エディタメニュー"
+            aria-expanded={menuOpen}
+          >
+            <Menu size={16} />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-gray-700 bg-[#15202b] shadow-xl">
+              <button
+                type="button"
+                className="w-full px-3 py-2.5 text-left text-xs font-bold hover:bg-white/5"
+                onClick={() => {
+                  setMenuOpen(false);
+                  const mf = fieldRef.current;
+                  if (mf) {
+                    insertPlainTextIntoMathfield(mf);
+                    onChangeRef.current(mf.value);
+                  }
+                }}
+              >
+                テキストを入力（通常の文章入力）
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
       <math-field
         ref={(el) => {
           fieldRef.current = el as MathfieldElement | null;
         }}
         className="aha-mathfield min-h-[7.5rem] min-w-0 w-full shrink-0 overflow-auto"
+        default-mode="math"
+        smart-mode="true"
       />
       {footer && <div className="mt-2 min-w-0 shrink-0">{footer}</div>}
       <div

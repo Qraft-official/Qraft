@@ -1,6 +1,13 @@
 "use client";
 
+import {
+  attachMultilineMathfield,
+  attachPlainTextMenu,
+  insertMathNewline,
+  insertPlainTextIntoMathfield,
+} from "@/lib/mathlive";
 import type { MathfieldElement } from "mathlive";
+import { Menu } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type MathKeyAction, MathKeyboard } from "./MathKeyboard";
 
@@ -40,9 +47,9 @@ export function VisualMathEditor({
     if (!mf) return;
 
     mf.mathVirtualKeyboardPolicy = "manual";
-    mf.smartFence = true;
-    mf.defaultMode = "math";
     window.mathVirtualKeyboard?.hide();
+    attachPlainTextMenu(mf);
+    const detachMultiline = attachMultilineMathfield(mf);
 
     const sync = () => onChangeRef.current(mf.getValue("latex"));
     const keepVkHidden = () => window.mathVirtualKeyboard?.hide();
@@ -52,6 +59,7 @@ export function VisualMathEditor({
     mf.focus();
 
     return () => {
+      detachMultiline();
       mf.removeEventListener("input", sync);
       mf.removeEventListener("focusin", keepVkHidden);
     };
@@ -63,6 +71,8 @@ export function VisualMathEditor({
     if (!mf || !ready) return;
     if (mf.getValue("latex") !== value) mf.value = value;
   }, [ready, value]);
+
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const insertVisual = (latex: string) => {
     const mf = fieldRef.current;
@@ -90,11 +100,7 @@ export function VisualMathEditor({
       return;
     }
     if (action.type === "enter") {
-      mf.insert("\\\\", {
-        focus: true,
-        format: "latex",
-        selectionMode: "after",
-      });
+      insertMathNewline(mf);
       onChangeRef.current(mf.getValue("latex"));
       return;
     }
@@ -105,9 +111,40 @@ export function VisualMathEditor({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-3 pt-2">
         {header}
-        <p className="mb-1.5 text-[10px] font-bold tracking-wide text-muted">
-          視覚数式エディタ · 枠をタップして中に入力
-        </p>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold tracking-wide text-muted">
+            視覚数式エディタ · 枠をタップして中に入力
+          </p>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
+              aria-label="エディタメニュー"
+              aria-expanded={menuOpen}
+            >
+              <Menu size={16} />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-gray-700 bg-[#15202b] shadow-xl">
+                <button
+                  type="button"
+                  className="w-full px-3 py-2.5 text-left text-xs font-bold hover:bg-white/5"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    const mf = fieldRef.current;
+                    if (mf) {
+                      insertPlainTextIntoMathfield(mf);
+                      onChangeRef.current(mf.getValue("latex"));
+                    }
+                  }}
+                >
+                  テキストを入力（通常の文章入力）
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
         {!ready ? (
           <div className="flex min-h-[10rem] flex-1 items-center justify-center rounded-xl border border-gray-800 bg-panel text-sm text-muted">
             数式エディタを読み込み中…
@@ -118,6 +155,8 @@ export function VisualMathEditor({
               fieldRef.current = el as MathfieldElement | null;
             }}
             className="aha-mathfield aha-mathfield-visual min-h-[10rem] w-full min-w-0 flex-1 overflow-auto"
+            default-mode="math"
+            smart-mode="true"
           />
         )}
         {footer && <div className="mt-2 min-w-0 shrink-0 pb-2">{footer}</div>}

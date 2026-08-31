@@ -60,7 +60,7 @@ export default function ActivityPage() {
       </section>
 
       <section className="px-4 py-4">
-        <p className="text-xs font-bold text-muted">あなたのアクション · 全国戦 {sprint.dayId}</p>
+        <p className="text-xs font-bold text-muted">あなたのアクション · PULSE {sprint.dayId}</p>
         <div className="mt-3 space-y-4">
           {activities.map((a) => {
             const u = userOf(a.userId);

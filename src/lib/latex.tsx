@@ -2,13 +2,22 @@
 
 import katex from "katex";
 import { Fragment, useMemo } from "react";
+import { katexHtmlHasError, latexLooksLikePlainText, latexToPlainText, normalizeLatexForKatex } from "./latex-normalize";
 
 function render(math: string, display: boolean) {
-  return katex.renderToString(math, {
-    throwOnError: false,
-    displayMode: display,
-    output: "html",
-  });
+  const prepared = latexLooksLikePlainText(math) ? null : normalizeLatexForKatex(math);
+  if (prepared == null || prepared === "") return null;
+  try {
+    const html = katex.renderToString(prepared, {
+      throwOnError: false,
+      displayMode: display,
+      output: "html",
+    });
+    if (katexHtmlHasError(html)) return null;
+    return html;
+  } catch {
+    return null;
+  }
 }
 
 type Part =
@@ -105,7 +114,7 @@ function formatText(value: string) {
 export function LatexText({ text, className = "" }: { text: string; className?: string }) {
   const blocks = useMemo(() => splitCode(text), [text]);
   return (
-    <div className={`whitespace-pre-wrap break-words leading-relaxed ${className}`}>
+    <div className={`whitespace-pre-wrap break-words leading-relaxed [&_.katex-display]:my-2 [&_.katex-display]:block ${className}`}>
       {blocks.map((b, bi) => {
         if (b.type === "code") {
           return (
@@ -128,6 +137,10 @@ export function LatexText({ text, className = "" }: { text: string; className?: 
               if (p.type === "text") return <Fragment key={i}>{formatText(p.value)}</Fragment>;
               if (p.type === "code") return null;
               const html = render(p.value, p.type === "block");
+              if (!html) {
+                const fallback = latexToPlainText(p.value) || p.value;
+                return <Fragment key={i}>{formatText(fallback)}</Fragment>;
+              }
               if (p.type === "block") {
                 return (
                   <span

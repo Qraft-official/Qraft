@@ -1,5 +1,6 @@
 import type { Tier, Tiers } from "./types";
 import type { User } from "@supabase/supabase-js";
+import { sanitizeHandleInput } from "./handle";
 import { supabase } from "./supabase";
 
 function asText(value: unknown): string {
@@ -37,9 +38,12 @@ export function handleFromUser(user: {
 }) {
   const meta = user.user_metadata ?? {};
   const handle = asText(meta.handle);
-  if (handle.trim()) return handle.trim().replace(/^@/, "");
+  if (handle.trim()) {
+    const cleaned = sanitizeHandleInput(handle.trim());
+    return cleaned || undefined;
+  }
   const email = asText(user.email);
-  const fromEmail = email.split("@")[0]?.replace(/[^a-zA-Z0-9_]/g, "") ?? "";
+  const fromEmail = email.split("@")[0]?.replace(/[^a-zA-Z0-9_.-]/g, "") ?? "";
   return fromEmail || undefined;
 }
 

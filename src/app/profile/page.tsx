@@ -1,6 +1,8 @@
 "use client";
 
 import { EditProfileModal } from "@/components/EditProfileModal";
+import { FeedbackEntryButton } from "@/components/FeedbackModal";
+import { IosNotice } from "@/components/IosNotice";
 import { PostCard } from "@/components/PostCard";
 import { ProfileRadar } from "@/components/ProfileRadar";
 import { UserAvatar, UserBanner } from "@/components/UserAvatar";
@@ -114,6 +116,13 @@ export default function ProfilePage() {
               {s.emoji} {TIER_NAMES[s.id][me.tiers[s.id]]}
             </span>
           ))}
+        </div>
+      </div>
+
+      <div className="mt-4 px-4">
+        <IosNotice />
+        <div className="mt-3">
+          <FeedbackEntryButton className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-800 bg-panel px-3 py-3 text-sm font-bold" />
         </div>
       </div>
 

@@ -1,10 +1,13 @@
 "use client";
 
+import { IosNotice } from "@/components/IosNotice";
+import { NotificationBell } from "@/components/NotificationBell";
 import { PostCard } from "@/components/PostCard";
 import { SprintBanner } from "@/components/SprintBanner";
 import { TimelineAd } from "@/components/TimelineAd";
 import { useApp } from "@/lib/store";
 import type { FeedTab } from "@/lib/types";
+import { PULSE_BLURB } from "@/lib/constants";
 import { Crown } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 
@@ -21,13 +24,14 @@ export default function HomePage() {
     openPremium,
     openPaywall,
     loungePosts,
+    openComposer,
   } = useApp();
   const [tab, setTab] = useState<FeedTab>("foryou");
 
   const tabs: { id: FeedTab; label: string }[] = [
     { id: "foryou", label: "おすすめ" },
     { id: "following", label: "フォロー中" },
-    { id: "sprint", label: "🏆 21:00" },
+    { id: "sprint", label: "PULSE" },
     { id: "lounge", label: "🏠 Lounge" },
   ];
 
@@ -63,7 +67,7 @@ export default function HomePage() {
     <div>
       <header className="sticky top-0 z-30 border-b border-gray-800 bg-black/80 backdrop-blur-md">
         <div className="flex items-center justify-between px-3 py-3">
-          <span className="w-8" />
+          <NotificationBell className="text-white" />
           <h1 className="text-lg font-black tracking-tight">
             Qraft<span className="ml-1 text-aha">クラフト</span>
           </h1>
@@ -99,6 +103,10 @@ export default function HomePage() {
         </div>
       </header>
 
+      <div className="border-b border-gray-800 px-4 py-3">
+        <IosNotice />
+      </div>
+
       <SprintBanner />
 
       {hasPremium && tab === "foryou" && (
@@ -109,6 +117,18 @@ export default function HomePage() {
         </div>
       )}
 
+      {tab === "sprint" && (
+        <div className="border-b border-gray-800 px-4 py-3">
+          <p className="text-xs leading-relaxed text-muted">{PULSE_BLURB}</p>
+          <button
+            type="button"
+            onClick={() => openComposer({ open: true, mode: "problem", isSprint: true })}
+            className="mt-3 w-full rounded-full bg-aha py-3 text-sm font-black text-black"
+          >
+            21時問題を投稿
+          </button>
+        </div>
+      )}
       {tab === "sprint" && !sprintUnlocked && (
         <p className="px-4 py-4 text-sm text-muted">
           挑戦を提出（またはタイムアウト）すると、この日の「みんなの解答」が開放されます。

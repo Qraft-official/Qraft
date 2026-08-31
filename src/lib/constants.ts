@@ -6,6 +6,10 @@ export const DEV_HANDLES = ["aha_taro"] as const;
 export const VERIFIED_CREATOR_IDS = ["u-official", "u-mirai"] as const;
 export const PREMIUM_PRICE_JPY = 300;
 
+export const PULSE_NAME = "PULSE（パルス）";
+export const PULSE_BLURB =
+  "PULSE（パルス）：毎日21時に一斉配信される限定デイリー問題。全員で同時に挑戦しよう！";
+
 export const SUBJECTS: { id: Subject; emoji: string; label: string }[] = [
   { id: "math", emoji: "📐", label: "数学" },
   { id: "physics", emoji: "⚡", label: "物理" },
@@ -71,7 +75,7 @@ export const STORAGE_KEYS = {
 } as const;
 
 export const TITLE_CATALOG = [
-  "夜21時の求道者",
+  "PULSEの求道者",
   "初回Qraft達成",
   "論理マスター",
   "計算力ゴリラ",
@@ -105,17 +109,45 @@ export const PREMIUM_ACCENTS = [
 ];
 
 export const PREMIUM_PERKS = [
-  { icon: "🚫", title: "広告OFF", desc: "タイムラインの広告をすべて非表示" },
-  { icon: "🎨", title: "プロフィールカスタマイズ", desc: "アクセントカラーと上級バナー" },
-  { icon: "✨", title: "答案デコレーション", desc: "ネオンペンとゴールド枠の解法カード" },
-  { icon: "😂", title: "特別リアクション", desc: "限定の高ドパミン絵文字リアクション" },
-  { icon: "🏠", title: "プライベートコミュニティ", desc: "Premium求解者だけのフィード" },
-  { icon: "🤖", title: "AI問題メーカー", desc: "プロンプトから問題を自動生成" },
-  { icon: "🎵", title: "BGM", desc: "解答中のアンビエントフォーカス音" },
-  { icon: "👑", title: "限定称号・バッジ", desc: "ゴールド称号と認証チェック" },
-  { icon: "📊", title: "年鑑アナリティクス", desc: "習熟度の深掘り統計" },
-  { icon: "🎪", title: "限定イベント", desc: "特別デイリーチャレンジ先行参加" },
+  { icon: "👑", title: "公式認定プレミアムバッジ（認証マーク）", desc: "プロフィールに認証マークが付き、信頼される求解者として表示されます" },
+  { icon: "🖼️", title: "解法・問題への画像添付投稿", desc: "写真や解説画像を添付して、より分かりやすく共有できます" },
+  { icon: "🎨", title: "アイコン＆ヘッダー画像のカスタマイズ", desc: "自分だけのプロフィールに仕上げられます" },
+  { icon: "🚫", title: "完全広告非表示", desc: "ストレスフリーな学習環境で集中できます" },
+  { icon: "🚀", title: "新機能・ベータ機能への先行アクセス", desc: "実験中の機能をいち早く体験できます" },
+  { icon: "🔒", title: "プレミアム限定コミュニティ・チャットへの参加権", desc: "求解者だけのフィードと交流スペースに入れます" },
+  { icon: "📊", title: "年間学習アナリティクス・詳細グラフの解放", desc: "習熟度の深掘り統計で伸びを可視化します" },
+  { icon: "🔥", title: "限定リアクション＆エフェクトの使用", desc: "特別な絵文字リアクションと演出が使えます" },
+  { icon: "📝", title: "ノートの無限保存＆大容量バックアップ", desc: "手書き・打ち込みノートをたっぷり保存できます" },
+  { icon: "💬", title: "開発者へのダイレクトフィードバック・機能リクエスト権", desc: "欲しい機能を開発者に直接届けられます" },
 ] as const;
+
+export const PREMIUM_DEV_MESSAGE = [
+  "Qraft（クラフト）をインストールしていただきありがとうございます！",
+  "実は開発者は個人で運営している貧乏学生です。このSNSはたくさんの学習者が集まることで本当のおもしろさを発揮します！サーバー代や開発を継続し、サービス閉鎖を避けるためにも、ぜひジュース2本分（月額300円）のご支援・応援をよろしくお願いします！",
+] as const;
+
+export const GUARDIAN_CONSENT_LABEL =
+  "15歳未満の方は、保護者の同意を得て利用してください（同意を得ています）";
+
+export const FEEDBACK_THANKS_TITLE = "💌 フィードバックありがとうございます！";
+export const FEEDBACK_THANKS_MESSAGE =
+  "貴重なご意見・リクエストをお送りいただきありがとうございます！開発の参考にさせていただき、より良いサービスを目指して改善してまいります。";
+
+export const PREMIUM_THANKS_TITLE = "👑 プレミアムプランへようこそ！ご支援ありがとうございます！";
+export const PREMIUM_THANKS_MESSAGE =
+  "プレミアムプランへのご加入、本当にありがとうございます！皆様からの暖かいご支援のおかげでQraftの運営・開発を続けることができます。限定機能や特別バッジをお楽しみください！";
+
+export const WELCOME_NOTIFICATION_TITLE = "🎉 Qraftへようこそ！";
+
+export const WELCOME_NOTIFICATION_MESSAGE = `Qraft（クラフト）をご利用いただきありがとうございます！
+みんなで問題を出し合ったり、手書きや数式エディタで解法をシェアして楽しんでくださいね。
+
+【iPhone / iPad（iOS）をご利用の方へ】
+現在、開発者の環境都合によりネイティブアプリ版はAndroid限定公開となっています。
+Apple端末（iOS）をご利用の方は、Webブラウザ（SafariやChromeなど）から快適にご利用いただけます！`;
+
+export const IOS_NOTICE =
+  "【iPhone/iPad（iOS）をご利用の方へ】開発環境の都合上（Macを所持していないため）、現在ネイティブアプリ版はAndroid限定公開となっています。Apple端末をご利用の方は、Webブラウザ（SafariやChromeなど）からアクセスしてご活用ください！";
 
 export const AVATAR_EMOJIS = ["🧠", "✨", "📐", "⚡", "🧪", "🌊", "🔥", "😎", "🧬", "🚀"];
 

@@ -57,8 +57,21 @@ body {
   box-shadow: 0 0 24px rgba(168, 85, 247, 0.4);
 }
 
-.safe-bottom {
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+.notebook-stage {
+  min-height: 14rem;
+  height: clamp(16rem, 48dvh, 36rem);
+}
+
+@media (min-width: 768px) {
+  .notebook-stage {
+    height: clamp(20rem, 56dvh, 44rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  .notebook-stage {
+    height: clamp(22rem, 62dvh, 48rem);
+  }
 }
 
 .aha-mathfield {
@@ -71,14 +84,20 @@ body {
   font-size: 1.35rem;
   padding: 0.75rem 0.85rem;
   outline: none;
+  white-space: pre-wrap;
   --hue: 270;
   --contains-highlight-background-color: rgba(168, 85, 247, 0.25);
 }
 
 .aha-mathfield-visual {
   font-size: 1.65rem;
-  line-height: 1.6;
+  line-height: 1.75;
   min-height: 10rem;
+}
+
+.aha-mathfield::part(content),
+.aha-mathfield::part(menu-toggle) {
+  white-space: pre-wrap;
 }
 
 .aha-mathfield-visual::part(virtual-keyboard-toggle) {

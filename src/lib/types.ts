@@ -37,6 +37,7 @@ export type NotePage = {
   id: string;
   latex: string;
   doodle: number;
+  image?: string;
 };
 
 export type Post = {
@@ -73,9 +74,21 @@ export type Stroke = {
   points: { x: number; y: number }[];
 };
 
+export type CanvasText = {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  fontSize: number;
+  width?: number;
+  height?: number;
+};
+
 export type CanvasPage = {
   id: string;
   strokes: Stroke[];
+  texts?: CanvasText[];
 };
 
 export type SprintRecord = {
@@ -97,5 +110,6 @@ export type ActivityItem = {
 
 export type Composer =
   | { open: false }
-  | { open: true; mode: "menu" | "problem" | "solution"; quotePostId?: string }
+  | { open: true; mode: "problem"; isSprint?: boolean }
+  | { open: true; mode: "solution"; quotePostId: string }
   | { open: true; mode: "reply"; replyToId: string };

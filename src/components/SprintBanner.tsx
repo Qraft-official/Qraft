@@ -1,6 +1,7 @@
 "use client";
 
-import { formatTimer, getNextRelease } from "@/lib/sprint";
+import { PULSE_BLURB, PULSE_NAME } from "@/lib/constants";
+import { getNextRelease } from "@/lib/sprint";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
 import { Flame } from "lucide-react";
@@ -43,11 +44,12 @@ export function SprintBanner() {
     >
       <div className="flex items-center gap-2 text-sm font-black">
         <Flame className="text-orange-400" size={18} />
-        21:00問題 公開中（10分一本勝負）
+        {PULSE_NAME} 公開中
       </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted">{PULSE_BLURB}</p>
       <p className="mt-1 text-xs text-muted">{status}</p>
       <div className="mt-2 flex items-center justify-between text-[11px]">
-        <span className="text-aha">次の全国戦まで {toNext}</span>
+        <span className="text-aha">次の配信まで {toNext}</span>
         {sprintUnlocked && <span className="text-purple-300">Live 精度開放中</span>}
       </div>
     </motion.button>

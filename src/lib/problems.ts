@@ -3,7 +3,7 @@ import { ME_ID } from "./constants";
 import { ensureProfile } from "./auth";
 import { supabase } from "./supabase";
 import { getSprintDayId } from "./sprint";
-import type { Post, Subject, User } from "./types";
+import type { NotePage, Post, Subject, User } from "./types";
 
 export type ProblemRow = {
   id: string;
@@ -16,6 +16,8 @@ export type ProblemRow = {
   is_sprint: boolean;
   sprint_day: string | null;
   created_at: string;
+  pages?: NotePage[] | null;
+  problem_format?: string | null;
 };
 
 export type ProfileRow = {
@@ -31,6 +33,8 @@ export type NewProblem = {
   solution?: string;
   photo?: string;
   isSprint?: boolean;
+  pages?: NotePage[];
+  format?: "handwriting" | "typed";
 };
 
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
@@ -60,10 +64,31 @@ export function fallbackUser(id: string, profile?: ProfileRow | null): User {
   };
 }
 
+function asNotePages(value: unknown): NotePage[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const pages: NotePage[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") continue;
+    const p = raw as Record<string, unknown>;
+    if (typeof p.id !== "string") continue;
+    pages.push({
+      id: p.id,
+      latex: typeof p.latex === "string" ? p.latex : "",
+      doodle: typeof p.doodle === "number" ? p.doodle : 0,
+      image: typeof p.image === "string" ? p.image : undefined,
+    });
+  }
+  return pages.length ? pages : undefined;
+}
+
 export function problemToPost(row: ProblemRow): Post {
   const title = row.title?.trim() ?? "";
   const body = row.problem_text ?? "";
   const text = title ? `**${title}**\n\n${body}` : body;
+  const format =
+    row.problem_format === "handwriting" || row.problem_format === "typed"
+      ? row.problem_format
+      : undefined;
   return {
     id: row.id,
     authorId: row.author_id,
@@ -73,6 +98,8 @@ export function problemToPost(row: ProblemRow): Post {
     title,
     solution: row.solution ?? undefined,
     photo: row.photo ?? undefined,
+    pages: asNotePages(row.pages),
+    solutionFormat: format,
     isSprint: row.is_sprint,
     createdAt: row.created_at,
     replyCount: 0,
@@ -142,6 +169,8 @@ export async function insertProblem(input: NewProblem): Promise<{
       photo: input.photo ?? null,
       is_sprint: !!input.isSprint,
       sprint_day: input.isSprint ? getSprintDayId() : null,
+      pages: input.pages ?? null,
+      problem_format: input.format ?? null,
     })
     .select("*")
     .single();

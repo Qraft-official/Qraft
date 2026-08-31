@@ -1,11 +1,12 @@
 "use client";
 
 import { PREMIUM_REACTIONS, SUBJECT_LABEL, TIER_NAMES } from "@/lib/constants";
+import { sharePost } from "@/lib/share";
 import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
-import { Brain, MessageCircle, PenLine, Repeat2, Star, Undo2 } from "lucide-react";
+import { Brain, MessageCircle, PenLine, Repeat2, Share2, Star, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CommentThread } from "./CommentThread";
@@ -15,11 +16,10 @@ import { StarRating } from "./StarRating";
 import { UserAvatar } from "./UserAvatar";
 import { VerifiedBadge } from "./VerifiedBadge";
 
-function isTypedSolution(post: Post) {
-  if (post.kind !== "solution") return false;
+function isTypedNotebook(post: Post) {
   if (post.solutionFormat === "typed") return true;
   if (post.solutionFormat === "handwriting") return false;
-  return !post.pages?.length;
+  return post.kind === "solution" && !post.pages?.length;
 }
 
 function timeAgo(iso: string) {
@@ -62,6 +62,7 @@ export function PostCard({
   const [rateOpen, setRateOpen] = useState(false);
   const [threadOpen, setThreadOpen] = useState(false);
   const [repostOpen, setRepostOpen] = useState(false);
+  const [shareToast, setShareToast] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const following = follows.includes(author.id);
   const liked = likes.includes(post.id);
@@ -131,17 +132,22 @@ export function PostCard({
                 {post.kind === "problem" && (
                   <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-muted">
                     オリジナル問題
+                    {post.solutionFormat === "typed"
+                      ? " · 打ち込み"
+                      : post.solutionFormat === "handwriting" || post.pages?.some((p) => p.image)
+                        ? " · 手書き"
+                        : ""}
                   </span>
                 )}
                 {post.kind === "solution" && (
                   <span className="rounded-full bg-aha/10 px-2 py-0.5 text-[10px] text-aha">
                     {quoted ? "引用解法" : "解法"}
-                    {isTypedSolution(post) ? " · 打ち込み" : post.pages?.length ? " · 手書き" : ""}
+                    {isTypedNotebook(post) ? " · 打ち込み" : post.pages?.length ? " · 手書き" : ""}
                   </span>
                 )}
                 {post.kind === "sprint" && (
                   <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">
-                    21:00全国戦
+                    PULSE
                   </span>
                 )}
               </div>
@@ -159,7 +165,7 @@ export function PostCard({
             )}
           </div>
 
-          {!(post.kind === "solution" && isTypedSolution(post)) && (
+          {!(post.kind === "solution" && isTypedNotebook(post)) && (
             <Link href={`/p/${post.id}`} className="mt-2 block">
               <LatexText text={post.text} className="text-[15px] text-[#e7e9ea]" />
             </Link>
@@ -167,7 +173,7 @@ export function PostCard({
 
           {quoted && <QuoteEmbed postId={post.problemId!} />}
 
-          {post.kind === "solution" && isTypedSolution(post) && (
+          {post.kind === "solution" && isTypedNotebook(post) && !post.pages?.length && (
             <Link href={`/p/${post.id}`} className="mt-3 block">
               <div
                 className={`paper-grid rounded-2xl border bg-[#0b1220] p-3 ${
@@ -182,7 +188,7 @@ export function PostCard({
             </Link>
           )}
 
-          {post.photo && (
+          {post.photo && !post.pages?.some((p) => p.image) && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={post.photo}
@@ -191,7 +197,7 @@ export function PostCard({
             />
           )}
 
-          {post.pages && post.pages.length > 0 && post.solutionFormat !== "typed" && (
+          {post.pages && post.pages.length > 0 && (
             <div
               className={
                 authorVerified(author.id)
@@ -250,24 +256,26 @@ export function PostCard({
                         {reposted ? "リポストを取り消す" : "リポスト"}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRepostOpen(false);
-                        openComposer({
-                          open: true,
-                          mode: "solution",
-                          quotePostId: post.id,
-                        });
-                      }}
-                      className="flex w-full items-center gap-3 border-t border-gray-800 px-4 py-3 text-left text-sm hover:bg-white/5"
-                    >
-                      <PenLine size={18} className="text-aha" />
-                      <span>
-                        <span className="block font-bold text-aha">引用して解法を投稿</span>
-                        <span className="text-[11px] text-muted">手書きキャンバスで引用</span>
-                      </span>
-                    </button>
+                    {(post.kind === "problem" || post.kind === "sprint") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRepostOpen(false);
+                          openComposer({
+                            open: true,
+                            mode: "solution",
+                            quotePostId: post.id,
+                          });
+                        }}
+                        className="flex w-full items-center gap-3 border-t border-gray-800 px-4 py-3 text-left text-sm hover:bg-white/5"
+                      >
+                        <PenLine size={18} className="text-aha" />
+                        <span>
+                          <span className="block font-bold text-aha">引用して解法を投稿</span>
+                          <span className="text-[11px] text-muted">この問題を引用して解法を書く</span>
+                        </span>
+                      </button>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -315,7 +323,30 @@ export function PostCard({
               <Star size={16} />
               {post.kind === "solution" ? elegance || "—" : aha || "—"}
             </button>
+            {(post.kind === "problem" || post.kind === "sprint") && (
+              <button
+                type="button"
+                onClick={() => {
+                  void sharePost({ id: post.id, text: post.text }).then((res) => {
+                    if (res.ok && res.method === "copy") {
+                      setShareToast("リンクをコピーしました！");
+                      window.setTimeout(() => setShareToast(""), 2200);
+                    }
+                  });
+                }}
+                className="flex items-center gap-1 text-xs hover:text-aha"
+                aria-label="共有"
+              >
+                <Share2 size={16} />
+              </button>
+            )}
           </div>
+
+          {shareToast && (
+            <p className="mt-2 rounded-full bg-aha/15 px-3 py-1 text-center text-[11px] font-bold text-aha">
+              {shareToast}
+            </p>
+          )}
 
           {rateOpen && (
             <motion.div

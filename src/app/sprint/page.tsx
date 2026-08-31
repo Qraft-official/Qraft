@@ -1,12 +1,11 @@
 "use client";
 
-import { MultiPageCanvas } from "@/components/MultiPageCanvas";
 import { PostCard } from "@/components/PostCard";
+import { PULSE_BLURB, PULSE_NAME } from "@/lib/constants";
 import { formatTimer, remainingMs } from "@/lib/sprint";
 import { useApp } from "@/lib/store";
-import type { CanvasPage } from "@/lib/types";
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, PenLine } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -18,21 +17,16 @@ export default function SprintPage() {
     startSprint,
     submitSprint,
     timeoutSprint,
-    updateSprintPages,
     community,
     sprintUnlocked,
     hasPremium,
     bgmOn,
     setBgmOn,
     openPaywall,
+    openComposer,
     posts,
   } = useApp();
   const [now, setNow] = useState(Date.now());
-  const [pages, setPages] = useState<CanvasPage[]>(sprint.pages);
-
-  useEffect(() => {
-    setPages(sprint.pages);
-  }, [sprint.pages]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 200);
@@ -52,9 +46,12 @@ export default function SprintPage() {
     return { accuracy, avg, n: 12840 };
   }, [sprint.submittedAt, sprint.timedOut]);
 
-  const onPages = (next: CanvasPage[]) => {
-    setPages(next);
-    updateSprintPages(next);
+  const openQuoteComposer = () => {
+    openComposer({
+      open: true,
+      mode: "solution",
+      quotePostId: officialPost.id,
+    });
   };
 
   if (sprintUnlocked) {
@@ -64,7 +61,7 @@ export default function SprintPage() {
           <button onClick={() => router.push("/")} className="text-white">
             <ArrowLeft size={20} />
           </button>
-          <p className="font-bold">全国戦 結果</p>
+          <p className="font-bold">{PULSE_NAME} 結果</p>
         </header>
         <div className="mx-4 mt-4 rounded-2xl border border-gray-800 bg-panel p-4">
           <p className="text-xs text-muted">LIVE</p>
@@ -109,10 +106,18 @@ export default function SprintPage() {
         <button onClick={() => router.push("/")} className="self-start text-muted">
           <ArrowLeft size={20} />
         </button>
-        <p className="mt-8 text-sm font-bold text-orange-400">🔥 21:00全国戦</p>
+        <p className="mt-8 text-sm font-bold text-orange-400">🔥 {PULSE_NAME}</p>
         <h1 className="mt-2 text-3xl font-black">10分一本勝負</h1>
-        <p className="mt-3 text-sm text-muted">
-          開始した瞬間からカウントダウン。提出しなければタイムアウト。次の 21:00 まで何度でも待てるが、一度スタートしたら逃げられない。
+        <p className="mt-3 text-sm text-muted">{PULSE_BLURB}</p>
+        <button
+          type="button"
+          onClick={() => openComposer({ open: true, mode: "problem", isSprint: true })}
+          className="mt-4 w-full rounded-full border border-aha/50 bg-aha/10 py-3 text-sm font-bold text-aha"
+        >
+          21時問題を投稿
+        </button>
+        <p className="mt-2 text-sm text-muted">
+          開始した瞬間からカウントダウン。提出しなければタイムアウト。次の配信まで待てますが、一度スタートしたら逃げられません。
         </p>
         <div className="mt-6 rounded-2xl border border-gray-800 bg-panel p-4">
           <PostCard post={officialPost} />
@@ -144,7 +149,7 @@ export default function SprintPage() {
   const danger = left !== null && left < 30000;
 
   return (
-    <div className="flex h-dvh flex-col bg-black">
+    <div className="flex min-h-dvh flex-col bg-black pb-8">
       <div className="flex items-center justify-between px-4 py-3">
         <p className="text-xs font-bold text-muted">CHALLENGE</p>
         <motion.p
@@ -155,10 +160,11 @@ export default function SprintPage() {
           {formatTimer(left ?? 0)}
         </motion.p>
         <button
-          onClick={() => submitSprint(pages)}
+          type="button"
+          onClick={() => submitSprint(sprint.pages)}
           className="rounded-full bg-neon px-3 py-1.5 text-xs font-bold"
         >
-          提出
+          結果を見る
         </button>
       </div>
       <button
@@ -174,7 +180,23 @@ export default function SprintPage() {
       >
         🎵 BGM {hasPremium ? (bgmOn ? "ON" : "OFF") : "Premium"}
       </button>
-      <MultiPageCanvas pages={pages} onChange={onPages} className="min-h-0 flex-1" premium={hasPremium} />
+      <p className="px-4 pb-2 text-xs leading-relaxed text-muted">
+        通常の引用投稿と同じ流れで、手書きノートまたは打ち込み式ノートを選んで解答できます。解法を投稿するとフィードが開放されます。
+      </p>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <PostCard post={officialPost} />
+      </div>
+      <div className="px-4 pt-2">
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          type="button"
+          onClick={openQuoteComposer}
+          className="glow-lime flex w-full items-center justify-center gap-2 rounded-full bg-aha py-4 text-base font-black text-black"
+        >
+          <PenLine size={18} />
+          引用して解法を投稿
+        </motion.button>
+      </div>
     </div>
   );
 }

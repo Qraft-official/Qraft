@@ -1,7 +1,8 @@
 "use client";
 
 import { LatexText } from "@/lib/latex";
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { Menu } from "lucide-react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { type MathKeyAction, MathKeyboard } from "./MathKeyboard";
 
@@ -42,6 +43,7 @@ export function LatexEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const draftRef = useRef(value);
   const pendingCaretRef = useRef<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const applyCaret = (pos: number) => {
     const el = textareaRef.current;
@@ -175,7 +177,7 @@ export function LatexEditor({
         }`}
       >
         {header}
-        <div className="aha-scroll mb-1 flex shrink-0 gap-1 overflow-x-auto pb-1">
+        <div className="aha-scroll mb-1 flex shrink-0 items-center gap-1 overflow-x-auto pb-1">
           {FORMAT.map((f) => (
             <button
               key={f.id}
@@ -189,6 +191,31 @@ export function LatexEditor({
               {f.label}
             </button>
           ))}
+          <div className="relative ml-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="rounded-lg border border-gray-700 bg-white/5 p-1 text-muted hover:text-white"
+              aria-label="エディタメニュー"
+            >
+              <Menu size={14} />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-gray-700 bg-[#15202b] shadow-xl">
+                <button
+                  type="button"
+                  className="w-full px-3 py-2.5 text-left text-xs font-bold hover:bg-white/5"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    const raw = window.prompt("テキストを入力（通常の文章）", "");
+                    if (raw?.trim()) insertTemplate(raw.trim());
+                  }}
+                >
+                  テキストを入力（通常の文章入力）
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <textarea
           ref={textareaRef}
@@ -204,7 +231,10 @@ export function LatexEditor({
           autoCapitalize="sentences"
           autoCorrect="on"
           spellCheck
-          className={`min-w-0 w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 font-mono text-sm leading-relaxed outline-none focus:border-neon ${
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.stopPropagation();
+          }}
+          className={`min-w-0 w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 font-mono text-sm leading-relaxed whitespace-pre-wrap outline-none focus:border-neon ${
             docked
               ? "min-h-[8rem] flex-1 resize-none overflow-y-auto"
               : tall

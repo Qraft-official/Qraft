@@ -4,7 +4,9 @@ import { PREMIUM_PERKS, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import { Crown, X } from "lucide-react";
+import { FeedbackEntryButton } from "@/components/FeedbackModal";
 import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
+import { PremiumDevMessage } from "@/components/PremiumDevMessage";
 
 export function PremiumModal() {
   const {
@@ -56,6 +58,11 @@ export function PremiumModal() {
                 加入中 · 10大特典がすべて有効です
               </p>
             )}
+
+            <PremiumDevMessage />
+            <div className="mb-4">
+              <FeedbackEntryButton />
+            </div>
 
             <div className="mb-4 rounded-2xl bg-gradient-to-br from-amber-500/20 via-purple-600/20 to-aha/10 p-4">
               <p className="text-3xl font-black">

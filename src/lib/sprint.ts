@@ -1,4 +1,4 @@
-import { SPRINT_HOUR, SPRINT_MS } from "./constants";
+import { PULSE_NAME, SPRINT_HOUR, SPRINT_MS } from "./constants";
 import type { Post, Subject } from "./types";
 
 export function getSprintDayId(now = new Date()): string {
@@ -67,7 +67,7 @@ export function makeOfficialPost(dayId: string): Post {
     authorId: "u-official",
     kind: "sprint",
     subject: bank.subject,
-    text: `🔥 **21:00全国戦** — ${bank.title}\n\n${bank.text}`,
+    text: `🔥 **${PULSE_NAME}** — ${bank.title}\n\n${bank.text}`,
     createdAt: `${dayId}T21:00:00`,
     replyCount: 128,
     repostCount: 64,

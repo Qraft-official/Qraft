@@ -6,13 +6,23 @@ import { CreateSheet } from "@/components/CreateSheet";
 import { Fab } from "@/components/Fab";
 import { FocusBgm } from "@/components/FocusBgm";
 import { Onboarding } from "@/components/Onboarding";
+import { FeedbackModal } from "@/components/FeedbackModal";
 import { PaywallModal, PremiumModal } from "@/components/PremiumModal";
 import { ReplySheet } from "@/components/ReplySheet";
 import { useApp } from "@/lib/store";
 import { usePathname } from "next/navigation";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { ready, onboarded, profileHydrated, authenticated, openComposer, accentColor } = useApp();
+  const {
+    ready,
+    onboarded,
+    profileHydrated,
+    authenticated,
+    openComposer,
+    accentColor,
+    feedbackOpen,
+    closeFeedback,
+  } = useApp();
   const path = usePathname();
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
@@ -34,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="mx-auto min-h-dvh max-w-lg bg-black"
+      className="mx-auto min-h-dvh w-full max-w-lg bg-black md:max-w-2xl lg:max-w-4xl"
       style={{ ["--accent" as string]: accentColor }}
     >
       <FocusBgm />
@@ -42,14 +52,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!hideChrome && (
         <>
           <div className="h-24" />
-          <Fab onClick={() => openComposer({ open: true, mode: "menu" })} />
+          <Fab onClick={() => openComposer({ open: true, mode: "problem" })} />
           <BottomNav />
-          <CreateSheet />
-          <ReplySheet />
         </>
       )}
+      <CreateSheet />
+      <ReplySheet />
       <PremiumModal />
       <PaywallModal />
+      <FeedbackModal open={feedbackOpen} onClose={closeFeedback} />
     </div>
   );
 }

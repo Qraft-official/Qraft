@@ -1,21 +1,28 @@
 "use client";
 
 import { PREMIUM_PERKS, PREMIUM_PRICE_JPY } from "@/lib/constants";
+import { ensurePremiumThanksNotification } from "@/lib/notifications";
 import { useApp } from "@/lib/store";
 import { ArrowLeft, Crown } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
 import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
+import { PremiumDevMessage } from "@/components/PremiumDevMessage";
 
 function PremiumCheckoutResult() {
   const params = useSearchParams();
-  const { subscribe } = useApp();
+  const { subscribe, refreshNotifications } = useApp();
   const success = params.get("success") === "true";
   const canceled = params.get("canceled") === "true";
 
   useEffect(() => {
-    if (success) subscribe();
-  }, [success, subscribe]);
+    if (!success) return;
+    subscribe();
+    void (async () => {
+      await ensurePremiumThanksNotification();
+      await refreshNotifications();
+    })();
+  }, [success, subscribe, refreshNotifications]);
 
   if (success) {
     return (
@@ -57,6 +64,9 @@ function PremiumPageInner() {
         Qraft Premium
       </p>
       <p className="mt-1 text-sm text-muted">月額 ¥{PREMIUM_PRICE_JPY}</p>
+      <div className="mt-4">
+        <PremiumDevMessage />
+      </div>
       <div className="mt-4">
         <PremiumCheckoutResult />
       </div>

@@ -20,6 +20,7 @@ import {
   sessionUserFields,
   tiersFromProfile,
 } from "./auth";
+import { isValidHandle, sanitizeHandleInput } from "./handle";
 import { ME_ID, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
 import { isVerifiedCreator, LOUNGE_POSTS } from "./premium";
 import {
@@ -51,6 +52,13 @@ import type {
   Tiers,
   User,
 } from "./types";
+import { sendPulseProblemMail } from "./dev-mail-client";
+import {
+  ensureWelcomeNotification,
+  fetchNotifications,
+  markNotificationRead as persistNotificationRead,
+  type AppNotification,
+} from "./notifications";
 
 type Ratings = Record<string, Partial<Record<RatingKind, number>>>;
 
@@ -88,7 +96,10 @@ type Store = {
   toggleLike: (postId: string) => void;
   toggleRepost: (postId: string) => void;
   rate: (postId: string, kind: RatingKind, stars: number) => void;
-  addProblem: (input: NewProblem) => Promise<{ error?: string }>;
+  addProblem: (input: NewProblem) => Promise<{ error?: string; mailError?: string }>;
+  openFeedback: () => void;
+  closeFeedback: () => void;
+  feedbackOpen: boolean;
   addSolution: (input: {
     subject: Subject;
     text: string;
@@ -131,6 +142,10 @@ type Store = {
   react: (postId: string, emoji: string) => void;
   reactions: Record<string, string>;
   authorVerified: (userId: string) => boolean;
+  notifications: AppNotification[];
+  unreadNotificationCount: number;
+  refreshNotifications: () => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -151,7 +166,7 @@ function freshSprint(dayId: string): SprintRecord {
     startedAt: null,
     submittedAt: null,
     timedOut: false,
-    pages: [{ id: "page-1", strokes: [] }],
+    pages: [{ id: "page-1", strokes: [], texts: [] }],
   };
 }
 
@@ -179,6 +194,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [composer, setComposer] = useState<Composer>(emptyComposer);
   const [subscribed, setSubscribed] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [paywallReason, setPaywallReason] = useState("この機能は Premium 限定です");
   const [bgmOn, setBgmOnState] = useState(false);
@@ -187,6 +203,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [sprint, setSprint] = useState<SprintRecord>(() =>
     freshSprint(getSprintDayId()),
   );
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,6 +249,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setIsAdmin(false);
         setOnboarded(false);
         setProfileHydrated(true);
+        setNotifications([]);
       }
     };
 
@@ -243,6 +261,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       window.setTimeout(() => {
         void (async () => {
           await ensureProfile(user);
+          await ensureWelcomeNotification();
+          const inbox = await fetchNotifications();
+          if (cancelled) return;
+          setNotifications(inbox);
           const { data } = await fetchLearningProfile(user.id);
           if (cancelled) return;
           if (data) {
@@ -512,6 +534,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       handle?: string;
     }) => {
       try {
+        const handle = input.handle ? sanitizeHandleInput(input.handle) : "";
+        if (handle && !isValidHandle(handle)) {
+          return { error: "アカウントIDは半角英数字と - _ . のみ使えます" };
+        }
         const { data, error } = await supabase.auth.signUp({
           email: input.email.trim(),
           password: input.password,
@@ -519,7 +545,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             emailRedirectTo: emailRedirectTo(),
             data: {
               name: input.name?.trim() || "",
-              handle: input.handle?.trim().replace(/^@/, "") || "",
+              handle,
             },
           },
         });
@@ -529,6 +555,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         if (data.user) {
           await ensureProfile(data.user);
+          await ensureWelcomeNotification();
+          const inbox = await fetchNotifications();
+          setNotifications(inbox);
           setSupabaseUid(data.user.id);
           setSessionEmail(data.user.email ?? null);
           setAuthenticated(true);
@@ -537,7 +566,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setProfile((p) => ({
             ...p,
             ...(input.name ? { name: input.name.trim() } : {}),
-            ...(input.handle ? { handle: input.handle.trim().replace(/^@/, "") } : {}),
+            ...(handle ? { handle } : {}),
           }));
         }
         return {};
@@ -567,8 +596,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }));
         window.setTimeout(() => {
           setProfileHydrated(false);
-          void ensureProfile(data.user);
-          void fetchLearningProfile(data.user.id).then(({ data: row }) => {
+          void (async () => {
+            await ensureProfile(data.user);
+            await ensureWelcomeNotification();
+            const inbox = await fetchNotifications();
+            setNotifications(inbox);
+            const { data: row } = await fetchLearningProfile(data.user.id);
             if (row) {
               setOnboarded(!!row.onboarded);
               setTiers(tiersFromProfile(row));
@@ -577,8 +610,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               setOnboarded(false);
             }
             setProfileHydrated(true);
-          });
-          void checkIsAdmin().then(setIsAdmin);
+            setIsAdmin(await checkIsAdmin());
+          })();
         }, 0);
       }
       return {};
@@ -600,6 +633,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setOnboarded(false);
     setAge(null);
     setProfileHydrated(true);
+    setNotifications([]);
   }, []);
 
   const toggleFollow = useCallback((userId: string) => {
@@ -661,16 +695,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addProblem = useCallback(async (input: NewProblem) => {
-    if (!isDeveloper) {
-      return { error: "問題の投稿は管理者のみできます" };
-    }
     const {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session?.user) {
       return { error: "投稿するにはログインしてください" };
     }
-    const { post, error } = await insertProblem(input);
+    const { post, error } = await insertProblem({
+      ...input,
+      isSprint: !!input.isSprint,
+    });
     if (error || !post) return { error: error || "投稿に失敗しました" };
     setRemotePosts((p) => [post, ...p.filter((x) => x.id !== post.id)]);
     setRemoteUsers((u) => ({
@@ -681,18 +715,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handle: handleFromUser(session.user) ?? null,
       }),
     }));
+    if (input.isSprint) {
+      const mail = await sendPulseProblemMail({
+        problemId: post.id,
+        title: input.title ?? "",
+        text: input.text,
+        subject: input.subject,
+        solution: input.solution,
+        photo: input.photo || input.pages?.find((p) => p.image)?.image,
+        authorName: me.name,
+        authorHandle: me.handle,
+      });
+      if (mail.error) return { mailError: mail.error };
+    }
     return {};
-  }, [isDeveloper]);
+  }, [me.name, me.handle]);
 
   const addSolution = useCallback(
     (input: {
       subject: Subject;
       text: string;
-      pages?: { id: string; latex: string; doodle: number }[];
+      pages?: { id: string; latex: string; doodle: number; image?: string }[];
       problemId?: string;
       solutionFormat?: "handwriting" | "typed";
       photo?: string;
     }) => {
+      if (!input.problemId) return;
       const format = input.solutionFormat ?? (input.pages?.length ? "handwriting" : "typed");
       const post: Post = {
         id: `local-sol-${Date.now()}`,
@@ -701,7 +749,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         subject: input.subject,
         text: input.text,
         photo: input.photo,
-        pages: format === "typed" ? undefined : input.pages,
+        pages: input.pages,
         problemId: input.problemId,
         solutionFormat: format,
         createdAt: new Date().toISOString(),
@@ -714,6 +762,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         eleganceCount: 0,
       };
       setExtra((p) => [post, ...p]);
+      const problem = getPost(input.problemId);
+      if (problem && (problem.kind === "sprint" || problem.isSprint)) {
+        setSprint((s) => {
+          if (!s.startedAt || s.submittedAt) return s;
+          return { ...s, submittedAt: Date.now(), timedOut: false };
+        });
+      }
       if (input.problemId) {
         setActivities((a) => [
           {
@@ -728,7 +783,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ]);
       }
     },
-    [supabaseUid],
+    [supabaseUid, getPost],
   );
 
   const addReply = useCallback((input: { replyToId: string; text: string }) => {
@@ -772,13 +827,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const openComposer = useCallback(
     (next: Exclude<Composer, { open: false }>) => {
-      if (next.mode === "problem" && !isDeveloper) {
-        setComposer({ open: true, mode: "menu" });
-        return;
-      }
+      if (next.mode === "solution" && !next.quotePostId) return;
       setComposer(next);
     },
-    [isDeveloper],
+    [],
   );
 
   const closeComposer = useCallback(() => setComposer(emptyComposer), []);
@@ -796,6 +848,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const openPremium = useCallback(() => setPremiumOpen(true), []);
   const closePremium = useCallback(() => setPremiumOpen(false), []);
+  const openFeedback = useCallback(() => setFeedbackOpen(true), []);
+  const closeFeedback = useCallback(() => setFeedbackOpen(false), []);
   const openPaywall = useCallback((reason?: string) => {
     setPaywallReason(reason || "この機能は Qraft Premium（月額¥300）限定です");
     setPaywallOpen(true);
@@ -824,7 +878,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       startedAt: Date.now(),
       submittedAt: null,
       timedOut: false,
-      pages: s.pages.length ? s.pages : [{ id: "page-1", strokes: [] }],
+      pages: s.pages.length ? s.pages : [{ id: "page-1", strokes: [], texts: [] }],
     }));
   }, []);
 
@@ -846,6 +900,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const sprintUnlocked = !!(sprint.submittedAt || sprint.timedOut);
+
+  const refreshNotifications = useCallback(async () => {
+    const inbox = await fetchNotifications();
+    setNotifications(inbox);
+  }, []);
+
+  const markNotificationRead = useCallback(async (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+    );
+    await persistNotificationRead(id);
+  }, []);
+
+  const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
 
   const value: Store = {
     ready,
@@ -882,6 +950,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleRepost,
     rate,
     addProblem,
+    openFeedback,
+    closeFeedback,
+    feedbackOpen,
     addSolution,
     addReply,
     startSprint,
@@ -915,6 +986,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     react,
     reactions,
     authorVerified,
+    notifications,
+    unreadNotificationCount,
+    refreshNotifications,
+    markNotificationRead,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -1,3 +1,4 @@
+import { userFromRequest } from "@/lib/api-auth";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const user = await userFromRequest(request);
     const stripe = new Stripe(secret);
     const origin =
       request.headers.get("origin") ||
@@ -43,6 +45,9 @@ export async function POST(request: Request) {
       line_items: [{ price, quantity: 1 }],
       success_url: `${origin}/premium?success=true`,
       cancel_url: `${origin}/premium?canceled=true`,
+      client_reference_id: user?.id,
+      metadata: user ? { user_id: user.id } : undefined,
+      ...(user?.email ? { customer_email: user.email } : {}),
     });
 
     if (!session.url) {

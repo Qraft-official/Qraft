@@ -1,6 +1,7 @@
 "use client";
 
 import { AgePicker, SubjectLevelPickers } from "@/components/LearningSettings";
+import { GuardianConsentCheckbox } from "@/components/GuardianConsentCheckbox";
 import { useApp } from "@/lib/store";
 import type { Tiers } from "@/lib/types";
 import { motion } from "framer-motion";
@@ -12,6 +13,7 @@ export function Onboarding() {
   const [tiers, setTiers] = useState<Tiers>({ math: 1, physics: 1, chemistry: 1 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [consent, setConsent] = useState(false);
 
   return (
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-black px-5 py-10">
@@ -28,6 +30,11 @@ export function Onboarding() {
 
         <div className="mt-8 space-y-6">
           <AgePicker age={age} onChange={setAge} />
+          <GuardianConsentCheckbox
+            id="onboarding-guardian-consent"
+            checked={consent}
+            onChange={setConsent}
+          />
           <SubjectLevelPickers tiers={tiers} onChange={setTiers} />
         </div>
 
@@ -35,9 +42,9 @@ export function Onboarding() {
 
         <motion.button
           whileTap={{ scale: 0.97 }}
-          disabled={age === null || busy}
+          disabled={age === null || !consent || busy}
           onClick={() => {
-            if (age === null) return;
+            if (age === null || !consent) return;
             setBusy(true);
             setError("");
             void completeOnboarding({ age, tiers }).then((res) => {

@@ -25,6 +25,8 @@ create table if not exists public.problems (
   photo text,
   is_sprint boolean not null default false,
   sprint_day date,
+  pages jsonb,
+  problem_format text,
   created_at timestamptz not null default now()
 );
 
@@ -97,36 +99,102 @@ create policy "problems are readable"
 
 drop policy if exists "users can insert own problems" on public.problems;
 drop policy if exists "admins can insert problems" on public.problems;
-create policy "admins can insert problems"
+create policy "users can insert own problems"
   on public.problems for insert
   to authenticated
-  with check (
-    author_id = (select auth.uid())
-    and public.is_admin()
-  );
+  with check (author_id = (select auth.uid()));
 
 drop policy if exists "users can update own problems" on public.problems;
 drop policy if exists "admins can update problems" on public.problems;
-create policy "admins can update problems"
+create policy "users can update own problems"
   on public.problems for update
   to authenticated
-  using (public.is_admin())
-  with check (
-    author_id = (select auth.uid())
-    and public.is_admin()
-  );
+  using (author_id = (select auth.uid()) or public.is_admin())
+  with check (author_id = (select auth.uid()) or public.is_admin());
 
 drop policy if exists "users can delete own problems" on public.problems;
 drop policy if exists "admins can delete problems" on public.problems;
-create policy "admins can delete problems"
+create policy "users can delete own problems"
   on public.problems for delete
   to authenticated
-  using (public.is_admin());
+  using (author_id = (select auth.uid()) or public.is_admin());
 
 grant select on public.profiles to anon, authenticated;
 grant insert, update on public.profiles to authenticated;
 grant select on public.problems to anon, authenticated;
 grant insert, update, delete on public.problems to authenticated;
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  title text not null,
+  message text not null,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists notifications_user_created_idx
+  on public.notifications (user_id, created_at desc);
+
+create unique index if not exists notifications_welcome_once
+  on public.notifications (user_id)
+  where title = '🎉 Qraftへようこそ！';
+
+create unique index if not exists notifications_premium_thanks_once
+  on public.notifications (user_id)
+  where title = '👑 プレミアムプランへようこそ！ご支援ありがとうございます！';
+
+alter table public.notifications enable row level security;
+
+drop policy if exists "users can read own notifications" on public.notifications;
+create policy "users can read own notifications"
+  on public.notifications for select
+  to authenticated
+  using (user_id = (select auth.uid()));
+
+drop policy if exists "users can update own notifications" on public.notifications;
+create policy "users can update own notifications"
+  on public.notifications for update
+  to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+drop policy if exists "users can insert own notifications" on public.notifications;
+create policy "users can insert own notifications"
+  on public.notifications for insert
+  to authenticated
+  with check (user_id = (select auth.uid()));
+
+grant select, insert, update on public.notifications to authenticated;
+
+create or replace function public.ensure_welcome_notification()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := (select auth.uid());
+begin
+  if uid is null then
+    return;
+  end if;
+  insert into public.notifications (user_id, title, message)
+  select
+    uid,
+    '🎉 Qraftへようこそ！',
+    E'Qraft（クラフト）をご利用いただきありがとうございます！\nみんなで問題を出し合ったり、手書きや数式エディタで解法をシェアして楽しんでくださいね。\n\n【iPhone / iPad（iOS）をご利用の方へ】\n現在、開発者の環境都合によりネイティブアプリ版はAndroid限定公開となっています。\nApple端末（iOS）をご利用の方は、Webブラウザ（SafariやChromeなど）から快適にご利用いただけます！'
+  where not exists (
+    select 1
+    from public.notifications n
+    where n.user_id = uid
+      and n.title = '🎉 Qraftへようこそ！'
+  );
+end;
+$$;
+
+revoke all on function public.ensure_welcome_notification() from public, anon;
+grant execute on function public.ensure_welcome_notification() to authenticated;
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -142,6 +210,19 @@ begin
     nullif(new.raw_user_meta_data ->> 'handle', '')
   )
   on conflict (id) do nothing;
+
+  insert into public.notifications (user_id, title, message)
+  select
+    new.id,
+    '🎉 Qraftへようこそ！',
+    E'Qraft（クラフト）をご利用いただきありがとうございます！\nみんなで問題を出し合ったり、手書きや数式エディタで解法をシェアして楽しんでくださいね。\n\n【iPhone / iPad（iOS）をご利用の方へ】\n現在、開発者の環境都合によりネイティブアプリ版はAndroid限定公開となっています。\nApple端末（iOS）をご利用の方は、Webブラウザ（SafariやChromeなど）から快適にご利用いただけます！'
+  where not exists (
+    select 1
+    from public.notifications n
+    where n.user_id = new.id
+      and n.title = '🎉 Qraftへようこそ！'
+  );
+
   return new;
 end;
 $$;

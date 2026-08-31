@@ -10,7 +10,9 @@ import { FeedbackModal } from "@/components/FeedbackModal";
 import { PaywallModal, PremiumModal } from "@/components/PremiumModal";
 import { ReplySheet } from "@/components/ReplySheet";
 import { useApp } from "@/lib/store";
+import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const {
@@ -26,6 +28,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
+
+  useEffect(() => {
+    rememberPremiumReturnPath(path);
+  }, [path]);
 
   if (isAuthCallback) {
     return <>{children}</>;

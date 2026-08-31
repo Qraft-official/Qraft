@@ -17,7 +17,7 @@ export function PremiumCheckoutButton({
   const consentId = useId();
 
   return (
-    <div className="relative z-0" onClick={(e) => e.stopPropagation()}>
+    <div className="relative z-0 isolate">
       <div className="mb-3">
         <GuardianConsentCheckbox
           id={consentId}

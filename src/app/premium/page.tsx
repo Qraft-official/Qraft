@@ -49,48 +49,54 @@ function PremiumPageInner() {
   const { hasPremium, isDeveloper } = useApp();
 
   return (
-    <div className="px-4 py-6">
-      <button
-        type="button"
-        aria-label="戻る"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          goBackFromPremium(router);
-        }}
-        className="relative z-20 mb-6 text-muted"
-      >
-        <ArrowLeft size={20} />
-      </button>
-      <p className="flex items-center gap-2 text-2xl font-black">
-        <Crown className="text-amber-400" size={22} />
-        Qraft Premium
-      </p>
-      <p className="mt-1 text-sm text-muted">月額 ¥{PREMIUM_PRICE_JPY}</p>
-      <div className="mt-4">
-        <PremiumDevMessage />
-      </div>
-      <div className="mt-4">
-        <PremiumCheckoutResult />
-      </div>
-      {isDeveloper && (
-        <p className="mt-3 text-xs font-bold text-aha">開発者アカウントは全機能無料です。</p>
-      )}
-      <div className="mt-4 space-y-2">
-        {PREMIUM_PERKS.map((p) => (
-          <div key={p.title} className="rounded-2xl border border-gray-800 bg-panel px-3 py-2">
-            <p className="text-sm font-bold">
-              {p.icon} {p.title}
-            </p>
-            <p className="text-[11px] text-muted">{p.desc}</p>
-          </div>
-        ))}
-      </div>
-      {!hasPremium && !isDeveloper && (
-        <div className="mt-6">
-          <PremiumCheckoutButton />
+    <div className="flex min-h-dvh flex-col">
+      <header className="relative z-30 shrink-0 border-b border-gray-900 bg-black px-4 py-4">
+        <button
+          type="button"
+          aria-label="戻る"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
+            goBackFromPremium(router);
+          }}
+          className="pointer-events-auto relative z-30 -ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-muted"
+        >
+          <ArrowLeft size={20} />
+        </button>
+      </header>
+
+      <main className="relative z-0 flex-1 px-4 py-6">
+        <p className="flex items-center gap-2 text-2xl font-black">
+          <Crown className="text-amber-400" size={22} />
+          Qraft Premium
+        </p>
+        <p className="mt-1 text-sm text-muted">月額 ¥{PREMIUM_PRICE_JPY}</p>
+        <div className="mt-4">
+          <PremiumDevMessage />
         </div>
-      )}
+        <div className="mt-4">
+          <PremiumCheckoutResult />
+        </div>
+        {isDeveloper && (
+          <p className="mt-3 text-xs font-bold text-aha">開発者アカウントは全機能無料です。</p>
+        )}
+        <div className="mt-4 space-y-2">
+          {PREMIUM_PERKS.map((p) => (
+            <div key={p.title} className="rounded-2xl border border-gray-800 bg-panel px-3 py-2">
+              <p className="text-sm font-bold">
+                {p.icon} {p.title}
+              </p>
+              <p className="text-[11px] text-muted">{p.desc}</p>
+            </div>
+          ))}
+        </div>
+        {!hasPremium && !isDeveloper && (
+          <section className="relative z-0 mt-6" aria-label="決済">
+            <PremiumCheckoutButton />
+          </section>
+        )}
+      </main>
     </div>
   );
 }

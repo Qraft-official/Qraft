@@ -5,7 +5,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { PostCard } from "@/components/PostCard";
 import { SprintBanner } from "@/components/SprintBanner";
 import { TimelineAd } from "@/components/TimelineAd";
-import { WelcomeMissionCard, ReferralInviteCard } from "@/components/ReferralCards";
+import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
 import { useApp } from "@/lib/store";
 import type { FeedTab } from "@/lib/types";
 import { PULSE_BLURB, PREMIUM_PRICE_JPY } from "@/lib/constants";
@@ -110,10 +110,11 @@ export default function HomePage() {
 
       <SprintBanner />
 
-      <div className="space-y-3 px-4 py-3">
-        <WelcomeMissionCard />
-        <ReferralInviteCard />
-      </div>
+      {tab === "foryou" && (
+        <div className="px-4 py-3">
+          <ReferralCampaignBanner />
+        </div>
+      )}
 
       {hasPremium && tab === "foryou" && (
         <div className="border-b border-amber-500/20 bg-amber-400/5 px-4 py-3">

@@ -6,6 +6,7 @@ import { ProfileRadar } from "@/components/ProfileRadar";
 import { UserAvatar, UserBanner } from "@/components/UserAvatar";
 import { UserListModal } from "@/components/UserListModal";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
 import { PREMIUM_PRICE_JPY, PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import Link from "next/link";
@@ -77,18 +78,7 @@ export default function ProfilePage() {
             </button>
           </div>
         </div>
-        <Link
-          href="/settings?tab=referral"
-          className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/50 bg-gradient-to-r from-amber-400/20 via-aha/10 to-transparent px-4 py-3"
-        >
-          <span>
-            <span className="block text-sm font-black text-amber-200">🎁 友達紹介で半額！</span>
-            <span className="mt-0.5 block text-[11px] text-muted">
-              条件達成でプレミアムが1か月 ¥200。詳細は設定へ
-            </span>
-          </span>
-          <span className="shrink-0 text-xs font-bold text-aha">開く →</span>
-        </Link>
+        <ReferralCampaignBanner className="mt-3" />
         <p className="mt-3 text-sm">{me.bio}</p>
 
         <div className="mt-2 flex flex-wrap gap-1">

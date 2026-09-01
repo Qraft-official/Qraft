@@ -2,6 +2,7 @@
 
 import { AgePicker, SubjectLevelPickers } from "@/components/LearningSettings";
 import { GuardianConsentCheckbox } from "@/components/GuardianConsentCheckbox";
+import { WelcomeMissionCard } from "@/components/ReferralCards";
 import { ageForSave, needsGuardianConsent } from "@/lib/guardian-consent";
 import { useApp } from "@/lib/store";
 import type { Tiers } from "@/lib/types";
@@ -39,6 +40,7 @@ export function Onboarding() {
             />
           )}
           <SubjectLevelPickers tiers={tiers} onChange={setTiers} />
+          <WelcomeMissionCard />
         </div>
 
         {error && <p className="mt-3 text-xs text-red-400">{error}</p>}

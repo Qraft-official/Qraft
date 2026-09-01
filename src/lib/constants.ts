@@ -7,7 +7,7 @@ export const DEV_HANDLES = ["aha_taro"] as const;
 export const COMPLIMENTARY_PREMIUM_IDENTIFIERS = ["qrafter"] as const;
 export const GUARDIAN_CONSENT_AGE = 15;
 export const VERIFIED_CREATOR_IDS = ["u-official", "u-mirai"] as const;
-export const PREMIUM_PRICE_JPY = 300;
+export const PREMIUM_PRICE_JPY = 400;
 
 export const PULSE_NAME = "PULSE（パルス）";
 export const PULSE_BLURB =
@@ -126,7 +126,7 @@ export const PREMIUM_PERKS = [
 
 export const PREMIUM_DEV_MESSAGE = [
   "Qraft（クラフト）をインストールしていただきありがとうございます！",
-  "実は開発者は個人で運営している貧乏学生です。このSNSはたくさんの学習者が集まることで本当のおもしろさを発揮します！サーバー代や開発を継続し、サービス閉鎖を避けるためにも、ぜひジュース2本分（月額300円）のご支援・応援をよろしくお願いします！",
+  "実は開発者は個人で運営している貧乏学生です。このSNSはたくさんの学習者が集まることで本当のおもしろさを発揮します！サーバー代や開発を継続し、サービス閉鎖を避けるためにも、ぜひジュース2本分（月額400円）のご支援・応援をよろしくお願いします！",
 ] as const;
 
 export const GUARDIAN_CONSENT_LABEL =

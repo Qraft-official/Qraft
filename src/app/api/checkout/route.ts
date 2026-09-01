@@ -1,4 +1,5 @@
 import { bearerTokenFromRequest, userFromRequest } from "@/lib/api-auth";
+import { PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { isComplimentaryPremiumAccount } from "@/lib/premium";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       typeof user?.user_metadata?.handle === "string" ? user.user_metadata.handle : undefined;
     let name =
       typeof user?.user_metadata?.name === "string" ? user.user_metadata.name : undefined;
+    let couponId = "";
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (user && url && anon) {
@@ -43,9 +45,14 @@ export async function POST(request: Request) {
         auth: { persistSession: false, autoRefreshToken: false },
         global: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
       });
-      const { data } = await sb.from("profiles").select("handle, name").eq("id", user.id).maybeSingle();
+      const { data } = await sb
+        .from("profiles")
+        .select("handle, name, stripe_referral_coupon_id")
+        .eq("id", user.id)
+        .maybeSingle();
       if (data?.handle) handle = String(data.handle);
       if (data?.name) name = String(data.name);
+      if (data?.stripe_referral_coupon_id) couponId = String(data.stripe_referral_coupon_id);
     }
 
     if (
@@ -73,15 +80,49 @@ export async function POST(request: Request) {
 
     const stripe = new Stripe(secret);
     const price = await resolvePriceId(stripe, priceEnv);
+    let lineItem: Stripe.Checkout.SessionCreateParams.LineItem = { price, quantity: 1 };
+    try {
+      const retrieved = await stripe.prices.retrieve(price);
+      if (retrieved.unit_amount !== PREMIUM_PRICE_JPY) {
+        const productId = typeof retrieved.product === "string" ? retrieved.product : undefined;
+        lineItem = {
+          quantity: 1,
+          price_data: productId
+            ? {
+                currency: "jpy",
+                unit_amount: PREMIUM_PRICE_JPY,
+                recurring: { interval: "month" },
+                product: productId,
+              }
+            : {
+                currency: "jpy",
+                unit_amount: PREMIUM_PRICE_JPY,
+                recurring: { interval: "month" },
+                product_data: { name: "Qraft Premium" },
+              },
+        };
+      }
+    } catch {
+      lineItem = {
+        quantity: 1,
+        price_data: {
+          currency: "jpy",
+          unit_amount: PREMIUM_PRICE_JPY,
+          recurring: { interval: "month" },
+          product_data: { name: "Qraft Premium" },
+        },
+      };
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      line_items: [{ price, quantity: 1 }],
+      line_items: [lineItem],
       success_url: `${origin}/premium?success=true`,
       cancel_url: `${origin}/premium?canceled=true`,
       client_reference_id: user?.id,
       metadata: user ? { user_id: user.id } : undefined,
       ...(user?.email ? { customer_email: user.email } : {}),
+      ...(couponId.startsWith("c_") ? { discounts: [{ coupon: couponId }] } : {}),
     });
 
     if (!session.url) {

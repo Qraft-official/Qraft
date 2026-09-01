@@ -5,9 +5,10 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { PostCard } from "@/components/PostCard";
 import { SprintBanner } from "@/components/SprintBanner";
 import { TimelineAd } from "@/components/TimelineAd";
+import { WelcomeMissionCard, ReferralInviteCard } from "@/components/ReferralCards";
 import { useApp } from "@/lib/store";
 import type { FeedTab } from "@/lib/types";
-import { PULSE_BLURB } from "@/lib/constants";
+import { PULSE_BLURB, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { Crown } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 
@@ -76,7 +77,7 @@ export default function HomePage() {
             className="flex items-center gap-1 rounded-full border border-amber-400/40 px-2 py-1 text-[10px] font-bold text-amber-300"
           >
             <Crown size={12} />
-            {hasPremium ? "Premium" : "¥300"}
+            {hasPremium ? "Premium" : `¥${PREMIUM_PRICE_JPY}`}
           </button>
         </div>
         <div className="flex">
@@ -85,7 +86,7 @@ export default function HomePage() {
               key={t.id}
               onClick={() => {
                 if (t.id === "lounge" && !hasPremium) {
-                  openPaywall("プライベートコミュニティは Qraft Premium（月額¥300）限定です。");
+                  openPaywall(`プライベートコミュニティは Qraft Premium（月額¥${PREMIUM_PRICE_JPY}）限定です。`);
                   return;
                 }
                 setTab(t.id);
@@ -108,6 +109,11 @@ export default function HomePage() {
       </div>
 
       <SprintBanner />
+
+      <div className="space-y-3 px-4 py-3">
+        <WelcomeMissionCard />
+        <ReferralInviteCard />
+      </div>
 
       {hasPremium && tab === "foryou" && (
         <div className="border-b border-amber-500/20 bg-amber-400/5 px-4 py-3">

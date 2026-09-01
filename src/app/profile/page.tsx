@@ -8,10 +8,11 @@ import { ProfileRadar } from "@/components/ProfileRadar";
 import { UserAvatar, UserBanner } from "@/components/UserAvatar";
 import { UserListModal } from "@/components/UserListModal";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
+import { PREMIUM_PRICE_JPY, PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import { useMemo, useState } from "react";
 import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
+import { ReferralInviteCard, WelcomeMissionCard } from "@/components/ReferralCards";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
 type Tab = "posts" | "solutions" | "analytics" | "titles";
@@ -74,7 +75,7 @@ export default function ProfilePage() {
               onClick={openPremium}
               className="rounded-full border border-amber-400/40 px-3 py-1 text-[10px] font-bold text-amber-300"
             >
-              {hasPremium ? "Premium 特典" : "Premium ¥300"}
+              {hasPremium ? "Premium 特典" : `Premium ¥${PREMIUM_PRICE_JPY}`}
             </button>
             {!hasPremium && !isDeveloper && (
               <PremiumCheckoutButton
@@ -85,6 +86,10 @@ export default function ProfilePage() {
           </div>
         </div>
         <p className="mt-2 text-sm">{me.bio}</p>
+        <div className="mt-3 space-y-3">
+          <ReferralInviteCard />
+          <WelcomeMissionCard />
+        </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {me.activeTitles.map((t) => (
             <span
@@ -209,7 +214,7 @@ export default function ProfilePage() {
               className="mx-2 mt-4 w-[calc(100%-1rem)] rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left text-xs"
             >
               <span className="font-bold text-amber-200">年鑑アナリティクスは Premium</span>
-              <span className="mt-1 block text-muted">習熟度の深掘り統計は月額¥300で解放</span>
+              <span className="mt-1 block text-muted">習熟度の深掘り統計は月額¥{PREMIUM_PRICE_JPY}で解放</span>
             </button>
           )}
         </div>

@@ -21,7 +21,10 @@ import {
   tiersFromProfile,
 } from "./auth";
 import { isValidHandle, sanitizeHandleInput } from "./handle";
-import { ME_ID, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
+import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
+import { getDeviceId, takePendingReferralCode } from "./device-id";
+import type { ReferralMe } from "./referral";
+import { referralFetch } from "./referral-client";
 import { isVerifiedCreator, isComplimentaryPremiumAccount, LOUNGE_POSTS } from "./premium";
 import {
   communityForDay,
@@ -125,6 +128,9 @@ type Store = {
   repliesTo: (postId: string) => Post[];
   isDeveloper: boolean;
   hasPremium: boolean;
+  referralMe: ReferralMe | null;
+  refreshReferral: () => Promise<void>;
+  applyReferralCode: (code: string, deviceId: string) => Promise<{ error?: string }>;
   subscribed: boolean;
   subscribe: () => void;
   unsubscribe: () => void;
@@ -193,6 +199,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [composer, setComposer] = useState<Composer>(emptyComposer);
   const [subscribed, setSubscribed] = useState(false);
+  const [referralMe, setReferralMe] = useState<ReferralMe | null>(null);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -250,6 +257,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setOnboarded(false);
         setProfileHydrated(true);
         setNotifications([]);
+        setReferralMe(null);
       }
     };
 
@@ -282,6 +290,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setProfileHydrated(true);
           const admin = await checkIsAdmin();
           if (!cancelled) setIsAdmin(admin);
+          const pending = takePendingReferralCode();
+          const deviceId = getDeviceId();
+          if (pending && deviceId) {
+            await referralFetch("/api/referral", {
+              method: "POST",
+              body: JSON.stringify({ code: pending, deviceId }),
+            });
+          }
+          await referralFetch("/api/referral/event", {
+            method: "POST",
+            body: JSON.stringify({ type: "login" }),
+          });
+          const meRes = await referralFetch("/api/referral");
+          if (!cancelled && !meRes.error && meRes.data && "code" in meRes.data) {
+            setReferralMe(meRes.data as unknown as ReferralMe);
+          }
         })();
       }, 0);
     };
@@ -411,7 +435,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       email: sessionEmail,
     });
   }, [supabaseUid, remoteUsers, profile.handle, profile.name, sessionEmail]);
-  const hasPremium = isDeveloper || subscribed || complimentaryPremium;
+  const trialPremium = Boolean(
+    referralMe?.trialUntil && new Date(referralMe.trialUntil).getTime() > Date.now(),
+  );
+  const hasPremium = isDeveloper || subscribed || complimentaryPremium || trialPremium;
 
   const me: User = useMemo(() => {
     const base = supabaseUid
@@ -717,6 +744,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       isSprint: !!input.isSprint,
     });
     if (error || !post) return { error: error || "投稿に失敗しました" };
+    void referralFetch("/api/referral/event", {
+      method: "POST",
+      body: JSON.stringify({ type: "post" }),
+    }).then((res) => {
+      if (!res.error && res.data && "code" in res.data) {
+        setReferralMe(res.data as unknown as ReferralMe);
+      }
+    });
     setRemotePosts((p) => [post, ...p.filter((x) => x.id !== post.id)]);
     setRemoteUsers((u) => ({
       ...u,
@@ -773,6 +808,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         eleganceCount: 0,
       };
       setExtra((p) => [post, ...p]);
+      void referralFetch("/api/referral/event", {
+        method: "POST",
+        body: JSON.stringify({ type: "solve" }),
+      }).then((res) => {
+        if (!res.error && res.data && "code" in res.data) {
+          setReferralMe(res.data as unknown as ReferralMe);
+        }
+      });
       const problem = getPost(input.problemId);
       if (problem && (problem.kind === "sprint" || problem.isSprint)) {
         setSprint((s) => {
@@ -846,6 +889,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const closeComposer = useCallback(() => setComposer(emptyComposer), []);
 
+  const refreshReferral = useCallback(async () => {
+    const res = await referralFetch("/api/referral");
+    if (!res.error && res.data && "code" in res.data) {
+      setReferralMe(res.data as unknown as ReferralMe);
+    }
+  }, []);
+
+  const applyReferralCode = useCallback(async (code: string, deviceId: string) => {
+    const res = await referralFetch("/api/referral", {
+      method: "POST",
+      body: JSON.stringify({ code, deviceId }),
+    });
+    if (!res.error && res.data && "code" in res.data) {
+      setReferralMe(res.data as unknown as ReferralMe);
+    }
+    return { error: res.error };
+  }, []);
+
   const subscribe = useCallback(() => {
     setSubscribed(true);
     setPaywallOpen(false);
@@ -862,7 +923,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const openFeedback = useCallback(() => setFeedbackOpen(true), []);
   const closeFeedback = useCallback(() => setFeedbackOpen(false), []);
   const openPaywall = useCallback((reason?: string) => {
-    setPaywallReason(reason || "この機能は Qraft Premium（月額¥300）限定です");
+    setPaywallReason(reason || `この機能は Qraft Premium（月額¥${PREMIUM_PRICE_JPY}）限定です`);
     setPaywallOpen(true);
   }, []);
   const closePaywall = useCallback(() => setPaywallOpen(false), []);
@@ -980,6 +1041,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     repliesTo,
     isDeveloper,
     hasPremium,
+    referralMe,
+    refreshReferral,
+    applyReferralCode,
     subscribed,
     subscribe,
     unsubscribe,

@@ -299,7 +299,7 @@ export function PostCard({
               <button
                 type="button"
                 onClick={() =>
-                  openPaywall("特別リアクションは Qraft Premium（月額¥300）限定です。")
+                  openPaywall("特別リアクションは Qraft Premium（月額¥400）限定です。")
                 }
                 className="text-[11px] text-muted"
               >

@@ -1,7 +1,10 @@
 "use client";
 
 import { SUBJECTS, TIER_NAMES } from "@/lib/constants";
+import { LatexText } from "@/lib/latex";
+import { levelSample } from "@/lib/level-samples";
 import type { Subject, Tier, Tiers } from "@/lib/types";
+import { motion } from "framer-motion";
 
 export const TIER_BANDS: { label: string; hint: string; tiers: Tier[] }[] = [
   { label: "基礎", hint: "入門〜基本", tiers: [1, 2] },
@@ -91,15 +94,16 @@ export function SubjectLevelPickers({
       <p className="text-center text-[10px] text-muted">難易度の流れ：基礎 ➔ 応用 ➔ 発展</p>
 
       {SUBJECTS.map((s) => {
-        const current = tiers[s.id];
-        const band = bandFor(current);
+        const selectedLevel: Tier = tiers[s.id];
+        const band = bandFor(selectedLevel);
+        const sample = levelSample(s.id, selectedLevel);
         return (
           <div key={s.id} className="rounded-3xl border border-gray-800 bg-panel p-4">
             <p className="text-lg font-bold">
               {s.emoji} {s.label}
             </p>
             <p className="mt-1 text-xs text-purple-300">
-              Tier {current} · {TIER_NAMES[s.id][current]} · {band.label}
+              Tier {selectedLevel} · {TIER_NAMES[s.id][selectedLevel]} · {band.label}
             </p>
             <div className="mt-3 grid grid-cols-5 gap-2">
               {([1, 2, 3, 4, 5] as Tier[]).map((t) => (
@@ -108,7 +112,7 @@ export function SubjectLevelPickers({
                   type="button"
                   onClick={() => setTier(s.id, t)}
                   className={`rounded-xl py-3 text-sm font-black ${
-                    current === t ? "bg-neon text-white glow-purple" : "bg-white/5 text-muted"
+                    selectedLevel === t ? "bg-neon text-white glow-purple" : "bg-white/5 text-muted"
                   }`}
                 >
                   {t}
@@ -120,6 +124,32 @@ export function SubjectLevelPickers({
               <span>3 応用</span>
               <span>4–5 発展</span>
             </div>
+
+            <motion.div
+              key={`${s.id}-${selectedLevel}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+              className="mt-4 rounded-2xl border border-gray-800 bg-black/50 px-3 py-3"
+            >
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                    sample.band === "基礎"
+                      ? "bg-sky-400/15 text-sky-300"
+                      : sample.band === "応用"
+                        ? "bg-aha/15 text-aha"
+                        : "bg-orange-400/15 text-orange-300"
+                  }`}
+                >
+                  サンプル · {sample.band}
+                </span>
+                <span className="text-[11px] font-bold text-white">{sample.title}</span>
+              </div>
+              <p className="mb-2 text-[10px] leading-relaxed text-muted">{sample.bandHint}</p>
+              <LatexText text={sample.problem} className="text-[13px] text-[#e7e9ea]" />
+              <p className="mt-2 text-[11px] leading-relaxed text-purple-300">ヒント：{sample.hint}</p>
+            </motion.div>
           </div>
         );
       })}

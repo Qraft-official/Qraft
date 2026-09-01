@@ -1,6 +1,7 @@
 "use client";
 
 import { formatAuthError } from "@/lib/auth";
+import { savePendingReferralCode } from "@/lib/device-id";
 import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
@@ -20,6 +21,7 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [referralCode, setReferralCode] = useState("");
 
   useEffect(() => {
     try {
@@ -54,6 +56,7 @@ export function AuthScreen() {
       return;
     }
     setBusy(true);
+    if (referralCode.trim()) savePendingReferralCode(referralCode);
     try {
       if (mode === "signup") {
         const res =
@@ -183,6 +186,20 @@ export function AuthScreen() {
               15歳未満の方は、保護者の同意を得てご利用ください。年齢は次の画面で入力します。
             </p>
           )}
+
+          <label className="block text-xs text-muted">
+            紹介コード（任意）
+            <input
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+              className="mt-1 w-full rounded-xl border border-gray-800 bg-panel px-3 py-3 text-sm text-white outline-none"
+              placeholder="友達のコード"
+              autoComplete="off"
+            />
+            <span className="mt-1 block text-[10px] text-muted">
+              入力すると3日間プレミアム体験と Welcome Mission（4日以内）が始まります。
+            </span>
+          </label>
 
           {error && <p className="text-xs text-red-400">{error}</p>}
           {info && <p className="text-xs text-aha">{info}</p>}

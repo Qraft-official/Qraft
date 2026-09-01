@@ -134,7 +134,7 @@ export function EditProfileModal({
                   key={b}
                   onClick={() => {
                     if (!hasPremium) {
-                      openPaywall("上級バナーは Qraft Premium（月額¥300）限定です。");
+                      openPaywall("上級バナーは Qraft Premium（月額¥400）限定です。");
                       return;
                     }
                     setBanner(b);
@@ -154,7 +154,7 @@ export function EditProfileModal({
                   key={c}
                   onClick={() => {
                     if (!hasPremium) {
-                      openPaywall("アクセントカラーは Qraft Premium（月額¥300）限定です。");
+                      openPaywall("アクセントカラーは Qraft Premium（月額¥400）限定です。");
                       return;
                     }
                     setAccentColor(c);
@@ -204,7 +204,7 @@ export function EditProfileModal({
                     key={t}
                     onClick={() => {
                       if (gold && !hasPremium) {
-                        openPaywall("ゴールド称号は Qraft Premium（月額¥300）限定です。");
+                        openPaywall("ゴールド称号は Qraft Premium（月額¥400）限定です。");
                         return;
                       }
                       toggleTitle(t);
@@ -225,7 +225,7 @@ export function EditProfileModal({
             {!hasPremium && (
               <button
                 type="button"
-                onClick={() => openPaywall("限定ゴールド称号は Qraft Premium（月額¥300）です。")}
+                onClick={() => openPaywall("限定ゴールド称号は Qraft Premium（月額¥400）です。")}
                 className="mb-4 text-left text-[11px] text-amber-300"
               >
                 👑 ゴールド称号を解除する

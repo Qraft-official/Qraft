@@ -129,7 +129,7 @@ export function CreateSheet() {
             type="button"
             onClick={() => {
               if (!hasPremium) {
-                openPaywall("AI問題メーカーは Qraft Premium（月額¥300）限定です。");
+                openPaywall("AI問題メーカーは Qraft Premium（月額¥400）限定です。");
                 return;
               }
               const g = generateAiProblem(subject, aiPrompt);

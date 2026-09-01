@@ -243,3 +243,11 @@ exception
   when duplicate_object then null;
 end $$;
 
+-- Referral program (also applied remotely)
+alter table public.profiles
+  add column if not exists referral_code text,
+  add column if not exists stripe_customer_id text,
+  add column if not exists stripe_referral_coupon_id text,
+  add column if not exists premium_trial_until timestamptz;
+
+

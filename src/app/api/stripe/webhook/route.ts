@@ -1,4 +1,5 @@
 import { PREMIUM_THANKS_MESSAGE, PREMIUM_THANKS_TITLE } from "@/lib/constants";
+import { adminSupabase } from "@/lib/admin-supabase";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -49,6 +50,17 @@ export async function POST(request: Request) {
     if (session.mode === "subscription") {
       const userId = session.client_reference_id || session.metadata?.user_id;
       if (userId) await insertPremiumThanks(userId);
+      const admin = adminSupabase();
+      if (admin && userId) {
+        const customer =
+          typeof session.customer === "string" ? session.customer : session.customer?.id;
+        const patch: Record<string, unknown> = {};
+        if (customer) patch.stripe_customer_id = customer;
+        if (session.discounts?.length) patch.stripe_referral_coupon_id = null;
+        if (Object.keys(patch).length) {
+          await admin.from("profiles").update(patch).eq("id", userId);
+        }
+      }
     }
   }
 

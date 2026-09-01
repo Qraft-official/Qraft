@@ -4,6 +4,7 @@ export const WELCOME_MISSION_HOURS = 96;
 export const WELCOME_SOLVES_TARGET = 3;
 export const WELCOME_POSTS_TARGET = 3;
 export const WELCOME_LOGIN_TARGET = 3;
+export const REFERRAL_APPLY_HOURS = 168;
 
 export type ReferralClaimView = {
   referrerId: string;
@@ -23,7 +24,16 @@ export type ReferralMe = {
   trialUntil: string | null;
   pendingDiscount: boolean;
   claim: ReferralClaimView | null;
+  accountCreatedAt: string | null;
 };
+
+export function canShowReferralApplyForm(me: ReferralMe | null, now = Date.now()) {
+  if (!me || me.claim) return false;
+  if (!me.accountCreatedAt) return false;
+  const created = new Date(me.accountCreatedAt).getTime();
+  if (!Number.isFinite(created)) return false;
+  return now - created < REFERRAL_APPLY_HOURS * 3600000;
+}
 
 export function formatMissionCountdown(deadlineIso: string, now = Date.now()) {
   const end = new Date(deadlineIso).getTime();

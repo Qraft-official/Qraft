@@ -1,6 +1,7 @@
 import { adminSupabase } from "./admin-supabase";
 import {
   PREMIUM_REFERRAL_HALF_JPY,
+  REFERRAL_APPLY_HOURS,
   REFERRAL_TRIAL_HOURS,
   WELCOME_LOGIN_TARGET,
   WELCOME_MISSION_HOURS,
@@ -71,7 +72,7 @@ export async function getReferralMe(userId: string): Promise<ReferralMe | null> 
   const code = await ensureReferralCode(userId);
   const { data: profile } = await admin
     .from("profiles")
-    .select("premium_trial_until, stripe_referral_coupon_id")
+    .select("premium_trial_until, stripe_referral_coupon_id, created_at")
     .eq("id", userId)
     .maybeSingle();
   const { data: claim } = await admin
@@ -84,6 +85,7 @@ export async function getReferralMe(userId: string): Promise<ReferralMe | null> 
     trialUntil: profile?.premium_trial_until ? String(profile.premium_trial_until) : null,
     pendingDiscount: Boolean(profile?.stripe_referral_coupon_id),
     claim: claim ? asClaimView(claim as ReferralClaimRow) : null,
+    accountCreatedAt: profile?.created_at ? String(profile.created_at) : null,
   };
 }
 
@@ -95,11 +97,12 @@ export async function getReferralMeWithToken(userId: string, accessToken: string
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
-  const { data: profile } = await sb
+  const { data: profile, error: profileError } = await sb
     .from("profiles")
-    .select("referral_code, premium_trial_until, stripe_referral_coupon_id")
+    .select("referral_code, premium_trial_until, stripe_referral_coupon_id, created_at")
     .eq("id", userId)
     .maybeSingle();
+  if (profileError) return getReferralMe(userId);
   let code = profile?.referral_code ? String(profile.referral_code) : "";
   if (!code) {
     const { data: rpc } = await sb.rpc("random_referral_code");
@@ -112,6 +115,7 @@ export async function getReferralMeWithToken(userId: string, accessToken: string
     trialUntil: profile?.premium_trial_until ? String(profile.premium_trial_until) : null,
     pendingDiscount: Boolean(profile?.stripe_referral_coupon_id),
     claim: claim ? asClaimView(claim as ReferralClaimRow) : null,
+    accountCreatedAt: profile?.created_at ? String(profile.created_at) : null,
   };
 }
 
@@ -134,6 +138,21 @@ export async function applyReferralCode(input: {
     .maybeSingle();
   if (existing) return { error: "紹介コードはすでに適用済みです。" };
 
+  const { data: self } = await admin
+    .from("profiles")
+    .select("created_at")
+    .eq("id", input.refereeId)
+    .maybeSingle();
+  let createdRaw = self?.created_at ? String(self.created_at) : "";
+  if (!createdRaw) {
+    const { data: authUser } = await admin.auth.admin.getUserById(input.refereeId);
+    createdRaw = authUser.user?.created_at ? String(authUser.user.created_at) : "";
+  }
+  const createdAt = createdRaw ? new Date(createdRaw).getTime() : NaN;
+  if (!Number.isFinite(createdAt) || Date.now() - createdAt >= REFERRAL_APPLY_HOURS * 3600000) {
+    return { error: "紹介コードの入力期限（登録から7日以内）を過ぎています。" };
+  }
+
   const { data: deviceHit } = await admin
     .from("referral_claims")
     .select("referee_id")
@@ -146,7 +165,7 @@ export async function applyReferralCode(input: {
   const { data: referrer } = await admin
     .from("profiles")
     .select("id")
-    .eq("referral_code", code)
+    .ilike("referral_code", code)
     .maybeSingle();
   if (!referrer?.id) return { error: "紹介コードが見つかりません。" };
   if (referrer.id === input.refereeId) return { error: "自分の紹介コードは使えません。" };

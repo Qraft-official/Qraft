@@ -9,6 +9,7 @@ import { UserAvatar, UserBanner } from "@/components/UserAvatar";
 import { UserListModal } from "@/components/UserListModal";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { PREMIUM_PRICE_JPY, PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
+import { canShowReferralApplyForm } from "@/lib/referral";
 import { useApp } from "@/lib/store";
 import { useMemo, useState } from "react";
 import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
@@ -18,7 +19,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 type Tab = "posts" | "solutions" | "analytics" | "titles";
 
 export default function ProfilePage() {
-  const { me, posts, follows, followers, userOf, reposts, getPost, hasPremium, isDeveloper, openPremium, authorVerified, logout } =
+  const { me, posts, follows, followers, userOf, reposts, getPost, hasPremium, isDeveloper, openPremium, authorVerified, logout, referralMe } =
     useApp();
   const [tab, setTab] = useState<Tab>("posts");
   const [edit, setEdit] = useState(false);
@@ -35,6 +36,8 @@ export default function ProfilePage() {
     .filter((p): p is NonNullable<typeof p> => !!p && p.authorId !== me.id);
   const followingUsers = follows.map(userOf);
   const followerUsers = followers.map(userOf);
+
+  const showWelcomeMission = Boolean(referralMe?.claim) || canShowReferralApplyForm(referralMe);
 
   return (
     <div>
@@ -66,11 +69,11 @@ export default function ProfilePage() {
               編集
             </button>
             <button
-                onClick={() => void logout()}
-                className="rounded-full border border-gray-700 px-4 py-1.5 text-sm font-bold text-muted"
-              >
-                ログアウト
-              </button>
+              onClick={() => void logout()}
+              className="rounded-full border border-gray-700 px-4 py-1.5 text-sm font-bold text-muted"
+            >
+              ログアウト
+            </button>
             <button
               onClick={openPremium}
               className="rounded-full border border-amber-400/40 px-3 py-1 text-[10px] font-bold text-amber-300"
@@ -86,10 +89,12 @@ export default function ProfilePage() {
           </div>
         </div>
         <p className="mt-2 text-sm">{me.bio}</p>
+
         <div className="mt-3 space-y-3">
           <ReferralInviteCard />
-          <WelcomeMissionCard />
+          {showWelcomeMission && <WelcomeMissionCard />}
         </div>
+
         <div className="mt-2 flex flex-wrap gap-1">
           {me.activeTitles.map((t) => (
             <span
@@ -126,9 +131,12 @@ export default function ProfilePage() {
 
       <div className="mt-4 px-4">
         <IosNotice />
-        <div className="mt-3">
-          <FeedbackEntryButton className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-800 bg-panel px-3 py-3 text-sm font-bold" />
-        </div>
+        {/* プレミアム会員または開発者の場合のみフィードバック送信ボタンを表示 */}
+        {(hasPremium || isDeveloper) && (
+          <div className="mt-3">
+            <FeedbackEntryButton className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-800 bg-panel px-3 py-3 text-sm font-bold" />
+          </div>
+        )}
       </div>
 
       <div className="mt-2 flex border-b border-gray-800">

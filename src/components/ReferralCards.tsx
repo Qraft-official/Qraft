@@ -1,13 +1,12 @@
 "use client";
 
 import { getDeviceId, savePendingReferralCode } from "@/lib/device-id";
-import { referralFetch } from "@/lib/referral-client";
 import {
+  canShowReferralApplyForm,
   formatMissionCountdown,
   WELCOME_LOGIN_TARGET,
   WELCOME_POSTS_TARGET,
   WELCOME_SOLVES_TARGET,
-  type ReferralMe,
 } from "@/lib/referral";
 import { useApp } from "@/lib/store";
 import Link from "next/link";
@@ -34,6 +33,7 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
   if (!referralMe) return null;
 
   if (!claim) {
+    if (!canShowReferralApplyForm(referralMe, now)) return null;
     return (
       <div className="rounded-2xl border border-amber-500/30 bg-amber-400/5 px-4 py-3">
         <p className="text-sm font-black">友達紹介コード</p>

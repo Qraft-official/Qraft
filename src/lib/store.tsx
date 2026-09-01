@@ -290,14 +290,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setProfileHydrated(true);
           const admin = await checkIsAdmin();
           if (!cancelled) setIsAdmin(admin);
-          const pending = takePendingReferralCode();
           const deviceId = getDeviceId();
-          if (pending && deviceId) {
-            await referralFetch("/api/referral", {
-              method: "POST",
-              body: JSON.stringify({ code: pending, deviceId }),
-            });
-          }
           await referralFetch("/api/referral/event", {
             method: "POST",
             body: JSON.stringify({ type: "login" }),
@@ -305,6 +298,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const meRes = await referralFetch("/api/referral");
           if (!cancelled && !meRes.error && meRes.data && "code" in meRes.data) {
             setReferralMe(meRes.data as unknown as ReferralMe);
+          }
+          const pending = takePendingReferralCode();
+          const ownCode =
+            meRes.data && "code" in meRes.data ? String((meRes.data as { code?: string }).code ?? "") : "";
+          if (pending && deviceId && pending !== ownCode) {
+            const applied = await referralFetch("/api/referral", {
+              method: "POST",
+              body: JSON.stringify({ code: pending, deviceId }),
+            });
+            if (!cancelled && !applied.error && applied.data && "code" in applied.data) {
+              setReferralMe(applied.data as unknown as ReferralMe);
+            }
           }
         })();
       }, 0);

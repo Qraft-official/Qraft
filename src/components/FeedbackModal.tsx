@@ -15,7 +15,7 @@ export function FeedbackModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const { me, refreshNotifications } = useApp();
+  const { me, refreshNotifications, hasPremium, isDeveloper } = useApp();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("フィードバック");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -61,7 +61,7 @@ export function FeedbackModal({
 
   return (
     <AnimatePresence>
-      {open && (
+      {open && (hasPremium || isDeveloper) && (
         <motion.div
           className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 sm:items-center"
           initial={{ opacity: 0 }}
@@ -142,7 +142,8 @@ export function FeedbackModal({
 }
 
 export function FeedbackEntryButton({ className }: { className?: string }) {
-  const { openFeedback } = useApp();
+  const { openFeedback, hasPremium, isDeveloper } = useApp();
+  if (!hasPremium && !isDeveloper) return null;
   return (
     <button
       type="button"

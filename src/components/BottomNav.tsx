@@ -22,7 +22,11 @@ export function BottomNav() {
       <div className="mx-auto flex max-w-lg items-center justify-around px-1 pt-2">
         {TABS.map((t) => {
           const active =
-            t.href === "/" ? path === "/" : path.startsWith(t.href);
+            t.href === "/"
+              ? path === "/"
+              : t.href === "/profile"
+                ? path.startsWith("/profile") || path.startsWith("/settings")
+                : path.startsWith(t.href);
           const Icon = t.icon;
           const notify = t.href === "/notifications";
           return (

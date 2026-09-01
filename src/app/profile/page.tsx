@@ -1,25 +1,22 @@
 "use client";
 
 import { EditProfileModal } from "@/components/EditProfileModal";
-import { FeedbackEntryButton } from "@/components/FeedbackModal";
-import { IosNotice } from "@/components/IosNotice";
 import { PostCard } from "@/components/PostCard";
 import { ProfileRadar } from "@/components/ProfileRadar";
 import { UserAvatar, UserBanner } from "@/components/UserAvatar";
 import { UserListModal } from "@/components/UserListModal";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { PREMIUM_PRICE_JPY, PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
-import { canShowReferralApplyForm } from "@/lib/referral";
 import { useApp } from "@/lib/store";
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
-import { ReferralInviteCard, WelcomeMissionCard } from "@/components/ReferralCards";
+import { Settings } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
 type Tab = "posts" | "solutions" | "analytics" | "titles";
 
 export default function ProfilePage() {
-  const { me, posts, follows, followers, userOf, reposts, getPost, hasPremium, isDeveloper, openPremium, authorVerified, logout, referralMe } =
+  const { me, posts, follows, followers, userOf, reposts, getPost, hasPremium, isDeveloper, openPremium, authorVerified, logout } =
     useApp();
   const [tab, setTab] = useState<Tab>("posts");
   const [edit, setEdit] = useState(false);
@@ -36,8 +33,6 @@ export default function ProfilePage() {
     .filter((p): p is NonNullable<typeof p> => !!p && p.authorId !== me.id);
   const followingUsers = follows.map(userOf);
   const followerUsers = followers.map(userOf);
-
-  const showWelcomeMission = Boolean(referralMe?.claim) || canShowReferralApplyForm(referralMe);
 
   return (
     <div>
@@ -62,6 +57,12 @@ export default function ProfilePage() {
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-1 rounded-full border border-gray-700 px-3 py-1.5 text-sm font-bold"
+            >
+              <Settings size={14} /> 設定
+            </Link>
             <button
               onClick={() => setEdit(true)}
               className="rounded-full border border-gray-700 px-4 py-1.5 text-sm font-bold"
@@ -74,26 +75,21 @@ export default function ProfilePage() {
             >
               ログアウト
             </button>
-            <button
-              onClick={openPremium}
-              className="rounded-full border border-amber-400/40 px-3 py-1 text-[10px] font-bold text-amber-300"
-            >
-              {hasPremium ? "Premium 特典" : `Premium ¥${PREMIUM_PRICE_JPY}`}
-            </button>
-            {!hasPremium && !isDeveloper && (
-              <PremiumCheckoutButton
-                label="プレミアムプランに登録する"
-                className="rounded-full bg-amber-400 px-3 py-1.5 text-[11px] font-black text-black disabled:opacity-50"
-              />
-            )}
           </div>
         </div>
-        <p className="mt-2 text-sm">{me.bio}</p>
-
-        <div className="mt-3 space-y-3">
-          <ReferralInviteCard />
-          {showWelcomeMission && <WelcomeMissionCard />}
-        </div>
+        <Link
+          href="/settings?tab=referral"
+          className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/50 bg-gradient-to-r from-amber-400/20 via-aha/10 to-transparent px-4 py-3"
+        >
+          <span>
+            <span className="block text-sm font-black text-amber-200">🎁 友達紹介で半額！</span>
+            <span className="mt-0.5 block text-[11px] text-muted">
+              条件達成でプレミアムが1か月 ¥200。詳細は設定へ
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-bold text-aha">開く →</span>
+        </Link>
+        <p className="mt-3 text-sm">{me.bio}</p>
 
         <div className="mt-2 flex flex-wrap gap-1">
           {me.activeTitles.map((t) => (
@@ -127,16 +123,6 @@ export default function ProfilePage() {
             </span>
           ))}
         </div>
-      </div>
-
-      <div className="mt-4 px-4">
-        <IosNotice />
-        {/* プレミアム会員または開発者の場合のみフィードバック送信ボタンを表示 */}
-        {(hasPremium || isDeveloper) && (
-          <div className="mt-3">
-            <FeedbackEntryButton className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-800 bg-panel px-3 py-3 text-sm font-bold" />
-          </div>
-        )}
       </div>
 
       <div className="mt-2 flex border-b border-gray-800">

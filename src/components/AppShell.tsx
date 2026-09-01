@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { CreateSheet } from "@/components/CreateSheet";
 import { Fab } from "@/components/Fab";
 import { FocusBgm } from "@/components/FocusBgm";
+import { InviteCapture } from "@/components/InviteCapture";
 import { Onboarding } from "@/components/Onboarding";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { PaywallModal, PremiumModal } from "@/components/PremiumModal";
@@ -12,7 +13,7 @@ import { ReplySheet } from "@/components/ReplySheet";
 import { useApp } from "@/lib/store";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const {
@@ -28,25 +29,55 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
+  const isLegal = path === "/terms" || path === "/privacy";
+  const isInvite = path.startsWith("/i/");
 
   useEffect(() => {
     rememberPremiumReturnPath(path);
   }, [path]);
 
-  if (isAuthCallback) {
-    return <>{children}</>;
+  const capture = (
+    <Suspense fallback={null}>
+      <InviteCapture />
+    </Suspense>
+  );
+
+  if (isAuthCallback || isLegal || isInvite) {
+    return (
+      <>
+        {capture}
+        {children}
+      </>
+    );
   }
 
   if (!ready || (authenticated && !profileHydrated)) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-black">
-        <p className="text-2xl font-black text-aha">Qraft</p>
-      </div>
+      <>
+        {capture}
+        <div className="flex min-h-dvh items-center justify-center bg-black">
+          <p className="text-2xl font-black text-aha">Qraft</p>
+        </div>
+      </>
     );
   }
 
-  if (!authenticated) return <AuthScreen />;
-  if (!onboarded) return <Onboarding />;
+  if (!authenticated) {
+    return (
+      <>
+        {capture}
+        <AuthScreen />
+      </>
+    );
+  }
+  if (!onboarded) {
+    return (
+      <>
+        {capture}
+        <Onboarding />
+      </>
+    );
+  }
 
   return (
     <div
@@ -54,6 +85,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       style={{ ["--accent" as string]: accentColor }}
     >
       <FocusBgm />
+      {capture}
       {children}
       {!hideChrome && (
         <>

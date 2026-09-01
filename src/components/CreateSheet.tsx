@@ -5,7 +5,7 @@ import { emptyCanvasPage } from "@/lib/draw-canvas";
 import { generateAiProblem } from "@/lib/premium";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
 import { useApp } from "@/lib/store";
-import type { CanvasPage, Subject } from "@/lib/types";
+import type { CanvasPage, ProblemMode, Subject } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { Keyboard, PenLine, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -35,7 +35,13 @@ export function CreateSheet() {
   const [inputMode, setInputMode] = useState<"hand" | "typed">("hand");
   const [typedPages, setTypedPages] = useState<TypedPage[]>([{ id: "t-1", latex: "" }]);
   const [typedIndex, setTypedIndex] = useState(0);
+  const [postMode, setPostMode] = useState<ProblemMode>("question");
+  const [correctAnswer, setCorrectAnswer] = useState("");
+  const [solverAnswer, setSolverAnswer] = useState("");
+  const [pulseToast, setPulseToast] = useState("");
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
+  const quotePost = quotePostId ? getPost(quotePostId) : undefined;
+  const quotingChallenge = openSolution && quotePost?.problemMode === "challenge";
 
   useEffect(() => {
     if (!composer.open) return;
@@ -52,6 +58,8 @@ export function CreateSheet() {
       setInputMode("typed");
       setTypedPages([{ id: "t-1", latex: "" }]);
       setTypedIndex(0);
+      setPostMode("question");
+      setCorrectAnswer("");
     }
     if (composer.mode === "solution") {
       setText("");
@@ -60,6 +68,9 @@ export function CreateSheet() {
       setTypedPages([{ id: "t-1", latex: "" }]);
       setTypedIndex(0);
       setInputMode("hand");
+      setPostError("");
+      setPosting(false);
+      setSolverAnswer("");
       const q = getPost(composer.quotePostId);
       if (q) setSubject(q.subject);
     }
@@ -176,6 +187,8 @@ export function CreateSheet() {
           photo,
           isSprint: isSprintProblem,
           format: "typed",
+          mode: isSprintProblem ? "question" : postMode,
+          correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
         };
       } else {
         const images = canvasRef.current?.exportPageImages() ?? [];
@@ -195,6 +208,8 @@ export function CreateSheet() {
           photo: images.find(Boolean) || photo,
           isSprint: isSprintProblem,
           format: "handwriting",
+          mode: isSprintProblem ? "question" : postMode,
+          correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
           pages: pages.map((p, i) => ({
             id: p.id,
             latex: "",
@@ -203,16 +218,23 @@ export function CreateSheet() {
           })),
         };
       }
+      if (!isSprintProblem && postMode === "challenge" && !correctAnswer.trim()) {
+        setPosting(false);
+        setPostError("Challenger モードでは正解の入力が必須です");
+        return;
+      }
       const res = await addProblem(payload);
       setPosting(false);
       if (res.error) {
         setPostError(res.error);
         return;
       }
-      if (res.mailError) {
-        setPostError(
-          `投稿は保存されましたが、開発者へのメール送信に失敗しました。${res.mailError}`,
+      if (res.pulseSubmitted) {
+        setPulseToast(
+          "問題の応募が完了しました！運営が選別の上、PULSE問題として配信されます",
         );
+        window.setTimeout(() => setPulseToast(""), 5000);
+        close();
         return;
       }
       close();
@@ -220,6 +242,14 @@ export function CreateSheet() {
   };
 
   return (
+    <>
+    {pulseToast && (
+      <div className="pointer-events-none fixed inset-x-0 top-4 z-[80] flex justify-center px-4">
+        <p className="pointer-events-auto max-w-md rounded-2xl border border-aha/40 bg-black/90 px-4 py-3 text-center text-[13px] font-bold text-aha shadow-lg">
+          {pulseToast}
+        </p>
+      </div>
+    )}
     <AnimatePresence>
       {open && (
         <motion.div
@@ -241,7 +271,7 @@ export function CreateSheet() {
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="flex shrink-0 items-center justify-between px-4 py-3">
                   <p className="text-sm font-bold">
-                    {isSprintProblem ? "21時問題を投稿" : "問題を投稿"}
+                    {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
                   </p>
                   <button onClick={close} className="rounded-full p-1 text-muted">
                     <X size={18} />
@@ -264,6 +294,54 @@ export function CreateSheet() {
                   placeholder="タイトル（任意）"
                   className="mx-4 mb-2 w-[calc(100%-2rem)] shrink-0 rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
                 />
+                {isSprintProblem && (
+                  <p className="mx-4 mb-2 text-[11px] text-muted">
+                    応募内容は運営メールへ送られ、選別のうえ PULSE として配信されます。タイムラインにはすぐには載りません。
+                  </p>
+                )}
+                {!isSprintProblem && (
+                  <div className="mx-4 mb-2 grid shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPostMode("question")}
+                      className={`rounded-2xl border px-3 py-2 text-left ${
+                        postMode === "question"
+                          ? "border-aha bg-aha/10"
+                          : "border-gray-800 bg-panel"
+                      }`}
+                    >
+                      <p className="text-sm font-bold">教えて！Qraft</p>
+                      <p className="text-[11px] leading-snug text-muted">
+                        分からない問題や、みんなに解説してほしい問題を投稿します。
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPostMode("challenge")}
+                      className={`rounded-2xl border px-3 py-2 text-left ${
+                        postMode === "challenge"
+                          ? "border-orange-400 bg-orange-500/10"
+                          : "border-gray-800 bg-panel"
+                      }`}
+                    >
+                      <p className="text-sm font-bold">Challenger</p>
+                      <p className="text-[11px] leading-snug text-muted">
+                        自分で作った問題と正解を投稿します。（※正解の入力が必須です）
+                      </p>
+                    </button>
+                    {postMode === "challenge" && (
+                      <div>
+                        <input
+                          value={correctAnswer}
+                          onChange={(e) => setCorrectAnswer(e.target.value)}
+                          placeholder="正解"
+                          className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
+                        />
+                        <p className="mt-1 text-[11px] text-muted">※単位は書かなくていいです</p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {modeTabs}
                 {inputMode === "hand" ? (
                   <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -308,7 +386,7 @@ export function CreateSheet() {
                     onClick={submitProblem}
                     className="w-full rounded-full bg-neon py-3 text-sm font-bold text-white disabled:opacity-40"
                   >
-                    {posting ? "投稿中…" : "投稿する"}
+                    {posting ? "送信中…" : isSprintProblem ? "運営に応募する" : "投稿する"}
                   </button>
                 </div>
               </div>
@@ -400,50 +478,76 @@ export function CreateSheet() {
                   />
                 )}
                 <div className="shrink-0 px-4 py-3">
+                  {quotingChallenge && (
+                    <div className="mb-3">
+                      <input
+                        value={solverAnswer}
+                        onChange={(e) => setSolverAnswer(e.target.value)}
+                        placeholder="あなたの答え"
+                        className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
+                      />
+                      <p className="mt-1 text-[11px] text-muted">※単位は書かなくていいです</p>
+                    </div>
+                  )}
+                  {postError && <p className="mb-2 text-xs text-red-400">{postError}</p>}
                   <button
                     disabled={
-                      inputMode === "typed" && !typedPages.some((p) => p.latex.trim())
+                      posting ||
+                      (inputMode === "typed" && !typedPages.some((p) => p.latex.trim())) ||
+                      (quotingChallenge && !solverAnswer.trim())
                     }
                     onClick={() => {
                       if (!quotePostId) return;
-                      if (inputMode === "typed") {
-                        const joined = typedPages
-                          .map((p) => p.latex.trim())
-                          .filter(Boolean)
-                          .join("\n\n");
-                        addSolution({
-                          subject,
-                          text: wrapMathliveLatex(joined),
-                          pages: typedPages.map((p, i) => ({
-                            id: p.id,
-                            latex: wrapMathliveLatex(p.latex),
-                            doodle: i,
-                          })),
-                          problemId: quotePostId,
-                          solutionFormat: "typed",
-                          photo,
-                        });
-                      } else {
-                        const images = canvasRef.current?.exportPageImages() ?? [];
-                        addSolution({
-                          subject,
-                          text: text.trim() || "引用解法を投稿した。",
-                          pages: pages.map((p, i) => ({
-                            id: p.id,
-                            latex: "",
-                            doodle: i,
-                            image: images[i] || undefined,
-                          })),
-                          problemId: quotePostId,
-                          solutionFormat: "handwriting",
-                          photo,
-                        });
-                      }
-                      close();
+                      void (async () => {
+                        setPosting(true);
+                        setPostError("");
+                        let res: { error?: string };
+                        if (inputMode === "typed") {
+                          const joined = typedPages
+                            .map((p) => p.latex.trim())
+                            .filter(Boolean)
+                            .join("\n\n");
+                          res = await addSolution({
+                            subject,
+                            text: wrapMathliveLatex(joined),
+                            pages: typedPages.map((p, i) => ({
+                              id: p.id,
+                              latex: wrapMathliveLatex(p.latex),
+                              doodle: i,
+                            })),
+                            problemId: quotePostId,
+                            solutionFormat: "typed",
+                            photo,
+                            solverAnswer: quotingChallenge ? solverAnswer : undefined,
+                          });
+                        } else {
+                          const images = canvasRef.current?.exportPageImages() ?? [];
+                          res = await addSolution({
+                            subject,
+                            text: text.trim() || "引用解法を投稿した。",
+                            pages: pages.map((p, i) => ({
+                              id: p.id,
+                              latex: "",
+                              doodle: i,
+                              image: images[i] || undefined,
+                            })),
+                            problemId: quotePostId,
+                            solutionFormat: "handwriting",
+                            photo,
+                            solverAnswer: quotingChallenge ? solverAnswer : undefined,
+                          });
+                        }
+                        setPosting(false);
+                        if (res.error) {
+                          setPostError(res.error);
+                          return;
+                        }
+                        close();
+                      })();
                     }}
                     className="w-full rounded-full bg-aha py-3 text-sm font-bold text-black disabled:opacity-40"
                   >
-                    引用して公開
+                    {posting ? "投稿中…" : "引用して公開"}
                   </button>
                 </div>
               </div>
@@ -452,5 +556,6 @@ export function CreateSheet() {
         </motion.div>
       )}
     </AnimatePresence>
+    </>
   );
 }

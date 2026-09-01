@@ -33,12 +33,13 @@ export async function sendFeedbackMail(input: {
 }
 
 export async function sendPulseProblemMail(input: {
-  problemId: string;
   title: string;
   text: string;
   subject: string;
   solution?: string;
+  format?: string;
   photo?: string;
+  authorId?: string;
   authorName: string;
   authorHandle: string;
 }) {

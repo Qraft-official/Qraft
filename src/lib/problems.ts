@@ -1,8 +1,8 @@
 import { USER_MAP } from "./mock-data";
 import { ME_ID } from "./constants";
 import { ensureProfile } from "./auth";
+import { asProblemMode, type ProblemMode } from "./challenge";
 import { supabase } from "./supabase";
-import { getSprintDayId } from "./sprint";
 import { isComplimentaryPremiumAccount } from "./premium";
 import type { NotePage, Post, Subject, User } from "./types";
 
@@ -19,6 +19,8 @@ export type ProblemRow = {
   created_at: string;
   pages?: NotePage[] | null;
   problem_format?: string | null;
+  mode?: string | null;
+  correct_answer?: string | null;
 };
 
 export type ProfileRow = {
@@ -36,9 +38,22 @@ export type NewProblem = {
   isSprint?: boolean;
   pages?: NotePage[];
   format?: "handwriting" | "typed";
+  authorId?: string;
+  mode?: ProblemMode;
+  correctAnswer?: string | null;
+};
+
+export type ProblemPatch = {
+  title?: string;
+  text?: string;
+  correctAnswer?: string | null;
+  mode?: ProblemMode;
 };
 
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
+
+const PROBLEM_COLUMNS =
+  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer";
 
 export function asSubject(value: string): Subject {
   return SUBJECTS.includes(value as Subject) ? (value as Subject) : "math";
@@ -86,7 +101,7 @@ function asNotePages(value: unknown): NotePage[] | undefined {
   return pages.length ? pages : undefined;
 }
 
-export function problemToPost(row: ProblemRow): Post {
+export function problemToPost(row: ProblemRow, viewerId?: string | null): Post {
   const title = row.title?.trim() ?? "";
   const body = row.problem_text ?? "";
   const text = title ? `**${title}**\n\n${body}` : body;
@@ -94,6 +109,8 @@ export function problemToPost(row: ProblemRow): Post {
     row.problem_format === "handwriting" || row.problem_format === "typed"
       ? row.problem_format
       : undefined;
+  const problemMode = asProblemMode(row.mode);
+  const isAuthor = !!viewerId && viewerId === row.author_id;
   return {
     id: row.id,
     authorId: row.author_id,
@@ -115,6 +132,8 @@ export function problemToPost(row: ProblemRow): Post {
     eleganceSum: 0,
     eleganceCount: 0,
     sprintDay: row.is_sprint ? (row.sprint_day ?? undefined) : undefined,
+    problemMode,
+    correctAnswer: isAuthor && problemMode === "challenge" ? (row.correct_answer ?? "") : undefined,
   };
 }
 
@@ -123,9 +142,14 @@ export async function fetchProblems(): Promise<{
   profiles: Record<string, User>;
   error: string | null;
 }> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const viewerId = session?.user?.id ?? null;
+
   const { data, error } = await supabase
     .from("problems")
-    .select("*")
+    .select(PROBLEM_COLUMNS)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -133,7 +157,7 @@ export async function fetchProblems(): Promise<{
   }
 
   const rows = (data ?? []) as ProblemRow[];
-  const posts = rows.map(problemToPost);
+  const posts = rows.map((row) => problemToPost(row, viewerId));
   const authorIds = [...new Set(rows.map((r) => r.author_id))];
   const profiles: Record<string, User> = {};
 
@@ -150,6 +174,14 @@ export async function fetchProblems(): Promise<{
   return { posts, profiles, error: null };
 }
 
+function challengePayload(input: NewProblem) {
+  const isSprint = !!input.isSprint;
+  const mode: ProblemMode = isSprint ? "question" : asProblemMode(input.mode);
+  const correctAnswer =
+    mode === "challenge" ? (input.correctAnswer ?? "").trim() || null : null;
+  return { mode, correct_answer: correctAnswer };
+}
+
 export async function insertProblem(input: NewProblem): Promise<{
   post: Post | null;
   error: string | null;
@@ -157,29 +189,90 @@ export async function insertProblem(input: NewProblem): Promise<{
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const authorId = user?.id || session?.user?.id || input.authorId;
+  if (!authorId) {
     return { post: null, error: "投稿するにはログインしてください" };
   }
 
-  await ensureProfile(user);
+  if (user) await ensureProfile(user);
+  else if (session?.user) await ensureProfile(session.user);
+
+  if (input.isSprint) {
+    return { post: null, error: "PULSE応募はメール審査のみです。データベースには保存しません。" };
+  }
+
+  const challenge = challengePayload(input);
+  if (challenge.mode === "challenge" && !challenge.correct_answer) {
+    return { post: null, error: "Challenger モードでは正解の入力が必須です" };
+  }
 
   const { data, error } = await supabase
     .from("problems")
     .insert({
-      author_id: user.id,
+      author_id: authorId,
       title: input.title?.trim() ?? "",
       problem_text: input.text,
       solution: input.solution?.trim() || null,
       subject: input.subject,
       photo: input.photo ?? null,
-      is_sprint: !!input.isSprint,
-      sprint_day: input.isSprint ? getSprintDayId() : null,
+      is_sprint: false,
+      sprint_day: null,
       pages: input.pages ?? null,
       problem_format: input.format ?? null,
+      mode: challenge.mode,
+      correct_answer: challenge.correct_answer,
     })
-    .select("*")
+    .select(PROBLEM_COLUMNS)
     .single();
 
   if (error) return { post: null, error: error.message };
-  return { post: problemToPost(data as ProblemRow), error: null };
+  return { post: problemToPost(data as ProblemRow, authorId), error: null };
+}
+
+export async function updateProblem(
+  id: string,
+  patch: ProblemPatch,
+): Promise<{ post: Post | null; error: string | null }> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const viewerId = session?.user?.id;
+  if (!viewerId) {
+    return { post: null, error: "ログインしてください" };
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (patch.title !== undefined) updates.title = patch.title.trim();
+  if (patch.text !== undefined) updates.problem_text = patch.text;
+  if (patch.mode === "question") {
+    updates.mode = "question";
+    updates.correct_answer = null;
+  } else {
+    if (patch.mode === "challenge") updates.mode = "challenge";
+    if (patch.correctAnswer !== undefined) {
+      const trimmed = (patch.correctAnswer ?? "").trim();
+      if ((patch.mode === "challenge" || patch.mode === undefined) && !trimmed) {
+        return { post: null, error: "Challenger モードでは正解の入力が必須です" };
+      }
+      updates.correct_answer = trimmed || null;
+    }
+  }
+
+  if (!Object.keys(updates).length) {
+    return { post: null, error: "変更がありません" };
+  }
+
+  const { data, error } = await supabase
+    .from("problems")
+    .update(updates)
+    .eq("id", id)
+    .eq("author_id", viewerId)
+    .select(PROBLEM_COLUMNS)
+    .single();
+
+  if (error) return { post: null, error: error.message };
+  return { post: problemToPost(data as ProblemRow, viewerId), error: null };
 }

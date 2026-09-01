@@ -1,7 +1,9 @@
 "use client";
 
 import { GuardianConsentCheckbox } from "@/components/GuardianConsentCheckbox";
+import { needsGuardianConsent } from "@/lib/guardian-consent";
 import { startStripeCheckout } from "@/lib/stripe-checkout";
+import { useApp } from "@/lib/store";
 import { useId, useState } from "react";
 
 export function PremiumCheckoutButton({
@@ -11,23 +13,27 @@ export function PremiumCheckoutButton({
   label?: string;
   className?: string;
 }) {
+  const { me } = useApp();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [consent, setConsent] = useState(false);
   const consentId = useId();
+  const requireConsent = needsGuardianConsent(me.age);
 
   return (
     <div className="relative z-0 isolate">
-      <div className="mb-3">
-        <GuardianConsentCheckbox
-          id={consentId}
-          checked={consent}
-          onChange={setConsent}
-        />
-      </div>
+      {requireConsent && (
+        <div className="mb-3">
+          <GuardianConsentCheckbox
+            id={consentId}
+            checked={consent}
+            onChange={setConsent}
+          />
+        </div>
+      )}
       <button
         type="button"
-        disabled={busy || !consent}
+        disabled={busy || (requireConsent && !consent)}
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();

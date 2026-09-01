@@ -148,7 +148,10 @@ export function SubjectLevelPickers({
               </div>
               <p className="mb-2 text-[10px] leading-relaxed text-muted">{sample.bandHint}</p>
               <LatexText text={sample.problem} className="text-[13px] text-[#e7e9ea]" />
-              <p className="mt-2 text-[11px] leading-relaxed text-purple-300">ヒント：{sample.hint}</p>
+              <div className="mt-2 flex gap-1 text-[11px] leading-relaxed text-purple-300">
+                <span className="shrink-0">ヒント：</span>
+                <LatexText text={sample.hint} className="min-w-0 text-[11px] text-purple-300" />
+              </div>
             </motion.div>
           </div>
         );

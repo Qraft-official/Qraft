@@ -2,10 +2,10 @@
 
 import katex from "katex";
 import { Fragment, useMemo } from "react";
-import { katexHtmlHasError, latexLooksLikePlainText, latexToPlainText, normalizeLatexForKatex } from "./latex-normalize";
+import { katexHtmlHasError, latexToPlainText, normalizeLatexForKatex } from "./latex-normalize";
 
 function render(math: string, display: boolean) {
-  const prepared = latexLooksLikePlainText(math) ? null : normalizeLatexForKatex(math);
+  const prepared = normalizeLatexForKatex(math);
   if (prepared == null || prepared === "") return null;
   try {
     const html = katex.renderToString(prepared, {

@@ -1,6 +1,8 @@
 export type Subject = "math" | "physics" | "chemistry";
 export type Tier = 1 | 2 | 3 | 4 | 5;
 export type PostKind = "problem" | "solution" | "sprint" | "reply";
+export type ProblemMode = "question" | "challenge";
+export type ChallengeGrade = "correct" | "incorrect";
 export type FeedTab = "foryou" | "following" | "sprint" | "lounge";
 export type HallMode = "problems" | "solutions";
 
@@ -63,6 +65,12 @@ export type Post = {
   title?: string;
   solution?: string;
   isSprint?: boolean;
+  /** question = 教えて！Qraft, challenge = Challenger */
+  problemMode?: ProblemMode;
+  /** Author-only. Never sent to other clients from fetch. */
+  correctAnswer?: string;
+  solverAnswer?: string;
+  challengeGrade?: ChallengeGrade;
 };
 
 export type RatingKind = "aha" | "elegance";

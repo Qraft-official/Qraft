@@ -6,10 +6,11 @@ import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
-import { Brain, MessageCircle, PenLine, Repeat2, Share2, Star, Undo2 } from "lucide-react";
+import { Brain, MessageCircle, Pencil, PenLine, Repeat2, Share2, Star, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CommentThread } from "./CommentThread";
+import { EditProblemModal } from "./EditProblemModal";
 import { NotePages } from "./NotePages";
 import { QuoteEmbed } from "./QuoteEmbed";
 import { StarRating } from "./StarRating";
@@ -63,6 +64,7 @@ export function PostCard({
   const [threadOpen, setThreadOpen] = useState(false);
   const [repostOpen, setRepostOpen] = useState(false);
   const [shareToast, setShareToast] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const following = follows.includes(author.id);
   const liked = likes.includes(post.id);
@@ -129,6 +131,16 @@ export function PostCard({
                 <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300">
                   {SUBJECT_LABEL[post.subject]} {tier} · {TIER_NAMES[post.subject][tier]}
                 </span>
+                {post.kind === "problem" && post.problemMode === "challenge" && (
+                  <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-bold text-orange-300">
+                    Challenger
+                  </span>
+                )}
+                {post.kind === "problem" && post.problemMode !== "challenge" && (
+                  <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300">
+                    教えて！Qraft
+                  </span>
+                )}
                 {post.kind === "problem" && (
                   <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-muted">
                     オリジナル問題
@@ -145,6 +157,16 @@ export function PostCard({
                     {isTypedNotebook(post) ? " · 打ち込み" : post.pages?.length ? " · 手書き" : ""}
                   </span>
                 )}
+                {post.kind === "solution" && post.challengeGrade === "correct" && (
+                  <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                    Correct
+                  </span>
+                )}
+                {post.kind === "solution" && post.challengeGrade === "incorrect" && (
+                  <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
+                    Incorrect
+                  </span>
+                )}
                 {post.kind === "sprint" && (
                   <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">
                     PULSE
@@ -152,7 +174,19 @@ export function PostCard({
                 )}
               </div>
             </div>
-            {!isMe && (
+            <div className="flex shrink-0 items-center gap-1">
+              {isMe && (post.kind === "problem" || post.kind === "sprint") && (
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className="rounded-full border border-gray-700 px-2.5 py-1 text-[11px] font-bold text-muted hover:text-white"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <Pencil size={12} /> 編集
+                  </span>
+                </button>
+              )}
+              {!isMe && (
               <motion.button
                 whileTap={{ scale: 0.92 }}
                 onClick={() => toggleFollow(author.id)}
@@ -163,6 +197,7 @@ export function PostCard({
                 {following ? "フォロー中" : "フォロー"}
               </motion.button>
             )}
+            </div>
           </div>
 
           {!(post.kind === "solution" && isTypedNotebook(post)) && (
@@ -172,6 +207,26 @@ export function PostCard({
           )}
 
           {quoted && <QuoteEmbed postId={post.problemId!} />}
+
+          {post.kind === "solution" && post.challengeGrade && (
+            <p
+              className={`mt-2 rounded-xl px-3 py-2 text-xs font-bold ${
+                post.challengeGrade === "correct"
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : "bg-red-500/15 text-red-300"
+              }`}
+            >
+              {post.challengeGrade === "correct" ? "Correct（正解）" : "Incorrect（不正解）"}
+              {post.solverAnswer ? ` · あなたの答え: ${post.solverAnswer}` : ""}
+            </p>
+          )}
+
+          {isMe && post.problemMode === "challenge" && post.correctAnswer != null && post.correctAnswer !== "" && (
+            <p className="mt-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-100">
+              設定した正解: {post.correctAnswer}
+              <span className="mt-0.5 block text-[10px] text-orange-200/70">※単位は書かなくていいです</span>
+            </p>
+          )}
 
           {post.kind === "solution" && isTypedNotebook(post) && !post.pages?.length && (
             <Link href={`/p/${post.id}`} className="mt-3 block">
@@ -380,6 +435,7 @@ export function PostCard({
           )}
         </div>
       </div>
+      <EditProblemModal post={post} open={editOpen} onClose={() => setEditOpen(false)} />
     </article>
   );
 }

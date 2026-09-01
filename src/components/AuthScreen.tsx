@@ -2,10 +2,12 @@
 
 import { formatAuthError } from "@/lib/auth";
 import { savePendingReferralCode } from "@/lib/device-id";
+import { parseInviteCodeFromLocation } from "@/lib/referral";
 import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Mode = "login" | "signup";
@@ -26,6 +28,11 @@ export function AuthScreen() {
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
+      const invite = parseInviteCodeFromLocation(url.href);
+      if (invite) {
+        savePendingReferralCode(invite);
+        setReferralCode((prev) => prev || invite);
+      }
       const fromUrl =
         url.searchParams.get("error_description") || url.searchParams.get("error");
       if (fromUrl) {
@@ -205,6 +212,20 @@ export function AuthScreen() {
 
           {error && <p className="text-xs text-red-400">{error}</p>}
           {info && <p className="text-xs text-aha">{info}</p>}
+
+          {mode === "signup" && (
+            <p className="text-[11px] leading-relaxed text-muted">
+              アカウントを作成することで、
+              <Link href="/terms" className="font-bold text-sky-400 underline underline-offset-2">
+                利用規約
+              </Link>{" "}
+              および{" "}
+              <Link href="/privacy" className="font-bold text-sky-400 underline underline-offset-2">
+                プライバシーポリシー
+              </Link>
+              に同意したものとみなされます。
+            </p>
+          )}
 
           <motion.button
             whileTap={{ scale: 0.98 }}

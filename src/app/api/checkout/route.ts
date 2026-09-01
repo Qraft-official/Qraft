@@ -1,3 +1,4 @@
+import { adminSupabase } from "@/lib/admin-supabase";
 import { bearerTokenFromRequest, userFromRequest } from "@/lib/api-auth";
 import { PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { isComplimentaryPremiumAccount } from "@/lib/premium";
@@ -37,22 +38,36 @@ export async function POST(request: Request) {
     let name =
       typeof user?.user_metadata?.name === "string" ? user.user_metadata.name : undefined;
     let couponId = "";
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (user && url && anon) {
-      const token = bearerTokenFromRequest(request);
-      const sb = createClient(url, anon, {
-        auth: { persistSession: false, autoRefreshToken: false },
-        global: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-      });
-      const { data } = await sb
+    const admin = adminSupabase();
+    if (user && admin) {
+      const { data } = await admin
         .from("profiles")
-        .select("handle, name, stripe_referral_coupon_id")
+        .select("handle, name, stripe_referral_coupon_id, is_half_discount_eligible")
         .eq("id", user.id)
         .maybeSingle();
       if (data?.handle) handle = String(data.handle);
       if (data?.name) name = String(data.name);
-      if (data?.stripe_referral_coupon_id) couponId = String(data.stripe_referral_coupon_id);
+      const stored = data?.stripe_referral_coupon_id ? String(data.stripe_referral_coupon_id) : "";
+      if (stored.startsWith("c_")) couponId = stored;
+    } else if (user) {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (url && anon) {
+        const token = bearerTokenFromRequest(request);
+        const sb = createClient(url, anon, {
+          auth: { persistSession: false, autoRefreshToken: false },
+          global: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+        });
+        const { data } = await sb
+          .from("profiles")
+          .select("handle, name, stripe_referral_coupon_id")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (data?.handle) handle = String(data.handle);
+        if (data?.name) name = String(data.name);
+        const stored = data?.stripe_referral_coupon_id ? String(data.stripe_referral_coupon_id) : "";
+        if (stored.startsWith("c_")) couponId = stored;
+      }
     }
 
     if (

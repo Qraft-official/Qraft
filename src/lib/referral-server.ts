@@ -10,6 +10,7 @@ import {
   type ReferralClaimView,
   type ReferralMe,
 } from "./referral";
+import { loadCampaignFields, evaluateCluster } from "./campaign-server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 
@@ -80,12 +81,14 @@ export async function getReferralMe(userId: string): Promise<ReferralMe | null> 
     .select("*")
     .eq("referee_id", userId)
     .maybeSingle();
+  const campaign = await loadCampaignFields(userId);
   return {
     code,
     trialUntil: profile?.premium_trial_until ? String(profile.premium_trial_until) : null,
-    pendingDiscount: Boolean(profile?.stripe_referral_coupon_id),
+    pendingDiscount: Boolean(profile?.stripe_referral_coupon_id) || campaign.isHalfDiscountEligible,
     claim: claim ? asClaimView(claim as ReferralClaimRow) : null,
     accountCreatedAt: profile?.created_at ? String(profile.created_at) : null,
+    ...campaign,
   };
 }
 
@@ -110,12 +113,14 @@ export async function getReferralMeWithToken(userId: string, accessToken: string
     await sb.from("profiles").update({ referral_code: code }).eq("id", userId);
   }
   const { data: claim } = await sb.from("referral_claims").select("*").eq("referee_id", userId).maybeSingle();
+  const campaign = await loadCampaignFields(userId);
   return {
     code,
     trialUntil: profile?.premium_trial_until ? String(profile.premium_trial_until) : null,
-    pendingDiscount: Boolean(profile?.stripe_referral_coupon_id),
+    pendingDiscount: Boolean(profile?.stripe_referral_coupon_id) || campaign.isHalfDiscountEligible,
     claim: claim ? asClaimView(claim as ReferralClaimRow) : null,
     accountCreatedAt: profile?.created_at ? String(profile.created_at) : null,
+    ...campaign,
   };
 }
 
@@ -197,6 +202,8 @@ export async function applyReferralCode(input: {
     title: "🎁 Welcome Mission が始まりました",
     message: "紹介コードが適用されました。3日間プレミアム体験中です。4日以内に Welcome Mission を達成しましょう！",
   });
+
+  void evaluateCluster(referrer.id);
 
   const me = await getReferralMe(input.refereeId);
   return { me: me ?? undefined };

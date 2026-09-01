@@ -2,13 +2,18 @@
 
 import { getDeviceId, savePendingReferralCode } from "@/lib/device-id";
 import {
+  CAMPAIGN_INVITE_TARGET,
   canShowReferralApplyForm,
   formatMissionCountdown,
+  inviteUrlFromCode,
   PREMIUM_REFERRAL_HALF_JPY,
   WELCOME_LOGIN_TARGET,
   WELCOME_POSTS_TARGET,
   WELCOME_SOLVES_TARGET,
+  X_CAMPAIGN_POST_URL,
+  X_FOLLOW_INTENT_URL,
 } from "@/lib/referral";
+import { shareInvite } from "@/lib/share";
 import { useApp } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -209,38 +214,103 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
 }
 
 export function ReferralInviteCard() {
-  const { referralMe } = useApp();
-  const [copied, setCopied] = useState(false);
+  const { referralMe, recordCampaignTap } = useApp();
+  const [copied, setCopied] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
+  const [busy, setBusy] = useState<"follow" | "post" | null>(null);
   if (!referralMe?.code) return null;
+  const inviteUrl = inviteUrlFromCode(referralMe.code);
+  const invited = Math.min(referralMe.inviteSuccessCount ?? 0, CAMPAIGN_INVITE_TARGET);
+  const followDone = Boolean(referralMe.xFollowTapped);
+  const postDone = Boolean(referralMe.xPostTapped);
+  const eligible = Boolean(referralMe.isHalfDiscountEligible || referralMe.pendingDiscount);
+
+  const tapX = async (type: "x_follow" | "x_post", href: string) => {
+    setBusy(type === "x_follow" ? "follow" : "post");
+    window.open(href, "_blank", "noopener,noreferrer");
+    await recordCampaignTap(type);
+    setBusy(null);
+  };
+
   return (
     <div className="rounded-2xl border border-gray-800 bg-panel px-4 py-3">
-      <p className="text-sm font-black">あなたの紹介コード</p>
+      <p className="text-sm font-black">友達紹介で半額キャンペーン</p>
       <p className="mt-1 text-[11px] text-muted">
-        友達がこのコードで <WelcomeMissionText onOpen={() => setInfoOpen(true)} />{" "}
-        を4日以内に達成すると、{HALF_PRICE_LABEL}になります。次回の購入時または次回の更新時の1か月分に適用されます。
+        招待した人・された人の両方に、プレミアムが1か月半額（￥{PREMIUM_REFERRAL_HALF_JPY}）になります。判定はアプリ内ボタンのタップで行います。
       </p>
-      <div className="mt-2 flex items-center gap-2">
-        <p className="rounded-xl border border-gray-700 bg-black px-3 py-2 font-mono text-lg font-black tracking-widest">
-          {referralMe.code}
+      <ol className="mt-3 space-y-1.5 text-[12px]">
+        <li className="flex items-center justify-between gap-2">
+          <span>{invited >= CAMPAIGN_INVITE_TARGET ? "✅" : "◻️"} 専用リンクから2人招待</span>
+          <span className="text-muted">
+            {invited}/{CAMPAIGN_INVITE_TARGET}
+          </span>
+        </li>
+        <li className="flex items-center justify-between gap-2">
+          <span>{followDone ? "✅" : "◻️"} 公式Xをフォロー</span>
+          <button
+            type="button"
+            disabled={busy === "follow"}
+            onClick={() => void tapX("x_follow", X_FOLLOW_INTENT_URL)}
+            className="shrink-0 rounded-full border border-sky-500/40 px-2.5 py-1 text-[11px] font-bold text-sky-300"
+          >
+            {followDone ? "完了" : "フォローする"}
+          </button>
+        </li>
+        <li className="flex items-center justify-between gap-2">
+          <span>{postDone ? "✅" : "◻️"} 指定ポストをリポスト＆いいね</span>
+          <button
+            type="button"
+            disabled={busy === "post"}
+            onClick={() => void tapX("x_post", X_CAMPAIGN_POST_URL)}
+            className="shrink-0 rounded-full border border-sky-500/40 px-2.5 py-1 text-[11px] font-bold text-sky-300"
+          >
+            {postDone ? "完了" : "ポストを開く"}
+          </button>
+        </li>
+      </ol>
+      <div className="mt-3">
+        <p className="text-[11px] font-bold text-muted">あなたの招待URL</p>
+        <p className="mt-1 break-all rounded-xl border border-gray-700 bg-black px-3 py-2 font-mono text-[11px]">
+          {inviteUrl}
         </p>
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard.writeText(referralMe.code);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
-          }}
-          className="rounded-full border border-gray-700 px-3 py-1.5 text-[11px] font-bold"
-        >
-          {copied ? "コピー済み" : "コピー"}
-        </button>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <p className="rounded-xl border border-gray-700 bg-black px-3 py-1.5 font-mono text-sm font-black tracking-widest">
+            {referralMe.code}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void shareInvite(inviteUrl).then((res) => {
+                if (res.ok && res.method === "copy") {
+                  setCopied("招待文とURLをコピーしました");
+                  window.setTimeout(() => setCopied(""), 2200);
+                } else if (!res.ok && !("aborted" in res && res.aborted)) {
+                  setCopied("共有できませんでした。もう一度お試しください");
+                  window.setTimeout(() => setCopied(""), 2200);
+                }
+              });
+            }}
+            className="rounded-full border border-gray-700 px-3 py-1.5 text-[11px] font-bold"
+          >
+            友達に共有
+          </button>
+        </div>
       </div>
-      {referralMe.pendingDiscount && (
+      {copied && (
+        <p className="mt-2 rounded-full bg-aha/15 px-3 py-1 text-center text-[11px] font-bold text-aha">
+          {copied}
+        </p>
+      )}
+      {eligible && (
         <p className="mt-2 text-[11px] font-bold text-amber-300">
           1か月半額クーポンが付与されています（次回購入時または次回更新時）
         </p>
       )}
+      <p className="mt-2 text-[11px] text-muted">
+        友達がこのコードで{" "}
+        <WelcomeMissionText onOpen={() => setInfoOpen(true)} />{" "}
+        を4日以内に達成すると、紹介者にも別途 Welcome Mission の半額特典が付きます。
+      </p>
       <WelcomeMissionDetailsModal open={infoOpen} onClose={() => setInfoOpen(false)} />
     </div>
   );

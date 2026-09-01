@@ -1,0 +1,158 @@
+"use client";
+
+import { useApp } from "@/lib/store";
+import type { Post, ProblemMode } from "@/lib/types";
+import { AnimatePresence, motion } from "framer-motion";
+import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+
+function bodyFromPost(post: Post) {
+  if (post.title) {
+    const prefix = `**${post.title}**\n\n`;
+    if (post.text.startsWith(prefix)) return post.text.slice(prefix.length);
+  }
+  return post.text;
+}
+
+export function EditProblemModal({
+  post,
+  open,
+  onClose,
+}: {
+  post: Post | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { updateProblem } = useApp();
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const [mode, setMode] = useState<ProblemMode>("question");
+  const [correctAnswer, setCorrectAnswer] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open || !post) return;
+    setTitle(post.title ?? "");
+    setText(bodyFromPost(post));
+    setMode(post.problemMode === "challenge" ? "challenge" : "question");
+    setCorrectAnswer(post.correctAnswer ?? "");
+    setError("");
+    setSaving(false);
+  }, [open, post]);
+
+  if (!post) return null;
+
+  const save = async () => {
+    if (mode === "challenge" && !correctAnswer.trim()) {
+      setError("Challenger モードでは正解の入力が必須です");
+      return;
+    }
+    if (!text.trim() && !title.trim()) {
+      setError("本文またはタイトルを入力してください");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const res = await updateProblem(post.id, {
+      title,
+      text: text.trim() || title.trim(),
+      mode,
+      correctAnswer: mode === "challenge" ? correctAnswer : null,
+    });
+    setSaving(false);
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
+    onClose();
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg space-y-3 rounded-t-3xl border border-gray-800 bg-black p-4 sm:rounded-3xl"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold">問題を編集</p>
+              <button type="button" onClick={onClose} className="rounded-full p-1 text-muted">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={() => setMode("question")}
+                className={`rounded-2xl border px-3 py-2 text-left ${
+                  mode === "question" ? "border-aha bg-aha/10" : "border-gray-800 bg-panel"
+                }`}
+              >
+                <p className="text-sm font-bold">教えて！Qraft</p>
+                <p className="text-[11px] text-muted">
+                  分からない問題や、みんなに解説してほしい問題を投稿します。
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("challenge")}
+                className={`rounded-2xl border px-3 py-2 text-left ${
+                  mode === "challenge" ? "border-orange-400 bg-orange-500/10" : "border-gray-800 bg-panel"
+                }`}
+              >
+                <p className="text-sm font-bold">Challenger</p>
+                <p className="text-[11px] text-muted">
+                  自分で作った問題と正解を投稿します。（※正解の入力が必須です）
+                </p>
+              </button>
+            </div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="タイトル（任意）"
+              className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
+            />
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="問題文"
+              rows={6}
+              className="w-full resize-none rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
+            />
+            {mode === "challenge" && (
+              <div>
+                <input
+                  value={correctAnswer}
+                  onChange={(e) => setCorrectAnswer(e.target.value)}
+                  placeholder="正解"
+                  className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
+                />
+                <p className="mt-1 text-[11px] text-muted">※単位は書かなくていいです</p>
+              </div>
+            )}
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void save()}
+              className="w-full rounded-full bg-neon py-3 text-sm font-bold text-white disabled:opacity-40"
+            >
+              {saving ? "保存中…" : "保存する"}
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

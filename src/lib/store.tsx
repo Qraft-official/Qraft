@@ -39,7 +39,9 @@ import {
   fallbackUser,
   fetchProblems,
   insertProblem,
+  updateProblem as persistProblemUpdate,
   type NewProblem,
+  type ProblemPatch,
 } from "./problems";
 import { getSprintDayId, makeOfficialPost, remainingMs } from "./sprint";
 import { supabase } from "./supabase";
@@ -99,7 +101,12 @@ type Store = {
   toggleLike: (postId: string) => void;
   toggleRepost: (postId: string) => void;
   rate: (postId: string, kind: RatingKind, stars: number) => void;
-  addProblem: (input: NewProblem) => Promise<{ error?: string; mailError?: string }>;
+  addProblem: (input: NewProblem) => Promise<{
+    error?: string;
+    mailError?: string;
+    pulseSubmitted?: boolean;
+  }>;
+  updateProblem: (id: string, patch: ProblemPatch) => Promise<{ error?: string }>;
   openFeedback: () => void;
   closeFeedback: () => void;
   feedbackOpen: boolean;
@@ -110,7 +117,8 @@ type Store = {
     problemId?: string;
     solutionFormat?: "handwriting" | "typed";
     photo?: string;
-  }) => void;
+    solverAnswer?: string;
+  }) => Promise<{ error?: string }>;
   addReply: (input: { replyToId: string; text: string }) => void;
   startSprint: () => void;
   submitSprint: (pages: CanvasPage[]) => void;
@@ -131,6 +139,7 @@ type Store = {
   referralMe: ReferralMe | null;
   refreshReferral: () => Promise<void>;
   applyReferralCode: (code: string, deviceId: string) => Promise<{ error?: string }>;
+  recordCampaignTap: (type: "x_follow" | "x_post") => Promise<{ error?: string }>;
   subscribed: boolean;
   subscribe: () => void;
   unsubscribe: () => void;
@@ -355,6 +364,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (user) {
           applySession(user.id, sessionUserFields(user));
           afterSignIn(user);
+          void fetchProblems().then((remote) => {
+            setRemotePosts(remote.posts);
+            setRemoteUsers((prev) => ({ ...prev, ...remote.profiles }));
+          });
         } else {
           applySession(null);
         }
@@ -744,9 +757,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!session?.user) {
       return { error: "投稿するにはログインしてください" };
     }
+    const authorId = session.user.id || me.id;
+
+    if (input.isSprint) {
+      const mail = await sendPulseProblemMail({
+        title: input.title ?? "",
+        text: input.text,
+        subject: input.subject,
+        solution: input.solution,
+        format: input.format,
+        photo: input.photo || input.pages?.find((p) => p.image)?.image,
+        authorId,
+        authorName: me.name,
+        authorHandle: me.handle,
+      });
+      if (mail.error) return { error: mail.error };
+      return { pulseSubmitted: true };
+    }
+
     const { post, error } = await insertProblem({
       ...input,
-      isSprint: !!input.isSprint,
+      isSprint: false,
+      authorId,
     });
     if (error || !post) return { error: error || "投稿に失敗しました" };
     void referralFetch("/api/referral/event", {
@@ -766,32 +798,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handle: handleFromUser(session.user) ?? null,
       }),
     }));
-    if (input.isSprint) {
-      const mail = await sendPulseProblemMail({
-        problemId: post.id,
-        title: input.title ?? "",
-        text: input.text,
-        subject: input.subject,
-        solution: input.solution,
-        photo: input.photo || input.pages?.find((p) => p.image)?.image,
-        authorName: me.name,
-        authorHandle: me.handle,
-      });
-      if (mail.error) return { mailError: mail.error };
-    }
     return {};
-  }, [me.name, me.handle]);
+  }, [me.id, me.name, me.handle]);
+
+  const updateProblem = useCallback(async (id: string, patch: ProblemPatch) => {
+    const { post, error } = await persistProblemUpdate(id, patch);
+    if (error || !post) return { error: error || "更新に失敗しました" };
+    setRemotePosts((p) => p.map((x) => (x.id === id ? post : x)));
+    return {};
+  }, []);
 
   const addSolution = useCallback(
-    (input: {
+    async (input: {
       subject: Subject;
       text: string;
       pages?: { id: string; latex: string; doodle: number; image?: string }[];
       problemId?: string;
       solutionFormat?: "handwriting" | "typed";
       photo?: string;
+      solverAnswer?: string;
     }) => {
-      if (!input.problemId) return;
+      if (!input.problemId) return { error: "引用する問題がありません" };
+      const problem = getPost(input.problemId);
+      const isChallenge = problem?.problemMode === "challenge";
+      const solverAnswer = (input.solverAnswer ?? "").trim();
+      if (isChallenge && !solverAnswer) {
+        return { error: "答えを入力してください（単位は不要です）" };
+      }
+      let challengeGrade: Post["challengeGrade"];
+      if (isChallenge) {
+        const res = await referralFetch("/api/challenge/grade", {
+          method: "POST",
+          body: JSON.stringify({ problemId: input.problemId, answer: solverAnswer }),
+        });
+        if (res.error) return { error: res.error };
+        if (res.data && res.data.graded === true) {
+          challengeGrade = res.data.correct === true ? "correct" : "incorrect";
+        }
+      }
       const format = input.solutionFormat ?? (input.pages?.length ? "handwriting" : "typed");
       const post: Post = {
         id: `local-sol-${Date.now()}`,
@@ -803,6 +847,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         pages: input.pages,
         problemId: input.problemId,
         solutionFormat: format,
+        solverAnswer: isChallenge ? solverAnswer : undefined,
+        challengeGrade,
         createdAt: new Date().toISOString(),
         replyCount: 0,
         repostCount: 0,
@@ -821,26 +867,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setReferralMe(res.data as unknown as ReferralMe);
         }
       });
-      const problem = getPost(input.problemId);
       if (problem && (problem.kind === "sprint" || problem.isSprint)) {
         setSprint((s) => {
           if (!s.startedAt || s.submittedAt) return s;
           return { ...s, submittedAt: Date.now(), timedOut: false };
         });
       }
-      if (input.problemId) {
-        setActivities((a) => [
-          {
-            id: `act-${Date.now()}`,
-            type: "solution",
-            userId: supabaseUid ?? ME_ID,
-            postId: post.id,
-            text: "が引用解法を投稿した",
-            createdAt: new Date().toISOString(),
-          },
-          ...a,
-        ]);
-      }
+      setActivities((a) => [
+        {
+          id: `act-${Date.now()}`,
+          type: "solution",
+          userId: supabaseUid ?? ME_ID,
+          postId: post.id,
+          text: "が引用解法を投稿した",
+          createdAt: new Date().toISOString(),
+        },
+        ...a,
+      ]);
+      return {};
     },
     [supabaseUid, getPost],
   );
@@ -905,6 +949,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const res = await referralFetch("/api/referral", {
       method: "POST",
       body: JSON.stringify({ code, deviceId }),
+    });
+    if (!res.error && res.data && "code" in res.data) {
+      setReferralMe(res.data as unknown as ReferralMe);
+    }
+    return { error: res.error };
+  }, []);
+
+  const recordCampaignTap = useCallback(async (type: "x_follow" | "x_post") => {
+    const res = await referralFetch("/api/referral/campaign", {
+      method: "POST",
+      body: JSON.stringify({ type, deviceId: getDeviceId() }),
     });
     if (!res.error && res.data && "code" in res.data) {
       setReferralMe(res.data as unknown as ReferralMe);
@@ -1027,6 +1082,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleRepost,
     rate,
     addProblem,
+    updateProblem,
     openFeedback,
     closeFeedback,
     feedbackOpen,
@@ -1049,6 +1105,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     referralMe,
     refreshReferral,
     applyReferralCode,
+    recordCampaignTap,
     subscribed,
     subscribe,
     unsubscribe,

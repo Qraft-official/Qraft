@@ -27,7 +27,10 @@ create table if not exists public.problems (
   sprint_day date,
   pages jsonb,
   problem_format text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  mode text not null default 'question'
+    check (mode in ('question', 'challenge')),
+  correct_answer text
 );
 
 create index if not exists problems_created_at_idx
@@ -249,5 +252,32 @@ alter table public.profiles
   add column if not exists stripe_customer_id text,
   add column if not exists stripe_referral_coupon_id text,
   add column if not exists premium_trial_until timestamptz;
+
+-- Challenge / 教えて！Qraft modes (also applied remotely)
+alter table public.problems
+  add column if not exists mode text not null default 'question',
+  add column if not exists correct_answer text;
+
+alter table public.problems drop constraint if exists problems_mode_check;
+alter table public.problems
+  add constraint problems_mode_check check (mode in ('question', 'challenge'));
+
+-- Half-price invite campaign (also applied remotely)
+alter table public.profiles
+  add column if not exists is_half_discount_eligible boolean not null default false,
+  add column if not exists campaign_x_follow_tapped_at timestamptz,
+  add column if not exists campaign_x_post_tapped_at timestamptz;
+
+create table if not exists public.campaign_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null check (event_type in ('invite_open', 'x_follow', 'x_post')),
+  referrer_id uuid references public.profiles (id) on delete cascade,
+  user_id uuid references public.profiles (id) on delete set null,
+  device_id text not null check (char_length(device_id) >= 8 and char_length(device_id) <= 128),
+  created_at timestamptz not null default now()
+);
+
+alter table public.campaign_events enable row level security;
+revoke all on public.campaign_events from anon, authenticated;
 
 

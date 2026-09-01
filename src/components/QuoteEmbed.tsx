@@ -27,7 +27,9 @@ export function QuoteEmbed({ postId, compact }: { postId: string; compact?: bool
         <span className="truncate text-xs font-bold text-white">{author.name}</span>
         <span className="truncate text-xs text-muted">@{author.handle}</span>
         {post.kind === "problem" && (
-          <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] text-muted">問題</span>
+          <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] text-muted">
+            {post.problemMode === "challenge" ? "Challenger" : "問題"}
+          </span>
         )}
       </div>
       <div className={`mt-1 ${compact ? "max-h-16 overflow-y-auto" : ""}`}>

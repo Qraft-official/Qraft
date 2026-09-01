@@ -215,7 +215,7 @@ async function awardReferrerDiscount(referrerId: string, refereeId: string) {
     amount_off: PREMIUM_REFERRAL_HALF_JPY,
     currency: "jpy",
     duration: "once",
-    name: "紹介特典 翌月半額",
+    name: "紹介特典 1か月半額",
     metadata: { referrer_id: referrerId, referee_id: refereeId },
   });
   const { data: profile } = await admin
@@ -241,7 +241,7 @@ async function awardReferrerDiscount(referrerId: string, refereeId: string) {
   await admin.from("notifications").insert({
     user_id: referrerId,
     title: "🎉 紹介特典が届きました",
-    message: "友達が Welcome Mission を達成しました。翌月のプレミアムが半額（200円）になります。",
+    message: "友達が Welcome Mission を達成しました。プレミアムプランが1か月半額（￥200）になります。次回の購入時または次回の更新時に適用されます。",
   });
 }
 

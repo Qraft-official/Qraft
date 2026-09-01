@@ -4,13 +4,92 @@ import { getDeviceId, savePendingReferralCode } from "@/lib/device-id";
 import {
   canShowReferralApplyForm,
   formatMissionCountdown,
+  PREMIUM_REFERRAL_HALF_JPY,
   WELCOME_LOGIN_TARGET,
   WELCOME_POSTS_TARGET,
   WELCOME_SOLVES_TARGET,
 } from "@/lib/referral";
 import { useApp } from "@/lib/store";
-import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import { X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+
+const HALF_PRICE_LABEL = `プレミアムプランが1か月半額（￥${PREMIUM_REFERRAL_HALF_JPY}）`;
+
+function WelcomeMissionDetailsModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 sm:items-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 80 }}
+            animate={{ y: 0 }}
+            exit={{ y: 80 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-t-3xl border border-gray-800 bg-black p-4 sm:rounded-3xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="welcome-mission-title"
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h2 id="welcome-mission-title" className="text-lg font-black">
+                Welcome Mission
+              </h2>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full p-1 text-muted"
+                aria-label="閉じる"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-[12px] font-bold text-aha">期限: コード入力から4日以内</p>
+            <p className="mt-3 text-[12px] font-black">達成条件</p>
+            <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[13px]">
+              <li>3問解く</li>
+              <li>3日間連続ログイン</li>
+              <li>3問投稿する</li>
+            </ol>
+            <p className="mt-3 text-[11px] text-muted">
+              3つすべて達成すると、紹介者は{HALF_PRICE_LABEL}になります。次回の購入時または次回の更新時の1か月分に適用されます。
+            </p>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function WelcomeMissionText({
+  className,
+  onOpen,
+}: {
+  className?: string;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={className ?? "font-black text-aha underline decoration-aha/50 underline-offset-2"}
+    >
+      Welcome Mission
+    </button>
+  );
+}
 
 export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
   const { referralMe, applyReferralCode } = useApp();
@@ -18,6 +97,7 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 60000);
@@ -38,7 +118,8 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
       <div className="rounded-2xl border border-amber-500/30 bg-amber-400/5 px-4 py-3">
         <p className="text-sm font-black">友達紹介コード</p>
         <p className="mt-1 text-[11px] text-muted">
-          コードを入力すると、3日間プレミアム無料と Welcome Mission が始まります（達成期限は4日以内）。
+          コードを入力すると、3日間プレミアム無料と{" "}
+          <WelcomeMissionText onOpen={() => setInfoOpen(true)} /> が始まります（達成期限は4日以内）。
         </p>
         <div className="mt-2 flex gap-2">
           <input
@@ -66,6 +147,7 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
           </button>
         </div>
         {error && <p className="mt-2 text-[11px] text-red-400">{error}</p>}
+        <WelcomeMissionDetailsModal open={infoOpen} onClose={() => setInfoOpen(false)} />
       </div>
     );
   }
@@ -82,7 +164,7 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
     <div className="rounded-2xl border border-aha/40 bg-aha/5 px-4 py-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-black">Welcome Mission</p>
+          <WelcomeMissionText className="text-sm font-black text-white underline decoration-white/30 underline-offset-2" onOpen={() => setInfoOpen(true)} />
           {clock && (
             <p className={`mt-1 text-[11px] font-bold ${expired ? "text-red-400" : "text-aha"}`}>
               {completed
@@ -94,9 +176,13 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
           )}
         </div>
         {!compact && (
-          <Link href="/welcome-mission" className="text-[11px] font-bold text-muted">
+          <button
+            type="button"
+            onClick={() => setInfoOpen(true)}
+            className="text-[11px] font-bold text-muted"
+          >
             詳細
-          </Link>
+          </button>
         )}
       </div>
       <ul className="mt-3 space-y-1.5">
@@ -117,6 +203,7 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
       {referralMe.trialUntil && new Date(referralMe.trialUntil).getTime() > now && (
         <p className="mt-2 text-[11px] text-amber-300">プレミアム体験中（3日間）</p>
       )}
+      <WelcomeMissionDetailsModal open={infoOpen} onClose={() => setInfoOpen(false)} />
     </div>
   );
 }
@@ -124,12 +211,14 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
 export function ReferralInviteCard() {
   const { referralMe } = useApp();
   const [copied, setCopied] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   if (!referralMe?.code) return null;
   return (
     <div className="rounded-2xl border border-gray-800 bg-panel px-4 py-3">
       <p className="text-sm font-black">あなたの紹介コード</p>
       <p className="mt-1 text-[11px] text-muted">
-        友達がこのコードで Welcome Mission を4日以内に達成すると、翌月のプレミアムが半額（¥200）になります。
+        友達がこのコードで <WelcomeMissionText onOpen={() => setInfoOpen(true)} />{" "}
+        を4日以内に達成すると、{HALF_PRICE_LABEL}になります。次回の購入時または次回の更新時の1か月分に適用されます。
       </p>
       <div className="mt-2 flex items-center gap-2">
         <p className="rounded-xl border border-gray-700 bg-black px-3 py-2 font-mono text-lg font-black tracking-widest">
@@ -148,8 +237,11 @@ export function ReferralInviteCard() {
         </button>
       </div>
       {referralMe.pendingDiscount && (
-        <p className="mt-2 text-[11px] font-bold text-amber-300">翌月半額クーポンが付与されています</p>
+        <p className="mt-2 text-[11px] font-bold text-amber-300">
+          1か月半額クーポンが付与されています（次回購入時または次回更新時）
+        </p>
       )}
+      <WelcomeMissionDetailsModal open={infoOpen} onClose={() => setInfoOpen(false)} />
     </div>
   );
 }

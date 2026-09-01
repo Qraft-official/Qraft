@@ -13,7 +13,7 @@ export default function WelcomeMissionPage() {
       </button>
       <h1 className="text-2xl font-black">Welcome Mission</h1>
       <p className="mt-2 text-sm text-muted">
-        紹介コード適用から4日以内（96時間）に3つすべて達成すると、紹介者の翌月プレミアムが半額になります。
+        紹介コード適用から4日以内（96時間）に3つすべて達成すると、紹介者のプレミアムプランが1か月半額（￥200）になります。次回の購入時または次回の更新時の1か月分に適用されます。
       </p>
       <div className="mt-4 space-y-3">
         <WelcomeMissionCard compact />

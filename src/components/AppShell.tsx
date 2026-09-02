@@ -13,7 +13,20 @@ import { ReplySheet } from "@/components/ReplySheet";
 import { useApp } from "@/lib/store";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { usePathname } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
+
+function BootSplash() {
+  return (
+    <div
+      className="flex min-h-dvh items-center justify-center bg-black"
+      suppressHydrationWarning
+    >
+      <p className="text-2xl font-black text-aha" suppressHydrationWarning>
+        Qraft
+      </p>
+    </div>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const {
@@ -28,10 +41,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     closeFeedback,
   } = useApp();
   const path = usePathname();
+  const [mounted, setMounted] = useState(false);
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
   const isLegal = path === "/terms" || path === "/privacy";
   const isInvite = path.startsWith("/i/");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     rememberPremiumReturnPath(path);
@@ -52,13 +70,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!ready || (authenticated && !profileHydrated)) {
+  if (!mounted || !ready || (authenticated && !profileHydrated)) {
     return (
       <>
         {capture}
-        <div className="flex min-h-dvh items-center justify-center bg-black">
-          <p className="text-2xl font-black text-aha">Qraft</p>
-        </div>
+        <BootSplash />
       </>
     );
   }
@@ -86,6 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         composer.open ? "max-h-dvh overflow-hidden" : ""
       }`}
       style={{ ["--accent" as string]: accentColor }}
+      suppressHydrationWarning
     >
       <FocusBgm />
       {capture}

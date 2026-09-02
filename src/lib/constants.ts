@@ -75,6 +75,7 @@ export const STORAGE_KEYS = {
   accent: "aha.accent",
   reactions: "aha.reactions",
   auth: "aha.auth",
+  hiddenAds: "aha.hiddenAds",
 } as const;
 
 export const TITLE_CATALOG = [

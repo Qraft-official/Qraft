@@ -10,10 +10,10 @@ import { useApp } from "@/lib/store";
 import { inferUserLevel } from "@/lib/difficulty";
 import { sortRecommended } from "@/lib/recommend";
 import type { FeedTab } from "@/lib/types";
-import { AD_FEED_INTERVAL, adForSlot } from "@/lib/ads";
+import { AD_FEED_INTERVAL, adForSlot, loadHiddenAdIds } from "@/lib/ads";
 import { PULSE_BLURB, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { Crown } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 export default function HomePage() {
   const {
@@ -31,6 +31,17 @@ export default function HomePage() {
     openComposer,
   } = useApp();
   const [tab, setTab] = useState<FeedTab>("foryou");
+  const [hiddenAdIds, setHiddenAdIds] = useState<string[]>([]);
+  const [adToast, setAdToast] = useState("");
+
+  useEffect(() => {
+    setHiddenAdIds(loadHiddenAdIds());
+  }, []);
+
+  const flashAdToast = (msg: string) => {
+    setAdToast(msg);
+    window.setTimeout(() => setAdToast(""), 2400);
+  };
 
   const tabs: { id: FeedTab; label: string }[] = [
     { id: "foryou", label: "おすすめ" },
@@ -160,10 +171,49 @@ export default function HomePage() {
             showRepostLabel={reposts.includes(p.id) && p.authorId !== me.id}
           />
           {!hasPremium && tab === "foryou" && (i + 1) % AD_FEED_INTERVAL === 0 && (
-            <AdPost ad={adForSlot(Math.floor((i + 1) / AD_FEED_INTERVAL) - 1)} />
+            <FeedAd
+              slot={Math.floor((i + 1) / AD_FEED_INTERVAL) - 1}
+              hiddenAdIds={hiddenAdIds}
+              onHidden={(id) => setHiddenAdIds((prev) => (prev.includes(id) ? prev : [...prev, id]))}
+              onHideToast={() => flashAdToast("広告を非表示にしました")}
+              onReport={() => flashAdToast("報告を受け付けました")}
+            />
           )}
         </Fragment>
       ))}
+      {adToast && (
+        <div
+          className="pointer-events-none fixed bottom-24 left-1/2 z-50 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 rounded-full bg-white px-4 py-2.5 text-center text-sm font-bold text-black shadow-xl"
+          role="status"
+        >
+          {adToast}
+        </div>
+      )}
     </div>
+  );
+}
+
+function FeedAd({
+  slot,
+  hiddenAdIds,
+  onHidden,
+  onHideToast,
+  onReport,
+}: {
+  slot: number;
+  hiddenAdIds: string[];
+  onHidden: (id: string) => void;
+  onHideToast: () => void;
+  onReport: () => void;
+}) {
+  const ad = adForSlot(slot, hiddenAdIds);
+  if (!ad) return null;
+  return (
+    <AdPost
+      ad={ad}
+      onHidden={onHidden}
+      onReport={() => onReport()}
+      onHideStart={onHideToast}
+    />
   );
 }

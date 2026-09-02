@@ -1,7 +1,9 @@
+import { STORAGE_KEYS } from "./constants";
+
 export const AD_ACCOUNT_HANDLE = "advertisement";
 export const AD_ACCOUNT_NAME = "広告";
-/** Insert an in-feed ad after every N timeline posts (within the 5–10 range). */
-export const AD_FEED_INTERVAL = 7;
+/** Insert an in-feed ad after every N timeline posts (6th, 12th, 18th, …). */
+export const AD_FEED_INTERVAL = 6;
 
 export type InFeedAd = {
   id: string;
@@ -26,6 +28,31 @@ export const IN_FEED_ADS: InFeedAd[] = [
   },
 ];
 
-export function adForSlot(slotIndex: number): InFeedAd {
-  return IN_FEED_ADS[Math.abs(slotIndex) % IN_FEED_ADS.length] ?? IN_FEED_ADS[0];
+export function adForSlot(slotIndex: number, hiddenIds: Iterable<string> = []): InFeedAd | null {
+  const hidden = new Set(hiddenIds);
+  const pool = IN_FEED_ADS.filter((ad) => !hidden.has(ad.id));
+  if (!pool.length) return null;
+  return pool[Math.abs(slotIndex) % pool.length] ?? pool[0];
+}
+
+export function loadHiddenAdIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.hiddenAds);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function persistHiddenAdId(id: string) {
+  if (typeof window === "undefined") return;
+  const next = Array.from(new Set([...loadHiddenAdIds(), id]));
+  try {
+    localStorage.setItem(STORAGE_KEYS.hiddenAds, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
 }

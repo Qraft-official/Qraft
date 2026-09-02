@@ -9,7 +9,7 @@ import {
   TITLE_CATALOG,
 } from "@/lib/constants";
 import type { Tiers } from "@/lib/types";
-import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
+import { HANDLE_HINT, isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "@/lib/handle";
 import { fetchHandleChangeStatus, formatHandleNextDate, type HandleChangeStatus } from "@/lib/auth";
 import { ageForSave, needsGuardianConsent } from "@/lib/guardian-consent";
 import { isImageSrc, useApp } from "@/lib/store";
@@ -256,6 +256,10 @@ export function ProfileEditForm({
               return;
             }
             const nextHandle = sanitizeHandleInput(handle.trim()) || me.handle;
+            if (nextHandle && isReservedHandle(nextHandle)) {
+              setSaveError(RESERVED_HANDLE_ERROR);
+              return;
+            }
             if (nextHandle && !isValidHandle(nextHandle)) {
               setSaveError(HANDLE_HINT);
               return;

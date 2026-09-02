@@ -4,12 +4,13 @@ import { IosNotice } from "@/components/IosNotice";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PostCard } from "@/components/PostCard";
 import { SprintBanner } from "@/components/SprintBanner";
-import { TimelineAd } from "@/components/TimelineAd";
+import { AdPost } from "@/components/AdPost";
 import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
 import { useApp } from "@/lib/store";
 import { inferUserLevel } from "@/lib/difficulty";
 import { sortRecommended } from "@/lib/recommend";
 import type { FeedTab } from "@/lib/types";
+import { AD_FEED_INTERVAL, adForSlot } from "@/lib/ads";
 import { PULSE_BLURB, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { Crown } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
@@ -158,7 +159,9 @@ export default function HomePage() {
             post={p}
             showRepostLabel={reposts.includes(p.id) && p.authorId !== me.id}
           />
-          {!hasPremium && tab === "foryou" && (i + 1) % 4 === 0 && <TimelineAd />}
+          {!hasPremium && tab === "foryou" && (i + 1) % AD_FEED_INTERVAL === 0 && (
+            <AdPost ad={adForSlot(Math.floor((i + 1) / AD_FEED_INTERVAL) - 1)} />
+          )}
         </Fragment>
       ))}
     </div>

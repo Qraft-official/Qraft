@@ -22,12 +22,13 @@ import {
   sessionUserFields,
   tiersFromProfile,
 } from "./auth";
-import { isValidHandle, sanitizeHandleInput } from "./handle";
+import { isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "./handle";
 import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
 import { getDeviceId, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
 import { referralFetch } from "./referral-client";
 import { isVerifiedCreator, isComplimentaryPremiumAccount, LOUNGE_POSTS } from "./premium";
+import { userIsVerified } from "./verified";
 import {
   communityForDay,
   INITIAL_FOLLOWERS,
@@ -503,6 +504,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       : Array.isArray(base.activeTitles)
         ? base.activeTitles
         : [];
+    const verified =
+      premium ||
+      isVerifiedCreator(base.id) ||
+      userIsVerified({
+        ...base,
+        ...profile,
+        handle: typeof profile.handle === "string" ? profile.handle : base.handle,
+      });
     return {
       ...base,
       ...profile,
@@ -514,7 +523,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       followerCount: INITIAL_FOLLOWERS.length,
       titles,
       activeTitles,
-      verified: premium || isVerifiedCreator(base.id) || !!base.verified,
+      verified,
+      isVerified: verified,
     };
   }, [tiers, age, follows.length, profile, hasPremium, accentColor, supabaseUid, remoteUsers]);
 
@@ -630,6 +640,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const handle = input.handle ? sanitizeHandleInput(input.handle) : "";
         if (handle && !isValidHandle(handle)) {
           return { error: "アカウントIDは半角英数字と - _ . のみ使えます" };
+        }
+        if (handle && isReservedHandle(handle)) {
+          return { error: RESERVED_HANDLE_ERROR };
         }
         const { data, error } = await supabase.auth.signUp({
           email: input.email.trim(),
@@ -1124,12 +1137,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (userId: string) => {
       const u = userId === me.id ? me : USER_MAP[userId] ?? remoteUsers[userId];
       if (!u) return false;
-      if (isComplimentaryPremiumAccount(u)) return true;
-      if (isVerifiedCreator(u.id)) return true;
       if (userId === me.id && hasPremium) return true;
-      return !!u.verified;
+      return userIsVerified(u);
     },
-    [me, hasPremium, remoteUsers, isDeveloper],
+    [me, hasPremium, remoteUsers],
   );
 
   const startSprint = useCallback(() => {
@@ -1190,7 +1201,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...Object.values(remoteUsers).filter((u) => u.id !== me.id),
       ...USERS.filter((u) => u.id !== ME_ID && u.id !== me.id && !remoteUsers[u.id]).map((u) => ({
         ...u,
-        verified: !!u.verified || isVerifiedCreator(u.id),
+        verified: userIsVerified(u),
+        isVerified: userIsVerified(u),
       })),
     ],
     posts,

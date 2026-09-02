@@ -4,7 +4,7 @@ import { ensureProfile } from "./auth";
 import { asProblemMode, type ProblemMode } from "./challenge";
 import { asDifficulty } from "./difficulty";
 import { supabase } from "./supabase";
-import { isComplimentaryPremiumAccount } from "./premium";
+import { userIsVerified } from "./verified";
 import type { NotePage, Post, Subject, User } from "./types";
 
 export type ProblemRow = {
@@ -84,10 +84,11 @@ export function fallbackUser(id: string, profile?: ProfileRow | null): User {
     activeTitles: [],
     age: null,
     verified: false,
+    isVerified: false,
   };
-  if (isComplimentaryPremiumAccount({ id, handle: user.handle, name: user.name })) {
-    user.verified = true;
-  }
+  const verified = userIsVerified(user);
+  user.verified = verified;
+  user.isVerified = verified;
   return user;
 }
 

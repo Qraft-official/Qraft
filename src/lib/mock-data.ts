@@ -45,6 +45,7 @@ export const USERS: User[] = [
     titles: ["PULSEホスト"],
     activeTitles: ["PULSEホスト"],
     verified: true,
+    isVerified: true,
     analytics: [],
   },
   {
@@ -64,6 +65,7 @@ export const USERS: User[] = [
     titles: ["殿堂入り解法 x12", "ドパミンの神"],
     activeTitles: ["殿堂入り解法 x12", "ドパミンの神"],
     verified: true,
+    isVerified: true,
     analytics: [
       { day: "月", solves: 9, aha: 4.9 },
       { day: "火", solves: 8, aha: 4.7 },

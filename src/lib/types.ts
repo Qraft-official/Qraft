@@ -25,7 +25,9 @@ export type User = {
   titles: string[];
   activeTitles: string[];
   analytics: { day: string; solves: number; aha: number }[];
+  /** Official / creator verification. Prefer `userIsVerified()`. */
   verified?: boolean;
+  isVerified?: boolean;
 };
 
 export type ProfilePatch = Partial<

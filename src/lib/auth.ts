@@ -1,6 +1,6 @@
 import type { Tier, Tiers } from "./types";
 import type { User } from "@supabase/supabase-js";
-import { isValidHandle, sanitizeHandleInput } from "./handle";
+import { isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "./handle";
 import { supabase } from "./supabase";
 
 function asText(value: unknown): string {
@@ -40,10 +40,12 @@ export function handleFromUser(user: {
   const handle = asText(meta.handle);
   if (handle.trim()) {
     const cleaned = sanitizeHandleInput(handle.trim());
-    return cleaned || undefined;
+    if (!cleaned || isReservedHandle(cleaned)) return undefined;
+    return cleaned;
   }
   const email = asText(user.email);
   const fromEmail = email.split("@")[0]?.replace(/[^a-zA-Z0-9_.-]/g, "") ?? "";
+  if (fromEmail && isReservedHandle(fromEmail)) return undefined;
   return fromEmail || undefined;
 }
 
@@ -79,13 +81,19 @@ export async function ensureProfile(user: {
     if (existing) {
       const patch: Record<string, unknown> = {};
       if (!existing.name) patch.name = incoming.name;
-      if (!existing.handle && incoming.handle) patch.handle = incoming.handle;
+      if (!existing.handle && incoming.handle && !isReservedHandle(incoming.handle)) {
+        patch.handle = incoming.handle;
+      }
       if (Object.keys(patch).length) {
         await supabase.from("profiles").update(patch).eq("id", user.id);
       }
       return;
     }
-    const first = await supabase.from("profiles").upsert({ id: user.id, ...incoming });
+    const first = await supabase.from("profiles").upsert({
+      id: user.id,
+      name: incoming.name,
+      handle: incoming.handle && !isReservedHandle(incoming.handle) ? incoming.handle : null,
+    });
     if (!first.error) return;
     await supabase.from("profiles").upsert({ id: user.id, name: incoming.name, handle: null });
   } catch (err) {
@@ -186,6 +194,9 @@ export async function savePublicProfile(
   if (!nextHandle || !isValidHandle(nextHandle)) {
     return { error: "アカウントIDは半角英数字と - _ . のみ使えます" };
   }
+  if (isReservedHandle(nextHandle)) {
+    return { error: RESERVED_HANDLE_ERROR };
+  }
 
   const { data: current, error: readError } = await supabase
     .from("profiles")
@@ -218,6 +229,9 @@ export async function savePublicProfile(
   if (error) {
     if (error.code === "23505" || /duplicate|unique/i.test(error.message)) {
       return { error: "このアカウントIDは既に使われています。別のIDを指定してください" };
+    }
+    if (/RESERVED_HANDLE/i.test(error.message)) {
+      return { error: RESERVED_HANDLE_ERROR };
     }
     if (/HANDLE_CHANGE_LIMIT/i.test(error.message)) {
       const status = await fetchHandleChangeStatus(userId);

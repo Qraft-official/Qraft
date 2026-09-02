@@ -3,7 +3,7 @@
 import { formatAuthError } from "@/lib/auth";
 import { savePendingReferralCode } from "@/lib/device-id";
 import { parseInviteCodeFromLocation } from "@/lib/referral";
-import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
+import { HANDLE_HINT, isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "@/lib/handle";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
@@ -56,6 +56,10 @@ export function AuthScreen() {
     }
     if (mode === "signup" && password.length < 6) {
       setError("パスワードは6文字以上にしてください");
+      return;
+    }
+    if (mode === "signup" && handle.trim() && isReservedHandle(handle.trim())) {
+      setError(RESERVED_HANDLE_ERROR);
       return;
     }
     if (mode === "signup" && handle.trim() && !isValidHandle(handle.trim())) {

@@ -210,7 +210,10 @@ begin
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'name', ''),
-    nullif(new.raw_user_meta_data ->> 'handle', '')
+    case
+      when lower(coalesce(new.raw_user_meta_data ->> 'handle', '')) = 'advertisement' then null
+      else nullif(new.raw_user_meta_data ->> 'handle', '')
+    end
   )
   on conflict (id) do nothing;
 
@@ -402,5 +405,24 @@ $$;
 
 revoke all on function public.promote_own_problem(uuid) from public, anon;
 grant execute on function public.promote_own_problem(uuid) to authenticated;
+
+-- Reserved account IDs (users cannot claim advertisement)
+create or replace function public.enforce_reserved_handle()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.handle is not null and lower(new.handle) = 'advertisement' then
+    raise exception 'RESERVED_HANDLE';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_enforce_reserved_handle on public.profiles;
+create trigger trg_enforce_reserved_handle
+before insert or update of handle on public.profiles
+for each row
+execute function public.enforce_reserved_handle();
 
 

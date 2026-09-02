@@ -40,6 +40,9 @@ export type NotePage = {
   latex: string;
   doodle: number;
   image?: string;
+  /** CSS pixel size of the ink bounding box used when rasterizing / displaying. */
+  contentWidth?: number;
+  contentHeight?: number;
 };
 
 export type Post = {
@@ -70,6 +73,12 @@ export type Post = {
   /** Author-only. Never sent to other clients from fetch. */
   correctAnswer?: string;
   solverAnswer?: string;
+  /** 1–5. Author-selected difficulty. */
+  difficultyLevel?: number;
+  confusedCount?: number;
+  isHardSpotlight?: boolean;
+  promoted?: boolean;
+  promotedAt?: string;
   challengeGrade?: ChallengeGrade;
 };
 

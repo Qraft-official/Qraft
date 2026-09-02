@@ -10,28 +10,55 @@ import { INITIAL_FOLLOWS } from "@/lib/mock-data";
 import { useApp } from "@/lib/store";
 import { ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function UserPage() {
   const { handle } = useParams<{ handle: string }>();
   const router = useRouter();
-  const { posts, follows, toggleFollow, me, users, userOf, authorVerified } = useApp();
-  const user = users.find((u) => u.handle === handle) ?? me;
+  const { posts, follows, toggleFollow, me, users, userOf, authorVerified, searchUsers } = useApp();
+  const decoded = decodeURIComponent(String(handle ?? "")).replace(/^@/, "");
+  const user =
+    users.find((u) => u.handle === decoded) ??
+    users.find((u) => u.handle.toLowerCase() === decoded.toLowerCase());
+
+  useEffect(() => {
+    if (!decoded) return;
+    void searchUsers(decoded);
+  }, [decoded, searchUsers]);
+
   const [tab, setTab] = useState<"posts" | "solutions">("posts");
   const [list, setList] = useState<"following" | "followers" | null>(null);
   const theirs = useMemo(
     () =>
-      posts.filter(
-        (p) => p.authorId === user.id && p.kind !== "sprint" && p.kind !== "reply",
-      ),
-    [posts, user.id],
+      user
+        ? posts.filter(
+            (p) => p.authorId === user.id && p.kind !== "sprint" && p.kind !== "reply",
+          )
+        : [],
+    [posts, user],
   );
 
-  const followingUsers =
-    user.id === me.id
+  const followingUsers = user
+    ? user.id === me.id
       ? follows.map(userOf)
-      : INITIAL_FOLLOWS.map(userOf).filter((u) => u.id !== user.id);
-  const followerUsers = users.filter((u) => u.id !== user.id).slice(0, 4);
+      : INITIAL_FOLLOWS.map(userOf).filter((u) => u.id !== user.id)
+    : [];
+  const followerUsers = user ? users.filter((u) => u.id !== user.id).slice(0, 4) : [];
+
+  if (!user) {
+    return (
+      <div className="px-4 py-16 text-center">
+        <p className="text-sm text-muted">ユーザーが見つかりません</p>
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="mt-4 text-sm font-bold text-aha"
+        >
+          戻る
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>

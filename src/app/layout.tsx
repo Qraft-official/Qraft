@@ -41,16 +41,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${noto.variable} h-full dark`}
       suppressHydrationWarning
     >
-      <head>
+      <body className="min-h-full bg-black text-[#e7e9ea] antialiased" suppressHydrationWarning>
         <Script
-          id="adsense"
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
           crossOrigin="anonymous"
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
         />
-      </head>
-      <body className="min-h-full bg-black text-[#e7e9ea] antialiased" suppressHydrationWarning>
         <AppErrorBoundary>
           <AppProvider>
             <AppShell>{children}</AppShell>

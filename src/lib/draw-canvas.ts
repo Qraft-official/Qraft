@@ -44,6 +44,49 @@ export function textBounds(t: CanvasText) {
   return { w, h };
 }
 
+function strokePath(ctx: CanvasRenderingContext2D, s: CanvasPage["strokes"][number]) {
+  if (s.points.length < 2) return;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = s.width;
+  ctx.beginPath();
+  ctx.moveTo(s.points[0].x, s.points[0].y);
+  for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+  ctx.stroke();
+}
+
+/** Ink only: erasers punch ink via destination-out, never the ruled background. */
+function drawInkStrokes(ctx: CanvasRenderingContext2D, page: CanvasPage, w: number, h: number) {
+  const ink = document.createElement("canvas");
+  ink.width = Math.max(1, Math.ceil(w));
+  ink.height = Math.max(1, Math.ceil(h));
+  const ictx = ink.getContext("2d");
+  if (!ictx) return;
+  for (const s of page.strokes) {
+    if (s.points.length < 2) continue;
+    if (s.eraser) {
+      ictx.globalCompositeOperation = "destination-out";
+      ictx.strokeStyle = "rgba(0,0,0,1)";
+      ictx.shadowBlur = 0;
+      ictx.shadowColor = "transparent";
+      strokePath(ictx, s);
+    } else {
+      ictx.globalCompositeOperation = "source-over";
+      ictx.strokeStyle = s.color;
+      const glow = s.color === "#FBBF24" || s.color === "#FB7185";
+      ictx.shadowColor = glow ? s.color : "transparent";
+      ictx.shadowBlur = glow ? 10 : 0;
+      strokePath(ictx, s);
+      ictx.shadowBlur = 0;
+      ictx.shadowColor = "transparent";
+    }
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.drawImage(ink, 0, 0, w, h);
+  ctx.restore();
+}
+
 export function drawPage(
   ctx: CanvasRenderingContext2D,
   page: CanvasPage,
@@ -51,6 +94,8 @@ export function drawPage(
   h: number,
   skipTextId?: string | null,
 ) {
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = "#0b1220";
   ctx.fillRect(0, 0, w, h);
@@ -62,23 +107,7 @@ export function drawPage(
     ctx.lineTo(w, y);
     ctx.stroke();
   }
-  for (const s of page.strokes) {
-    if (s.points.length < 2) continue;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = s.width;
-    ctx.globalCompositeOperation = s.eraser ? "destination-out" : "source-over";
-    ctx.strokeStyle = s.eraser ? "rgba(0,0,0,1)" : s.color;
-    const glow = !s.eraser && (s.color === "#FBBF24" || s.color === "#FB7185");
-    ctx.shadowColor = glow ? s.color : "transparent";
-    ctx.shadowBlur = glow ? 10 : 0;
-    ctx.beginPath();
-    ctx.moveTo(s.points[0].x, s.points[0].y);
-    for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
-  }
+  drawInkStrokes(ctx, page, w, h);
   ctx.globalCompositeOperation = "source-over";
   ctx.textBaseline = "top";
   ctx.textAlign = "left";
@@ -92,6 +121,7 @@ export function drawPage(
       ctx.fillText(line || " ", t.x, t.y + i * lh);
     });
   }
+  ctx.restore();
 }
 
 export type ResizeCorner = "nw" | "ne" | "sw" | "se";
@@ -138,4 +168,45 @@ export function rasterizePage(page: CanvasPage, cssW: number, cssH: number) {
   ctx.scale(dpr, dpr);
   drawPage(ctx, page, w, h);
   return canvas.toDataURL("image/png");
+}
+
+const NOTE_MIN_H = 280;
+const NOTE_PAD = 56;
+
+/** Lowest ink/text Y on a page (pen strokes only; erasers do not extend bounds). */
+export function pageInkMaxY(page: CanvasPage): number {
+  let maxY = 0;
+  for (const s of page.strokes) {
+    if (s.eraser) continue;
+    const half = (s.width || 3) / 2;
+    for (const pt of s.points) {
+      if (pt.y + half > maxY) maxY = pt.y + half;
+    }
+  }
+  for (const t of page.texts ?? []) {
+    const bottom = t.y + textBounds(t).h;
+    if (bottom > maxY) maxY = bottom;
+  }
+  return maxY;
+}
+
+/** Shared canvas CSS height: tallest used range among pages + padding. */
+export function sharedNotebookHeight(
+  pages: CanvasPage[],
+  minH = NOTE_MIN_H,
+  pad = NOTE_PAD,
+): number {
+  const maxY = pages.reduce((m, p) => Math.max(m, pageInkMaxY(p)), 0);
+  return Math.max(minH, Math.ceil(maxY + pad));
+}
+
+export function typedContentHeight(latex: string, minH = 160, pad = 40): number {
+  const raw = latex.trim();
+  if (!raw) return minH;
+  const lines = Math.max(1, raw.split(/\n/).length + (raw.match(/\\\\/g)?.length ?? 0));
+  return Math.max(minH, Math.min(2400, pad + lines * 32));
+}
+
+export function sharedTypedHeight(pages: { latex: string }[]): number {
+  return pages.reduce((m, p) => Math.max(m, typedContentHeight(p.latex)), 160);
 }

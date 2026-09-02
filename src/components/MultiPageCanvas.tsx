@@ -7,6 +7,7 @@ import {
   hitResizeHandle,
   hitTestText,
   rasterizePage,
+  sharedNotebookHeight,
   textBounds,
   type ResizeCorner,
 } from "@/lib/draw-canvas";
@@ -18,6 +19,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -59,6 +61,7 @@ function applyResize(
 
 export type MultiPageCanvasHandle = {
   exportPageImages: () => string[];
+  getContentSize: () => { w: number; h: number };
 };
 
 export const MultiPageCanvas = forwardRef<
@@ -68,15 +71,18 @@ export const MultiPageCanvas = forwardRef<
     onChange: (pages: CanvasPage[]) => void;
     className?: string;
     premium?: boolean;
+    flush?: boolean;
   }
->(function MultiPageCanvas({ pages, onChange, className = "", premium = false }, ref) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
+>(function MultiPageCanvas({ pages, onChange, className = "", premium = false, flush = false }, ref) {
+  const canvasEls = useRef<(HTMLCanvasElement | null)[]>([]);
+  const wrapEls = useRef<(HTMLDivElement | null)[]>([]);
   const drawing = useRef<Stroke | null>(null);
   const dragText = useRef<{ id: string; dx: number; dy: number; moved: boolean } | null>(null);
-  const sizeRef = useRef({ w: 800, h: 1000 });
+  const sizeRef = useRef({ w: 800, h: 280 });
   const stopTrack = useRef<(() => void) | null>(null);
   const [index, setIndex] = useState(0);
+  const indexRef = useRef(0);
+  indexRef.current = index;
   const pens = premium ? [...PEN_COLORS, ...PREMIUM_PENS] : PEN_COLORS;
   const [color, setColor] = useState(PEN_COLORS[0].value);
   const [eraser, setEraser] = useState(false);
@@ -107,23 +113,37 @@ export const MultiPageCanvas = forwardRef<
     id: string;
   } | null>(null);
 
+  const contentH = sharedNotebookHeight(pages);
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
   const redraw = useCallback(() => {
-    const canvas = canvasRef.current;
-    const wrap = wrapRef.current;
-    if (!canvas || !wrap) return;
+    const list = pagesRef.current;
+    const inkH = sharedNotebookHeight(list);
+    const firstWrap = wrapEls.current.find(Boolean);
+    const w = firstWrap?.getBoundingClientRect().width || sizeRef.current.w;
     const dpr = window.devicePixelRatio || 1;
-    const rect = wrap.getBoundingClientRect();
-    sizeRef.current = { w: rect.width, h: rect.height };
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const page = pagesRef.current[index] ?? pagesRef.current[0];
-    if (page) drawPage(ctx, page, rect.width, rect.height, editingId);
-  }, [index, editingId]);
+    let usedH = inkH;
+    list.forEach((page, i) => {
+      const canvas = canvasEls.current[i];
+      const wrap = wrapEls.current[i];
+      if (!canvas) return;
+      const rectW = wrap?.getBoundingClientRect().width || w;
+      const wrapH = wrap?.getBoundingClientRect().height || 0;
+      const cssW = Math.max(1, rectW);
+      const cssH = flushRef.current ? Math.max(inkH, wrapH) : inkH;
+      usedH = Math.max(usedH, cssH);
+      canvas.width = Math.max(1, Math.floor(cssW * dpr));
+      canvas.height = Math.max(1, Math.floor(cssH * dpr));
+      canvas.style.width = `${cssW}px`;
+      canvas.style.height = `${cssH}px`;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawPage(ctx, page, cssW, cssH, i === indexRef.current ? editingId : null);
+    });
+    sizeRef.current = { w: Math.max(1, w), h: usedH };
+  }, [editingId, pages]);
 
   const commit = (next: CanvasPage[]) => {
     pagesRef.current = next;
@@ -132,18 +152,19 @@ export const MultiPageCanvas = forwardRef<
 
   const pageTexts = (p: CanvasPage) => p.texts ?? [];
 
-  const patchPage = (fn: (p: CanvasPage) => CanvasPage) => {
-    commit(pagesRef.current.map((p, i) => (i === index ? fn(p) : p)));
+  const patchPage = (fn: (p: CanvasPage) => CanvasPage, pageIndex = indexRef.current) => {
+    commit(pagesRef.current.map((p, i) => (i === pageIndex ? fn(p) : p)));
   };
 
-  const clientToCanvas = (clientX: number, clientY: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const r = canvas.getBoundingClientRect();
+  const clientToCanvas = (clientX: number, clientY: number, canvas?: HTMLCanvasElement | null) => {
+    const el = canvas ?? canvasEls.current[indexRef.current];
+    if (!el) return { x: 0, y: 0 };
+    const r = el.getBoundingClientRect();
     return { x: clientX - r.left, y: clientY - r.top };
   };
 
-  const pos = (e: { clientX: number; clientY: number }) => clientToCanvas(e.clientX, e.clientY);
+  const pos = (e: { clientX: number; clientY: number }, canvas?: HTMLCanvasElement | null) =>
+    clientToCanvas(e.clientX, e.clientY, canvas);
 
   const trackPointer = (pointerId: number, onMove: (e: PointerEvent) => void, onUp: () => void) => {
     stopTrack.current?.();
@@ -191,19 +212,26 @@ export const MultiPageCanvas = forwardRef<
     exportPageImages: () => {
       flushEdit();
       const { w, h } = sizeRef.current;
-      return pagesRef.current.map((p) => rasterizePage(p, w, h));
+      const tall = sharedNotebookHeight(pagesRef.current);
+      return pagesRef.current.map((p) => rasterizePage(p, w, Math.max(h, tall)));
+    },
+    getContentSize: () => {
+      const h = sharedNotebookHeight(pagesRef.current);
+      return { w: sizeRef.current.w, h: Math.max(sizeRef.current.h, h) };
     },
   }));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     redraw();
-  }, [pages, index, redraw, editingId]);
+  }, [pages, index, redraw, editingId, flush]);
 
   useEffect(() => {
     const ro = new ResizeObserver(() => redraw());
-    if (wrapRef.current) ro.observe(wrapRef.current);
+    wrapEls.current.forEach((el) => {
+      if (el) ro.observe(el);
+    });
     return () => ro.disconnect();
-  }, [redraw]);
+  }, [redraw, pages.length, flush]);
 
   useEffect(() => () => stopTrack.current?.(), []);
 
@@ -224,13 +252,18 @@ export const MultiPageCanvas = forwardRef<
     setEditValue(t.text);
   };
 
-  const beginMove = (t: CanvasText, pt: { x: number; y: number }, pointerId: number) => {
+  const beginMove = (
+    t: CanvasText,
+    pt: { x: number; y: number },
+    pointerId: number,
+    canvas?: HTMLCanvasElement | null,
+  ) => {
     dragText.current = { id: t.id, dx: pt.x - t.x, dy: pt.y - t.y, moved: false };
     setSelectedId(t.id);
     trackPointer(
       pointerId,
       (ev) => {
-        const p = clientToCanvas(ev.clientX, ev.clientY);
+        const p = clientToCanvas(ev.clientX, ev.clientY, canvas);
         const drag = dragText.current;
         if (!drag) return;
         drag.moved = true;
@@ -287,7 +320,9 @@ export const MultiPageCanvas = forwardRef<
     );
   };
 
-  const onPointerDown = (e: ReactPointerEvent) => {
+  const onPointerDown = (pageIndex: number, e: ReactPointerEvent<HTMLCanvasElement>) => {
+    indexRef.current = pageIndex;
+    setIndex(pageIndex);
     if (editingIdRef.current) {
       finishEdit();
       return;
@@ -298,8 +333,9 @@ export const MultiPageCanvas = forwardRef<
     } catch {
       /* already captured */
     }
-    const pt = pos(e);
-    const page = pagesRef.current[index];
+    const canvas = e.currentTarget;
+    const pt = pos(e, canvas);
+    const page = pagesRef.current[pageIndex];
     if (!page) return;
 
     const hit = hitTestText(pageTexts(page), pt.x, pt.y);
@@ -309,7 +345,7 @@ export const MultiPageCanvas = forwardRef<
         beginResize(hit, handle, e);
         return;
       }
-      beginMove(hit, pt, e.pointerId);
+      beginMove(hit, pt, e.pointerId, canvas);
       return;
     }
 
@@ -325,7 +361,7 @@ export const MultiPageCanvas = forwardRef<
         height: 48,
       };
       lastKind.current = "text";
-      patchPage((p) => ({ ...p, texts: [...pageTexts(p), next] }));
+      patchPage((p) => ({ ...p, texts: [...pageTexts(p), next] }), pageIndex);
       setEditSize({ w: 180, h: 48 });
       setSelectedId(next.id);
       setEditingId(next.id);
@@ -336,7 +372,7 @@ export const MultiPageCanvas = forwardRef<
     if (eraser) {
       if (hit) {
         lastKind.current = "text";
-        patchPage((p) => ({ ...p, texts: pageTexts(p).filter((t) => t.id !== hit.id) }));
+        patchPage((p) => ({ ...p, texts: pageTexts(p).filter((t) => t.id !== hit.id) }), pageIndex);
         if (selectedId === hit.id) setSelectedId(null);
         return;
       }
@@ -351,12 +387,12 @@ export const MultiPageCanvas = forwardRef<
     };
     drawing.current = stroke;
     lastKind.current = "stroke";
-    patchPage((p) => ({ ...p, strokes: [...p.strokes, stroke] }));
+    patchPage((p) => ({ ...p, strokes: [...p.strokes, stroke] }), pageIndex);
     trackPointer(
       e.pointerId,
       (ev) => {
         if (!drawing.current) return;
-        drawing.current.points.push(clientToCanvas(ev.clientX, ev.clientY));
+        drawing.current.points.push(clientToCanvas(ev.clientX, ev.clientY, canvas));
         commit(pagesRef.current.map((p) => ({ ...p, strokes: [...p.strokes] })));
       },
       () => {
@@ -425,17 +461,144 @@ export const MultiPageCanvas = forwardRef<
     return base;
   };
 
+  const renderPageSurface = (pageIndex: number, fill: boolean) => {
+    const showOverlay = pageIndex === index && !!activeBox;
+    return (
+      <div
+        ref={(el) => {
+          wrapEls.current[pageIndex] = el;
+        }}
+        className={`relative w-full ${fill ? "h-full min-h-0" : ""}`}
+        style={fill ? { minHeight: contentH } : { height: contentH }}
+      >
+        <canvas
+          ref={(el) => {
+            canvasEls.current[pageIndex] = el;
+          }}
+          className={`touch-none rounded-2xl border border-gray-800 ${
+            fill ? "h-full w-full" : "block w-full"
+          } ${textTool ? "cursor-text" : "cursor-crosshair"}`}
+          onPointerDown={(e) => onPointerDown(pageIndex, e)}
+        />
+        {showOverlay && activeBox && (
+          <div
+            className="absolute z-30"
+            style={{
+              left: activeBox.x,
+              top: activeBox.y,
+              width: boxSize.w,
+              height: boxSize.h,
+              pointerEvents: "auto",
+              touchAction: "none",
+            }}
+          >
+            {editingId === activeBox.id ? (
+              <>
+                <div
+                  className="absolute -top-6 left-0 right-0 flex h-6 cursor-grab items-center justify-center rounded-t-md bg-aha text-[10px] font-black text-black active:cursor-grabbing"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    try {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                    } catch {
+                      /* ignore */
+                    }
+                    beginMove(
+                      activeBox,
+                      pos(e, canvasEls.current[pageIndex]),
+                      e.pointerId,
+                      canvasEls.current[pageIndex],
+                    );
+                  }}
+                >
+                  移動
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  autoFocus
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") finishEdit();
+                    e.stopPropagation();
+                  }}
+                  className="h-full w-full resize-none rounded-md border-2 border-aha bg-black/85 px-1.5 py-0.5 font-semibold leading-[1.35] whitespace-pre-wrap text-white outline-none"
+                  style={{
+                    color: activeBox.color,
+                    fontSize: activeBox.fontSize,
+                    pointerEvents: "auto",
+                    touchAction: "manipulation",
+                  }}
+                  placeholder="テキストを入力"
+                />
+                <button
+                  type="button"
+                  onClick={finishEdit}
+                  className="absolute -bottom-8 left-0 rounded-full bg-aha px-2.5 py-0.5 text-[10px] font-black text-black"
+                >
+                  完了
+                </button>
+              </>
+            ) : (
+              <div
+                className="h-full w-full cursor-grab rounded-md border-2 border-aha/90 bg-aha/5 active:cursor-grabbing"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                    /* ignore */
+                  }
+                  beginMove(
+                    activeBox,
+                    pos(e, canvasEls.current[pageIndex]),
+                    e.pointerId,
+                    canvasEls.current[pageIndex],
+                  );
+                }}
+              />
+            )}
+            {(["nw", "ne", "sw", "se"] as const).map((corner) => (
+              <div
+                key={corner}
+                role="slider"
+                aria-label={`リサイズ ${corner}`}
+                style={handleStyle(corner)}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                    /* ignore */
+                  }
+                  beginResize(activeBox, corner, e);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className={`flex h-full min-h-0 flex-col ${className}`}>
-      <div className="flex items-center gap-2 overflow-x-auto px-3 py-2">
+      <div className="flex items-center gap-1.5 overflow-x-auto px-2 py-1 sm:gap-2 sm:px-3 sm:py-2">
         <div className="flex gap-1">
           {pages.map((p, i) => (
             <button
               key={p.id}
               onClick={() => {
                 finishEdit();
+                indexRef.current = i;
                 setIndex(i);
                 setSelectedId(null);
+                requestAnimationFrame(() => {
+                  wrapEls.current[i]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
               }}
               className={`h-8 min-w-8 rounded-lg text-xs font-bold ${
                 i === index ? "bg-neon text-white glow-purple" : "bg-white/10 text-muted"
@@ -448,123 +611,42 @@ export const MultiPageCanvas = forwardRef<
         <motion.button
           whileTap={{ scale: 0.92 }}
           onClick={addPage}
-          className="flex items-center gap-1 rounded-full bg-aha px-3 py-1.5 text-xs font-bold text-black"
+          className="flex items-center gap-1 rounded-full bg-aha px-2 py-1 text-[11px] font-bold text-black sm:px-3 sm:py-1.5 sm:text-xs"
         >
           <Plus size={14} /> Add Page
         </motion.button>
-        <span className="ml-auto text-[11px] text-muted">{pages.length} pages</span>
+        <span className="ml-auto hidden text-[11px] text-muted sm:inline">{pages.length} pages</span>
       </div>
 
-      <div className="relative min-h-0 flex-1 px-2">
-        <div ref={wrapRef} className="relative h-full min-h-0">
-          <canvas
-            ref={canvasRef}
-            className={`h-full w-full touch-none rounded-2xl border border-gray-800 ${
-              textTool ? "cursor-text" : "cursor-crosshair"
-            }`}
-            onPointerDown={onPointerDown}
-          />
-          {activeBox && (
-            <div
-              className="absolute z-30"
-              style={{
-                left: activeBox.x,
-                top: activeBox.y,
-                width: boxSize.w,
-                height: boxSize.h,
-                pointerEvents: "auto",
-                touchAction: "none",
-              }}
-            >
-              {editingId === activeBox.id ? (
-                <>
-                  <div
-                    className="absolute -top-6 left-0 right-0 flex h-6 cursor-grab items-center justify-center rounded-t-md bg-aha text-[10px] font-black text-black active:cursor-grabbing"
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      try {
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                      } catch {
-                        /* ignore */
-                      }
-                      beginMove(activeBox, pos(e), e.pointerId);
-                    }}
-                  >
-                    移動
-                  </div>
-                  <textarea
-                    ref={textareaRef}
-                    autoFocus
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") finishEdit();
-                      e.stopPropagation();
-                    }}
-                    className="h-full w-full resize-none rounded-md border-2 border-aha bg-black/85 px-1.5 py-0.5 font-semibold leading-[1.35] whitespace-pre-wrap text-white outline-none"
-                    style={{
-                      color: activeBox.color,
-                      fontSize: activeBox.fontSize,
-                      pointerEvents: "auto",
-                      touchAction: "manipulation",
-                    }}
-                    placeholder="テキストを入力"
-                  />
-                  <button
-                    type="button"
-                    onClick={finishEdit}
-                    className="absolute -bottom-8 left-0 rounded-full bg-aha px-2.5 py-0.5 text-[10px] font-black text-black"
-                  >
-                    完了
-                  </button>
-                </>
-              ) : (
-                <div
-                  className="h-full w-full cursor-grab rounded-md border-2 border-aha/90 bg-aha/5 active:cursor-grabbing"
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    try {
-                      e.currentTarget.setPointerCapture(e.pointerId);
-                    } catch {
-                      /* ignore */
-                    }
-                    beginMove(activeBox, pos(e), e.pointerId);
-                  }}
-                />
-              )}
-              {(["nw", "ne", "sw", "se"] as const).map((corner) => (
-                <div
-                  key={corner}
-                  role="slider"
-                  aria-label={`リサイズ ${corner}`}
-                  style={handleStyle(corner)}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    try {
-                      e.currentTarget.setPointerCapture(e.pointerId);
-                    } catch {
-                      /* ignore */
-                    }
-                    beginResize(activeBox, corner, e);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+      <div
+        className={`relative min-h-0 flex-1 ${flush ? "overflow-hidden px-0" : "overflow-y-auto px-2"}`}
+      >
+        {flush ? (
+          <div className="relative h-full min-h-0 overflow-y-auto">
+            {pages[index] ? renderPageSurface(index, true) : null}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 pb-2">
+            {pages.map((p, i) => (
+              <div
+                key={p.id}
+                className="max-h-[360px] overflow-y-auto overscroll-contain rounded-2xl [-webkit-overflow-scrolling:touch]"
+              >
+                {renderPageSurface(i, false)}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="safe-bottom flex items-center gap-2 overflow-x-auto px-3 py-3">
+      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1.5 sm:gap-2 sm:px-3 sm:py-3">
         <button
           type="button"
           onClick={() => {
             setTextTool(true);
             setEraser(false);
           }}
-          className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+          className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold sm:px-3 sm:py-1.5 sm:text-[11px] ${
             textTool ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
           aria-label="テキスト追加"
@@ -579,7 +661,7 @@ export const MultiPageCanvas = forwardRef<
               setEraser(false);
               setTextTool(false);
             }}
-            className="h-8 w-8 rounded-full border-2"
+            className="h-7 w-7 shrink-0 rounded-full border-2 sm:h-8 sm:w-8"
             style={{
               background: c.value,
               borderColor: !eraser && color === c.value ? "#fff" : "transparent",

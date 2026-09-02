@@ -2,6 +2,7 @@ import { USER_MAP } from "./mock-data";
 import { ME_ID } from "./constants";
 import { ensureProfile } from "./auth";
 import { asProblemMode, type ProblemMode } from "./challenge";
+import { asDifficulty } from "./difficulty";
 import { supabase } from "./supabase";
 import { isComplimentaryPremiumAccount } from "./premium";
 import type { NotePage, Post, Subject, User } from "./types";
@@ -21,6 +22,11 @@ export type ProblemRow = {
   problem_format?: string | null;
   mode?: string | null;
   correct_answer?: string | null;
+  difficulty_level?: number | null;
+  confused_count?: number | null;
+  is_hard_spotlight?: boolean | null;
+  promoted?: boolean | null;
+  promoted_at?: string | null;
 };
 
 export type ProfileRow = {
@@ -41,6 +47,7 @@ export type NewProblem = {
   authorId?: string;
   mode?: ProblemMode;
   correctAnswer?: string | null;
+  difficultyLevel?: number;
 };
 
 export type ProblemPatch = {
@@ -53,7 +60,7 @@ export type ProblemPatch = {
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
 
 const PROBLEM_COLUMNS =
-  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer";
+  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at";
 
 export function asSubject(value: string): Subject {
   return SUBJECTS.includes(value as Subject) ? (value as Subject) : "math";
@@ -96,6 +103,8 @@ function asNotePages(value: unknown): NotePage[] | undefined {
       latex: typeof p.latex === "string" ? p.latex : "",
       doodle: typeof p.doodle === "number" ? p.doodle : 0,
       image: typeof p.image === "string" ? p.image : undefined,
+      contentWidth: typeof p.contentWidth === "number" ? p.contentWidth : undefined,
+      contentHeight: typeof p.contentHeight === "number" ? p.contentHeight : undefined,
     });
   }
   return pages.length ? pages : undefined;
@@ -134,6 +143,11 @@ export function problemToPost(row: ProblemRow, viewerId?: string | null): Post {
     sprintDay: row.is_sprint ? (row.sprint_day ?? undefined) : undefined,
     problemMode,
     correctAnswer: isAuthor && problemMode === "challenge" ? (row.correct_answer ?? "") : undefined,
+    difficultyLevel: asDifficulty(row.difficulty_level),
+    confusedCount: Number(row.confused_count ?? 0),
+    isHardSpotlight: !!row.is_hard_spotlight,
+    promoted: !!row.promoted,
+    promotedAt: row.promoted_at ?? undefined,
   };
 }
 
@@ -224,6 +238,7 @@ export async function insertProblem(input: NewProblem): Promise<{
       problem_format: input.format ?? null,
       mode: challenge.mode,
       correct_answer: challenge.correct_answer,
+      difficulty_level: asDifficulty(input.difficultyLevel),
     })
     .select(PROBLEM_COLUMNS)
     .single();
@@ -274,5 +289,43 @@ export async function updateProblem(
     .single();
 
   if (error) return { post: null, error: error.message };
+  return { post: problemToPost(data as ProblemRow, viewerId), error: null };
+}
+
+export async function deleteProblem(id: string): Promise<{ error: string | null }> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const viewerId = session?.user?.id;
+  if (!viewerId) return { error: "ログインしてください" };
+  const { error } = await supabase.from("problems").delete().eq("id", id).eq("author_id", viewerId);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+export async function promoteProblem(id: string): Promise<{ post: Post | null; error: string | null }> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const viewerId = session?.user?.id;
+  if (!viewerId) return { post: null, error: "ログインしてください" };
+
+  const { error } = await supabase.rpc("promote_own_problem", { p_problem_id: id });
+  if (error) {
+    if (/PROMO_USED/i.test(error.message)) {
+      return { post: null, error: "今月のプロモーション枠（1回）は使用済みです" };
+    }
+    if (/NOT_OWNER/i.test(error.message)) {
+      return { post: null, error: "自分の投稿のみプロモーションできます" };
+    }
+    return { post: null, error: error.message };
+  }
+
+  const { data, error: readError } = await supabase
+    .from("problems")
+    .select(PROBLEM_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+  if (readError || !data) return { post: null, error: readError?.message || "更新に失敗しました" };
   return { post: problemToPost(data as ProblemRow, viewerId), error: null };
 }

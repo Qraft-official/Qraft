@@ -10,6 +10,7 @@ import {
 } from "@/lib/constants";
 import type { Tiers } from "@/lib/types";
 import { HANDLE_HINT, isValidHandle, sanitizeHandleInput } from "@/lib/handle";
+import { fetchHandleChangeStatus, formatHandleNextDate, type HandleChangeStatus } from "@/lib/auth";
 import { ageForSave, needsGuardianConsent } from "@/lib/guardian-consent";
 import { isImageSrc, useApp } from "@/lib/store";
 import { useEffect, useId, useState } from "react";
@@ -39,6 +40,8 @@ export function ProfileEditForm({
   const [saveError, setSaveError] = useState("");
   const [saved, setSaved] = useState("");
   const [consent, setConsent] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [handleStatus, setHandleStatus] = useState<HandleChangeStatus | null>(null);
   const consentFieldId = useId();
 
   useEffect(() => {
@@ -54,6 +57,10 @@ export function ProfileEditForm({
     setSaveError("");
     setConsent(false);
   }, [me]);
+
+  useEffect(() => {
+    void fetchHandleChangeStatus(me.id).then(setHandleStatus);
+  }, [me.id]);
 
   const readFile = (file: File, cb: (url: string) => void) => {
     const r = new FileReader();
@@ -164,7 +171,19 @@ export function ProfileEditForm({
         onChange={(v) => setHandle(sanitizeHandleInput(v))}
         prefix="@"
         hint={HANDLE_HINT}
+        disabled={Boolean(handleStatus && handleStatus.remaining <= 0)}
       />
+      {handleStatus && handleStatus.remaining <= 0 && handleStatus.nextAt && (
+        <p className="mb-3 text-[11px] text-amber-300">
+          アカウントIDの変更は2週間に2回までです。次回は {formatHandleNextDate(handleStatus.nextAt)}{" "}
+          以降に変更できます。
+        </p>
+      )}
+      {handleStatus && handleStatus.remaining > 0 && handleStatus.used > 0 && (
+        <p className="mb-3 text-[11px] text-muted">
+          直近2週間のID変更: {handleStatus.used}/2回（残り {handleStatus.remaining} 回）
+        </p>
+      )}
       <Field label="学校 / クラス" value={school} onChange={setSchool} placeholder="明星高専 2年B組" />
       <label className="mb-3 block text-xs text-muted">
         自己紹介
@@ -214,9 +233,6 @@ export function ProfileEditForm({
         </button>
       )}
 
-      {saveError && <p className="mb-3 text-xs text-red-400">{saveError}</p>}
-      {saved && <p className="mb-3 text-xs text-aha">{saved}</p>}
-
       <div className="mb-4 space-y-4">
         <p className="text-sm font-bold">学習設定</p>
         <AgePicker age={age} onChange={setAge} />
@@ -232,44 +248,56 @@ export function ProfileEditForm({
 
       <button
         type="button"
-        disabled={needsGuardianConsent(age) && !consent}
+        disabled={saving || (needsGuardianConsent(age) && !consent)}
         onClick={() => {
-          if (needsGuardianConsent(age) && !consent) {
-            setSaveError("15歳未満の方は、保護者の同意確認にチェックしてください");
-            return;
-          }
-          const nextHandle = sanitizeHandleInput(handle.trim()) || me.handle;
-          if (nextHandle && !isValidHandle(nextHandle)) {
-            setSaveError(HANDLE_HINT);
-            return;
-          }
-          const nextAge = ageForSave(age);
-          setSaveError("");
-          updateProfile({
-            name: name.trim() || me.name,
-            handle: nextHandle,
-            bio,
-            school,
-            avatar,
-            banner,
-            activeTitles,
-            titles: Array.from(new Set([...me.titles, ...activeTitles])),
-            age: nextAge,
-          });
-          void updateLearningSettings({ age: nextAge, tiers }).then((res) => {
-            if (res.error) {
-              setSaveError(res.error);
+          void (async () => {
+            if (needsGuardianConsent(age) && !consent) {
+              setSaveError("15歳未満の方は、保護者の同意確認にチェックしてください");
               return;
             }
+            const nextHandle = sanitizeHandleInput(handle.trim()) || me.handle;
+            if (nextHandle && !isValidHandle(nextHandle)) {
+              setSaveError(HANDLE_HINT);
+              return;
+            }
+            const nextAge = ageForSave(age);
+            setSaveError("");
+            setSaving(true);
+            const profileRes = await updateProfile({
+              name: name.trim() || me.name,
+              handle: nextHandle,
+              bio,
+              school,
+              avatar,
+              banner,
+              activeTitles,
+              titles: Array.from(new Set([...me.titles, ...activeTitles])),
+              age: nextAge,
+            });
+            if (profileRes.error) {
+              setSaving(false);
+              setSaveError(profileRes.error);
+              return;
+            }
+            const learn = await updateLearningSettings({ age: nextAge, tiers });
+            setSaving(false);
+            if (learn.error) {
+              setSaveError(learn.error);
+              return;
+            }
+            const status = await fetchHandleChangeStatus(me.id);
+            setHandleStatus(status);
             setSaved("保存しました");
             window.setTimeout(() => setSaved(""), 2000);
             onSaved?.();
-          });
+          })();
         }}
         className="w-full rounded-full bg-white py-3 text-sm font-bold text-black disabled:opacity-40"
       >
-        保存
+        {saving ? "保存中…" : "保存"}
       </button>
+      {saveError && <p className="mt-2 text-center text-xs text-red-400">{saveError}</p>}
+      {saved && <p className="mt-2 text-center text-xs text-aha">{saved}</p>}
     </div>
   );
 }
@@ -281,6 +309,7 @@ function Field({
   prefix,
   placeholder,
   hint,
+  disabled,
 }: {
   label: string;
   value: string;
@@ -288,18 +317,24 @@ function Field({
   prefix?: string;
   placeholder?: string;
   hint?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className="mb-3 block text-xs text-muted">
       {label}
-      <div className="mt-1 flex items-center rounded-xl border border-gray-800 bg-panel px-3">
+      <div
+        className={`mt-1 flex items-center rounded-xl border border-gray-800 bg-panel px-3 ${
+          disabled ? "opacity-50" : ""
+        }`}
+      >
         {prefix && <span className="text-sm text-muted">{prefix}</span>}
         <input
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           spellCheck={false}
-          className="w-full bg-transparent py-2 text-sm text-white outline-none"
+          disabled={disabled}
+          className="w-full bg-transparent py-2 text-sm text-white outline-none disabled:cursor-not-allowed"
         />
       </div>
       {hint && <span className="mt-1 block text-[10px] text-muted">{hint}</span>}

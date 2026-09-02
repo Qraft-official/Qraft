@@ -1,12 +1,28 @@
 "use client";
 
-import { PREMIUM_REACTIONS, SUBJECT_LABEL, TIER_NAMES } from "@/lib/constants";
+import { PREMIUM_PRICE_JPY, PREMIUM_REACTIONS, SUBJECT_LABEL, TIER_NAMES } from "@/lib/constants";
+import { difficultyLabel } from "@/lib/difficulty";
+import { isActivePromotion } from "@/lib/recommend";
+import { referralFetch } from "@/lib/referral-client";
 import { sharePost } from "@/lib/share";
 import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
-import { Brain, MessageCircle, Pencil, PenLine, Repeat2, Share2, Star, Undo2 } from "lucide-react";
+import {
+  Brain,
+  Flag,
+  Megaphone,
+  MessageCircle,
+  MoreVertical,
+  Pencil,
+  PenLine,
+  Repeat2,
+  Share2,
+  Star,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CommentThread } from "./CommentThread";
@@ -21,6 +37,22 @@ function isTypedNotebook(post: Post) {
   if (post.solutionFormat === "typed") return true;
   if (post.solutionFormat === "handwriting") return false;
   return post.kind === "solution" && !post.pages?.length;
+}
+
+function typedNotebookPages(post: Post) {
+  const title = post.title?.trim();
+  const pages = post.pages;
+  if (pages?.some((p) => Boolean(p.image) || Boolean(p.latex?.trim()))) {
+    if (!title) return pages;
+    return pages.map((p, i) => {
+      if (i !== 0 || p.image || p.latex.includes(title)) return p;
+      return { ...p, latex: `**${title}**\n\n${p.latex}` };
+    });
+  }
+  if (post.text.trim()) {
+    return [{ id: `${post.id}-typed`, latex: post.text, doodle: 0 }];
+  }
+  return [];
 }
 
 function timeAgo(iso: string) {
@@ -57,7 +89,11 @@ export function PostCard({
     openPaywall,
     react,
     reactions,
+    toggleConfused,
+    confusedMine,
     authorVerified,
+    deleteProblem,
+    promoteProblem,
   } = useApp();
   const author = userOf(post.authorId);
   const [rateOpen, setRateOpen] = useState(false);
@@ -65,7 +101,12 @@ export function PostCard({
   const [repostOpen, setRepostOpen] = useState(false);
   const [shareToast, setShareToast] = useState("");
   const [editOpen, setEditOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [promoOpen, setPromoOpen] = useState(false);
+  const [menuBusy, setMenuBusy] = useState(false);
+  const [menuMsg, setMenuMsg] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
   const following = follows.includes(author.id);
   const liked = likes.includes(post.id);
   const reposted = reposts.includes(post.id);
@@ -76,6 +117,8 @@ export function PostCard({
   const tier = author.tiers[post.subject];
   const quoted = post.kind === "solution" && post.problemId;
   const comments = repliesTo(post.id).filter((p) => p.kind === "reply");
+  const typed = isTypedNotebook(post);
+  const typedPages = typed ? typedNotebookPages(post) : [];
 
   useEffect(() => {
     if (!repostOpen) return;
@@ -88,6 +131,18 @@ export function PostCard({
       document.removeEventListener("click", onDoc);
     };
   }, [repostOpen]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const t = window.setTimeout(() => document.addEventListener("click", onDoc), 0);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener("click", onDoc);
+    };
+  }, [moreOpen]);
 
   const openComments = () => {
     setThreadOpen(true);
@@ -172,20 +227,24 @@ export function PostCard({
                     PULSE
                   </span>
                 )}
+                {(post.kind === "problem" || post.kind === "sprint") && (
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-muted">
+                    Lv{post.difficultyLevel ?? 3} {difficultyLabel(post.difficultyLevel ?? 3)}
+                  </span>
+                )}
+                {post.isHardSpotlight && (
+                  <span className="rounded-full bg-aha/15 px-2 py-0.5 text-[10px] font-bold text-aha">
+                    難問
+                  </span>
+                )}
+                {isActivePromotion(post) && (
+                  <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                    プロモーション
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              {isMe && (post.kind === "problem" || post.kind === "sprint") && (
-                <button
-                  type="button"
-                  onClick={() => setEditOpen(true)}
-                  className="rounded-full border border-gray-700 px-2.5 py-1 text-[11px] font-bold text-muted hover:text-white"
-                >
-                  <span className="inline-flex items-center gap-1">
-                    <Pencil size={12} /> 編集
-                  </span>
-                </button>
-              )}
               {!isMe && (
               <motion.button
                 whileTap={{ scale: 0.92 }}
@@ -197,10 +256,118 @@ export function PostCard({
                 {following ? "フォロー中" : "フォロー"}
               </motion.button>
             )}
+              <div className="relative" ref={moreRef}>
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen((v) => !v)}
+                  className="rounded-full p-1.5 text-muted hover:bg-white/10 hover:text-white"
+                  aria-label="その他"
+                  aria-expanded={moreOpen}
+                >
+                  <MoreVertical size={18} />
+                </button>
+                <AnimatePresence>
+                  {moreOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="absolute right-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-gray-800 bg-black shadow-xl"
+                    >
+                      {isMe ? (
+                        <>
+                          {(post.kind === "problem" || post.kind === "sprint") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMoreOpen(false);
+                                setEditOpen(true);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
+                            >
+                              <Pencil size={16} /> 編集
+                            </button>
+                          )}
+                          {(post.kind === "problem" || post.kind === "sprint") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMoreOpen(false);
+                                if (!hasPremium) {
+                                  openPaywall(
+                                    `プロモーションは Qraft Premium（月額¥${PREMIUM_PRICE_JPY}）限定です。`,
+                                  );
+                                  return;
+                                }
+                                setPromoOpen(true);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
+                            >
+                              <Megaphone size={16} className="text-amber-300" /> プロモーション設定
+                            </button>
+                          )}
+                          {(post.kind === "problem" || post.kind === "sprint") && (
+                          <button
+                            type="button"
+                            disabled={menuBusy}
+                            onClick={() => {
+                              if (!window.confirm("この投稿を削除しますか？")) return;
+                              setMoreOpen(false);
+                              setMenuBusy(true);
+                              void deleteProblem(post.id).then((res) => {
+                                setMenuBusy(false);
+                                if (res.error) setMenuMsg(res.error);
+                              });
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-400 hover:bg-white/5"
+                          >
+                            <Trash2 size={16} /> 削除
+                          </button>
+                          )}
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={menuBusy}
+                          onClick={() => {
+                            setMoreOpen(false);
+                            const reason =
+                              window.prompt("報告理由を入力してください（任意）") ?? "";
+                            setMenuBusy(true);
+                            void referralFetch("/api/feedback", {
+                              method: "POST",
+                              body: JSON.stringify({
+                                category: "投稿報告",
+                                subject: `投稿の報告 ${post.id}`,
+                                message: [
+                                  `投稿ID: ${post.id}`,
+                                  `投稿者: ${author.name} @${author.handle}`,
+                                  `理由: ${reason.trim() || "（未記入）"}`,
+                                  "",
+                                  post.text.slice(0, 500),
+                                ].join("\n"),
+                                name: me.name,
+                                handle: me.handle,
+                              }),
+                            }).then((res) => {
+                              setMenuBusy(false);
+                              setMenuMsg(res.error || "報告を受け付けました");
+                              window.setTimeout(() => setMenuMsg(""), 2500);
+                            });
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
+                        >
+                          <Flag size={16} /> この投稿を報告
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
 
-          {!(post.kind === "solution" && isTypedNotebook(post)) && (
+          {!typed && (
             <Link href={`/p/${post.id}`} className="mt-2 block">
               <LatexText text={post.text} className="text-[15px] text-[#e7e9ea]" />
             </Link>
@@ -228,19 +395,16 @@ export function PostCard({
             </p>
           )}
 
-          {post.kind === "solution" && isTypedNotebook(post) && !post.pages?.length && (
-            <Link href={`/p/${post.id}`} className="mt-3 block">
-              <div
-                className={`paper-grid rounded-2xl border bg-[#0b1220] p-3 ${
-                  authorVerified(author.id)
-                    ? "border-amber-400/60 shadow-[0_0_24px_rgba(251,191,36,0.18)]"
-                    : "border-gray-800"
-                }`}
-              >
-                <p className="mb-1 text-[10px] font-bold text-muted">打ち込み式</p>
-                <LatexText text={post.text} className="text-[15px] text-[#e7e9ea]" />
-              </div>
-            </Link>
+          {typed && typedPages.length > 0 && (
+            <div
+              className={
+                authorVerified(author.id)
+                  ? "mt-2 rounded-2xl border border-amber-400/50 p-1 shadow-[0_0_20px_rgba(251,191,36,0.15)]"
+                  : ""
+              }
+            >
+              <NotePages pages={typedPages} />
+            </div>
           )}
 
           {post.photo && !post.pages?.some((p) => p.image) && (
@@ -252,7 +416,7 @@ export function PostCard({
             />
           )}
 
-          {post.pages && post.pages.length > 0 && (
+          {!typed && post.pages && post.pages.length > 0 && (
             <div
               className={
                 authorVerified(author.id)
@@ -335,6 +499,26 @@ export function PostCard({
                 )}
               </AnimatePresence>
             </div>
+
+            {(post.kind === "problem" || post.kind === "sprint") && (
+              <motion.button
+                type="button"
+                whileTap={{ scale: 1.15 }}
+                onClick={() => void toggleConfused(post.id)}
+                className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-black ${
+                  confusedMine[post.id]
+                    ? "bg-aha/20 text-aha"
+                    : "text-muted hover:text-white"
+                }`}
+                aria-label="わからない"
+                aria-pressed={!!confusedMine[post.id]}
+              >
+                ?
+                {(post.confusedCount ?? 0) > 0 && (
+                  <span className="text-[10px] font-bold">{post.confusedCount}</span>
+                )}
+              </motion.button>
+            )}
 
             {hasPremium ? (
               <div className="flex items-center gap-0.5">
@@ -436,6 +620,54 @@ export function PostCard({
         </div>
       </div>
       <EditProblemModal post={post} open={editOpen} onClose={() => setEditOpen(false)} />
+      {promoOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setPromoOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-gray-800 bg-black p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm font-bold">プロモーション設定</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              プレミアム会員は月に1件まで、おすすめタイムラインで優先表示できます。この投稿を今月のプロモーションに設定しますか？
+            </p>
+            {menuMsg && <p className="mt-2 text-xs text-amber-300">{menuMsg}</p>}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPromoOpen(false)}
+                className="flex-1 rounded-full border border-gray-700 py-2 text-xs font-bold"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={menuBusy}
+                onClick={() => {
+                  setMenuBusy(true);
+                  setMenuMsg("");
+                  void promoteProblem(post.id).then((res) => {
+                    setMenuBusy(false);
+                    if (res.error) {
+                      setMenuMsg(res.error);
+                      return;
+                    }
+                    setPromoOpen(false);
+                  });
+                }}
+                className="flex-1 rounded-full bg-aha py-2 text-xs font-bold text-black"
+              >
+                {menuBusy ? "設定中…" : "設定する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {menuMsg && !promoOpen && (
+        <p className="px-4 pb-2 text-center text-[11px] text-aha">{menuMsg}</p>
+      )}
     </article>
   );
 }

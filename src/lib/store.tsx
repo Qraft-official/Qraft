@@ -17,6 +17,8 @@ import {
   handleFromUser,
   fetchLearningProfile,
   saveLearningProfile,
+  savePublicProfile,
+  searchProfiles,
   sessionUserFields,
   tiersFromProfile,
 } from "./auth";
@@ -40,9 +42,18 @@ import {
   fetchProblems,
   insertProblem,
   updateProblem as persistProblemUpdate,
+  deleteProblem as persistDeleteProblem,
+  promoteProblem as persistPromoteProblem,
   type NewProblem,
   type ProblemPatch,
 } from "./problems";
+import {
+  fetchMyConfusedProblemIds,
+  notifyConfusedReactors,
+  spotlightFromCount,
+  toggleConfusedReaction,
+} from "./problem-reactions";
+import { asDifficulty, MOCK_PROBLEM_META, isProblemUuid } from "./difficulty";
 import { getSprintDayId, makeOfficialPost, remainingMs } from "./sprint";
 import { supabase } from "./supabase";
 import type {
@@ -107,13 +118,15 @@ type Store = {
     pulseSubmitted?: boolean;
   }>;
   updateProblem: (id: string, patch: ProblemPatch) => Promise<{ error?: string }>;
+  deleteProblem: (id: string) => Promise<{ error?: string }>;
+  promoteProblem: (id: string) => Promise<{ error?: string }>;
   openFeedback: () => void;
   closeFeedback: () => void;
   feedbackOpen: boolean;
   addSolution: (input: {
     subject: Subject;
     text: string;
-    pages?: { id: string; latex: string; doodle: number }[];
+    pages?: { id: string; latex: string; doodle: number; image?: string; contentWidth?: number; contentHeight?: number }[];
     problemId?: string;
     solutionFormat?: "handwriting" | "typed";
     photo?: string;
@@ -126,7 +139,7 @@ type Store = {
   updateSprintPages: (pages: CanvasPage[]) => void;
   officialPost: Post;
   community: Post[];
-  updateProfile: (patch: ProfilePatch) => void;
+  updateProfile: (patch: ProfilePatch) => Promise<{ error?: string }>;
   updateLearningSettings: (input: { age: number; tiers: Tiers }) => Promise<{ error?: string }>;
   profileHydrated: boolean;
   openComposer: (next: Exclude<Composer, { open: false }>) => void;
@@ -161,6 +174,9 @@ type Store = {
   unreadNotificationCount: number;
   refreshNotifications: () => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
+  searchUsers: (query: string) => Promise<{ error?: string }>;
+  toggleConfused: (postId: string) => Promise<void>;
+  confusedMine: Record<string, boolean>;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -216,6 +232,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [bgmOn, setBgmOnState] = useState(false);
   const [accentColor, setAccentColorState] = useState("#A855F7");
   const [reactions, setReactions] = useState<Record<string, string>>({});
+  const [confusedMine, setConfusedMine] = useState<Record<string, boolean>>({});
+  const [confusedCounts, setConfusedCounts] = useState<Record<string, number>>({});
   const [sprint, setSprint] = useState<SprintRecord>(() =>
     freshSprint(getSprintDayId()),
   );
@@ -350,6 +368,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setRemotePosts(remote.posts);
         setRemoteUsers(remote.profiles);
         if (remote.error) console.warn("Failed to load problems:", remote.error);
+        const uid = data.session?.user?.id;
+        if (uid) {
+          const mine = await fetchMyConfusedProblemIds(uid);
+          if (!cancelled) {
+            setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
+          }
+        }
       } catch (err) {
         console.warn("Auth bootstrap failed:", err);
         if (!cancelled) setAuthenticated(false);
@@ -368,8 +393,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setRemotePosts(remote.posts);
             setRemoteUsers((prev) => ({ ...prev, ...remote.profiles }));
           });
+          void fetchMyConfusedProblemIds(user.id).then((mine) => {
+            setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
+          });
         } else {
           applySession(null);
+          setConfusedMine({});
         }
       } catch (err) {
         console.warn("onAuthStateChange failed:", err);
@@ -529,15 +558,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return main.map((p) => ({
-      ...p,
-      replyCount:
-        p.kind === "reply"
-          ? p.replyCount
-          : extras.filter((e) => e.kind === "reply" && e.replyToId === p.id).length +
-            MOCK_REPLIES.filter((e) => e.replyToId === p.id).length,
-    }));
-  }, [extra, mockOfficial, remotePosts]);
+    return main.map((p) => {
+      const mock = MOCK_PROBLEM_META[p.id];
+      const baseCount = confusedCounts[p.id] ?? p.confusedCount ?? mock?.confused ?? 0;
+      const level = p.difficultyLevel ?? mock?.level ?? 3;
+      return {
+        ...p,
+        difficultyLevel: asDifficulty(level),
+        confusedCount: baseCount,
+        isHardSpotlight: p.isHardSpotlight || spotlightFromCount(baseCount),
+        replyCount:
+          p.kind === "reply"
+            ? p.replyCount
+            : extras.filter((e) => e.kind === "reply" && e.replyToId === p.id).length +
+              MOCK_REPLIES.filter((e) => e.replyToId === p.id).length,
+      };
+    });
+  }, [extra, mockOfficial, remotePosts, confusedCounts]);
 
   const getPost = useCallback(
     (id: string) =>
@@ -808,11 +845,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return {};
   }, []);
 
+  const deleteProblem = useCallback(async (id: string) => {
+    if (isProblemUuid(id)) {
+      const { error } = await persistDeleteProblem(id);
+      if (error) return { error };
+      setRemotePosts((p) => p.filter((x) => x.id !== id));
+    }
+    setExtra((p) => p.filter((x) => x.id !== id));
+    return {};
+  }, []);
+
+  const promoteProblem = useCallback(async (id: string) => {
+    if (isProblemUuid(id)) {
+      const { post, error } = await persistPromoteProblem(id);
+      if (error || !post) return { error: error || "プロモーションに失敗しました" };
+      setRemotePosts((p) => p.map((x) => (x.id === id ? post : x)));
+      return {};
+    }
+    const now = new Date();
+    const used = [...remotePosts, ...extra].some((p) => {
+      if (p.id === id) return false;
+      if (!p.promoted || !p.promotedAt) return false;
+      const a = new Date(p.promotedAt);
+      return a.getFullYear() === now.getFullYear() && a.getMonth() === now.getMonth();
+    });
+    if (used) return { error: "今月のプロモーション枠（1回）は使用済みです" };
+    const stamp = now.toISOString();
+    const apply = (p: Post) =>
+      p.id === id ? { ...p, promoted: true, promotedAt: stamp } : p;
+    setRemotePosts((p) => p.map(apply));
+    setExtra((p) => p.map(apply));
+    return {};
+  }, [remotePosts, extra]);
+
   const addSolution = useCallback(
     async (input: {
       subject: Subject;
       text: string;
-      pages?: { id: string; latex: string; doodle: number; image?: string }[];
+      pages?: { id: string; latex: string; doodle: number; image?: string; contentWidth?: number; contentHeight?: number }[];
       problemId?: string;
       solutionFormat?: "handwriting" | "typed";
       photo?: string;
@@ -884,6 +954,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
         ...a,
       ]);
+      if (input.problemId) {
+        void notifyConfusedReactors(input.problemId).then(() => {
+          void fetchNotifications().then(setNotifications);
+        });
+      }
       return {};
     },
     [supabaseUid, getPost],
@@ -924,8 +999,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ]);
   }, [extra, supabaseUid]);
 
-  const updateProfile = useCallback((patch: ProfilePatch) => {
-    setProfile((p) => ({ ...p, ...patch }));
+  const updateProfile = useCallback(
+    async (patch: ProfilePatch) => {
+      if (supabaseUid && (patch.name != null || patch.handle != null)) {
+        const nextName = (patch.name ?? profile.name ?? "").toString();
+        const nextHandle = (patch.handle ?? profile.handle ?? "").toString();
+        const saved = await savePublicProfile(supabaseUid, {
+          name: nextName,
+          handle: nextHandle,
+        });
+        if (saved.error) return saved;
+        setRemoteUsers((prev) => ({
+          ...prev,
+          [supabaseUid]: {
+            ...(prev[supabaseUid] ?? fallbackUser(supabaseUid)),
+            name: nextName || prev[supabaseUid]?.name || "Qraft ユーザー",
+            handle: nextHandle || prev[supabaseUid]?.handle || supabaseUid.slice(0, 8),
+          },
+        }));
+      }
+      setProfile((p) => ({ ...p, ...patch }));
+      return {};
+    },
+    [supabaseUid, profile.name, profile.handle],
+  );
+
+  const searchUsers = useCallback(async (query: string) => {
+    const { profiles, error } = await searchProfiles(query);
+    if (error) return { error };
+    setRemoteUsers((prev) => {
+      const next = { ...prev };
+      for (const row of profiles) {
+        next[row.id] = fallbackUser(row.id, row);
+      }
+      return next;
+    });
+    return {};
   }, []);
 
   const openComposer = useCallback(
@@ -992,6 +1101,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const react = useCallback((postId: string, emoji: string) => {
     setReactions((prev) => ({ ...prev, [postId]: prev[postId] === emoji ? "" : emoji }));
   }, []);
+
+  const toggleConfused = useCallback(
+    async (postId: string) => {
+      const currentlyOn = !!confusedMine[postId];
+      const post = getPost(postId);
+      const prevCount = post?.confusedCount ?? 0;
+      const nextOn = !currentlyOn;
+      const nextCount = Math.max(0, prevCount + (nextOn ? 1 : -1));
+      setConfusedMine((prev) => ({ ...prev, [postId]: nextOn }));
+      setConfusedCounts((prev) => ({ ...prev, [postId]: nextCount }));
+      const res = await toggleConfusedReaction(postId, currentlyOn);
+      if (res.error) {
+        setConfusedMine((prev) => ({ ...prev, [postId]: currentlyOn }));
+        setConfusedCounts((prev) => ({ ...prev, [postId]: prevCount }));
+        console.warn("toggleConfused:", res.error);
+      }
+    },
+    [confusedMine, getPost],
+  );
   const authorVerified = useCallback(
     (userId: string) => {
       const u = userId === me.id ? me : USER_MAP[userId] ?? remoteUsers[userId];
@@ -1059,7 +1187,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     me,
     users: [
       me,
-      ...USERS.filter((u) => u.id !== ME_ID).map((u) => ({
+      ...Object.values(remoteUsers).filter((u) => u.id !== me.id),
+      ...USERS.filter((u) => u.id !== ME_ID && u.id !== me.id && !remoteUsers[u.id]).map((u) => ({
         ...u,
         verified: !!u.verified || isVerifiedCreator(u.id),
       })),
@@ -1083,6 +1212,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     rate,
     addProblem,
     updateProblem,
+    deleteProblem,
+    promoteProblem,
     openFeedback,
     closeFeedback,
     feedbackOpen,
@@ -1095,6 +1226,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     officialPost,
     community,
     updateProfile,
+    searchUsers,
+    toggleConfused,
+    confusedMine,
     openComposer,
     closeComposer,
     userOf,

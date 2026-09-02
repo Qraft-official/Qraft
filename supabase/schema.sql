@@ -280,4 +280,127 @@ create table if not exists public.campaign_events (
 alter table public.campaign_events enable row level security;
 revoke all on public.campaign_events from anon, authenticated;
 
+-- Account ID (handle) change history + 14-day / 2-change limit (also applied remotely)
+create table if not exists public.handle_changes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  old_handle text,
+  new_handle text not null,
+  changed_at timestamptz not null default now()
+);
+
+create index if not exists handle_changes_user_changed_idx
+  on public.handle_changes (user_id, changed_at desc);
+
+alter table public.handle_changes enable row level security;
+
+drop policy if exists "users can read own handle changes" on public.handle_changes;
+create policy "users can read own handle changes"
+  on public.handle_changes for select
+  to authenticated
+  using (user_id = (select auth.uid()));
+
+drop policy if exists "users can insert own handle changes" on public.handle_changes;
+create policy "users can insert own handle changes"
+  on public.handle_changes for insert
+  to authenticated
+  with check (user_id = (select auth.uid()));
+
+create or replace function public.enforce_handle_change_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  used int;
+begin
+  if new.handle is not distinct from old.handle then
+    return new;
+  end if;
+  select count(*) into used
+  from public.handle_changes
+  where user_id = new.id
+    and changed_at >= now() - interval '14 days';
+  if used >= 2 then
+    raise exception 'HANDLE_CHANGE_LIMIT';
+  end if;
+  insert into public.handle_changes (user_id, old_handle, new_handle)
+  values (new.id, old.handle, new.handle);
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_enforce_handle_change_limit on public.profiles;
+create trigger trg_enforce_handle_change_limit
+before update of handle on public.profiles
+for each row
+execute function public.enforce_handle_change_limit();
+
+-- Problem difficulty + 「？」 reactions (also applied remotely)
+alter table public.problems
+  add column if not exists difficulty_level smallint not null default 3,
+  add column if not exists confused_count integer not null default 0,
+  add column if not exists is_hard_spotlight boolean not null default false;
+
+create table if not exists public.problem_reactions (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  problem_id uuid not null references public.problems (id) on delete cascade,
+  emoji text not null default '?' check (emoji = '?'),
+  created_at timestamptz not null default now(),
+  primary key (user_id, problem_id)
+);
+
+alter table public.problem_reactions enable row level security;
+
+alter table public.problems
+  add column if not exists promoted boolean not null default false,
+  add column if not exists promoted_at timestamptz;
+
+create or replace function public.promote_own_problem(p_problem_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  actor uuid := auth.uid();
+  month_start timestamptz := date_trunc('month', now());
+begin
+  if actor is null then
+    raise exception 'not authenticated';
+  end if;
+  if not exists (
+    select 1 from public.problems
+    where id = p_problem_id and author_id = actor
+  ) then
+    raise exception 'NOT_OWNER';
+  end if;
+  if exists (
+    select 1 from public.problems
+    where author_id = actor
+      and promoted_at >= month_start
+      and id <> p_problem_id
+  ) then
+    raise exception 'PROMO_USED';
+  end if;
+  if exists (
+    select 1 from public.problems
+    where id = p_problem_id
+      and author_id = actor
+      and promoted_at >= month_start
+  ) then
+    raise exception 'PROMO_USED';
+  end if;
+  update public.problems
+    set promoted = true,
+        promoted_at = now()
+    where id = p_problem_id and author_id = actor;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.promote_own_problem(uuid) from public, anon;
+grant execute on function public.promote_own_problem(uuid) to authenticated;
+
 

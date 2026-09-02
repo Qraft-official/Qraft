@@ -7,6 +7,8 @@ import { SprintBanner } from "@/components/SprintBanner";
 import { TimelineAd } from "@/components/TimelineAd";
 import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
 import { useApp } from "@/lib/store";
+import { inferUserLevel } from "@/lib/difficulty";
+import { sortRecommended } from "@/lib/recommend";
 import type { FeedTab } from "@/lib/types";
 import { PULSE_BLURB, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { Crown } from "lucide-react";
@@ -61,8 +63,10 @@ export default function HomePage() {
       return [officialPost, ...extra];
     }
     if (tab === "lounge") return loungePosts;
-    return others.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
-  }, [tab, posts, follows, myId, officialPost, sprintUnlocked, community, reposts, loungePosts]);
+    const pool = others.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
+    const level = inferUserLevel(me.tiers, posts, myId);
+    return sortRecommended(pool, level);
+  }, [tab, posts, follows, myId, officialPost, sprintUnlocked, community, reposts, loungePosts, me.tiers]);
 
   return (
     <div>

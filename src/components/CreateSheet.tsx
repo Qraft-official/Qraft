@@ -1,14 +1,15 @@
 ﻿"use client";
 
 import { SUBJECTS } from "@/lib/constants";
-import { emptyCanvasPage } from "@/lib/draw-canvas";
+import { emptyCanvasPage, sharedTypedHeight } from "@/lib/draw-canvas";
 import { generateAiProblem } from "@/lib/premium";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
 import { useApp } from "@/lib/store";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
-import type { CanvasPage, ProblemMode, Subject } from "@/lib/types";
+import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
+import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { AnimatePresence, motion } from "framer-motion";
-import { Keyboard, PenLine, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Keyboard, Maximize2, Menu, PenLine, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { ImageUploadSection } from "./ImageUploadSection";
 import { MultiPageCanvas, type MultiPageCanvasHandle } from "./MultiPageCanvas";
@@ -37,9 +38,11 @@ export function CreateSheet() {
   const [typedPages, setTypedPages] = useState<TypedPage[]>([{ id: "t-1", latex: "" }]);
   const [typedIndex, setTypedIndex] = useState(0);
   const [postMode, setPostMode] = useState<ProblemMode>("question");
+  const [difficultyLevel, setDifficultyLevel] = useState<Tier>(3);
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [solverAnswer, setSolverAnswer] = useState("");
   const [pulseToast, setPulseToast] = useState("");
+  const [editorExpanded, setEditorExpanded] = useState(false);
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -48,6 +51,10 @@ export function CreateSheet() {
   const quotingChallenge = openSolution && quotePost?.problemMode === "challenge";
 
   useBodyScrollLock(open);
+
+  useEffect(() => {
+    if (!open) setEditorExpanded(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -174,11 +181,11 @@ export function CreateSheet() {
   const close = () => closeComposer();
 
   const modeTabs = (
-    <div className="flex shrink-0 gap-1 border-b border-gray-800 p-2">
+    <div className="flex shrink-0 gap-1 border-b border-gray-800 p-1 sm:p-2">
       <button
         type="button"
         onClick={() => setInputMode("hand")}
-        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-2 text-xs font-bold ${
+        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold sm:py-2 sm:text-xs ${
           inputMode === "hand" ? "bg-aha text-black" : "bg-white/5 text-muted"
         }`}
       >
@@ -187,7 +194,7 @@ export function CreateSheet() {
       <button
         type="button"
         onClick={() => setInputMode("typed")}
-        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-2 text-xs font-bold ${
+        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold sm:py-2 sm:text-xs ${
           inputMode === "typed" ? "bg-aha text-black" : "bg-white/5 text-muted"
         }`}
       >
@@ -269,9 +276,17 @@ export function CreateSheet() {
           format: "typed",
           mode: isSprintProblem ? "question" : postMode,
           correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
+          difficultyLevel,
+          pages: typedPages.map((p, i) => ({
+            id: p.id,
+            latex: wrapMathliveLatex(p.latex),
+            doodle: i,
+            contentHeight: sharedTypedHeight(typedPages),
+          })),
         };
       } else {
         const images = canvasRef.current?.exportPageImages() ?? [];
+        const size = canvasRef.current?.getContentSize() ?? { w: 800, h: 280 };
         const hasInk =
           images.some(Boolean) ||
           pages.some((p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0);
@@ -290,11 +305,14 @@ export function CreateSheet() {
           format: "handwriting",
           mode: isSprintProblem ? "question" : postMode,
           correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
+          difficultyLevel,
           pages: pages.map((p, i) => ({
             id: p.id,
             latex: "",
             doodle: i,
             image: images[i] || undefined,
+            contentWidth: size.w,
+            contentHeight: size.h,
           })),
         };
       }
@@ -346,11 +364,11 @@ export function CreateSheet() {
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
             onClick={(e) => e.stopPropagation()}
-            className="composer-dialog w-full max-w-lg rounded-t-3xl border border-gray-800 bg-black sm:rounded-3xl md:max-w-2xl lg:max-w-4xl"
+            className="composer-dialog relative w-full max-w-lg rounded-t-3xl border border-gray-800 bg-black sm:rounded-3xl md:max-w-2xl lg:max-w-4xl"
           >
             {openProblem && (
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="flex shrink-0 items-center justify-between px-4 py-3">
+                <div className="flex shrink-0 items-center justify-between px-3 py-1.5 sm:px-4 sm:py-3">
                   <p className="text-sm font-bold">
                     {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
                   </p>
@@ -358,15 +376,11 @@ export function CreateSheet() {
                     <X size={18} />
                   </button>
                 </div>
-                <div
-                  ref={scrollRef}
-                  className="composer-scroll"
-                  onFocusCapture={scrollFocusedField}
-                >
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <select
                   value={subject}
                   onChange={(e) => setSubject(e.target.value as Subject)}
-                  className="mx-4 mb-2 w-[calc(100%-2rem)] shrink-0 rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm"
+                  className="mx-3 mb-1 w-[calc(100%-1.5rem)] shrink-0 rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm sm:mx-4 sm:mb-2 sm:w-[calc(100%-2rem)] sm:py-2"
                 >
                   {SUBJECTS.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -378,40 +392,59 @@ export function CreateSheet() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="タイトル（任意）"
-                  className="mx-4 mb-2 w-[calc(100%-2rem)] shrink-0 rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
+                  className="mx-3 mb-1 w-[calc(100%-1.5rem)] shrink-0 rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm outline-none sm:mx-4 sm:mb-2 sm:w-[calc(100%-2rem)] sm:py-2"
                 />
+                <div className="mx-3 mb-1 shrink-0 sm:mx-4 sm:mb-2">
+                  <p className="mb-1 text-[11px] font-bold text-muted">難易度</p>
+                  <div className="flex gap-1 overflow-x-auto">
+                    {DIFFICULTY_LEVELS.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => setDifficultyLevel(d.id)}
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                          difficultyLevel === d.id
+                            ? "bg-aha text-black"
+                            : "border border-gray-700 text-muted"
+                        }`}
+                      >
+                        {d.label} {d.hint}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {isSprintProblem && (
                   <p className="mx-4 mb-2 text-[11px] text-muted">
                     応募内容は運営メールへ送られ、選別のうえ PULSE として配信されます。タイムラインにはすぐには載りません。
                   </p>
                 )}
                 {!isSprintProblem && (
-                  <div className="mx-4 mb-2 grid shrink-0 gap-2">
+                  <div className="mx-3 mb-1 grid shrink-0 gap-1 sm:mx-4 sm:mb-2 sm:gap-2">
                     <button
                       type="button"
                       onClick={() => setPostMode("question")}
-                      className={`rounded-2xl border px-3 py-2 text-left ${
+                      className={`rounded-xl border px-3 py-1.5 text-left sm:rounded-2xl sm:py-2 ${
                         postMode === "question"
                           ? "border-aha bg-aha/10"
                           : "border-gray-800 bg-panel"
                       }`}
                     >
                       <p className="text-sm font-bold">教えて！Qraft</p>
-                      <p className="text-[11px] leading-snug text-muted">
+                      <p className="hidden text-[11px] leading-snug text-muted sm:block">
                         分からない問題や、みんなに解説してほしい問題を投稿します。
                       </p>
                     </button>
                     <button
                       type="button"
                       onClick={() => setPostMode("challenge")}
-                      className={`rounded-2xl border px-3 py-2 text-left ${
+                      className={`rounded-xl border px-3 py-1.5 text-left sm:rounded-2xl sm:py-2 ${
                         postMode === "challenge"
                           ? "border-orange-400 bg-orange-500/10"
                           : "border-gray-800 bg-panel"
                       }`}
                     >
                       <p className="text-sm font-bold">Challenger</p>
-                      <p className="text-[11px] leading-snug text-muted">
+                      <p className="hidden text-[11px] leading-snug text-muted sm:block">
                         自分で作った問題と正解を投稿します。（※正解の入力が必須です）
                       </p>
                     </button>
@@ -429,9 +462,25 @@ export function CreateSheet() {
                   </div>
                 )}
                 {modeTabs}
+                <div
+                  ref={scrollRef}
+                  className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                  onFocusCapture={scrollFocusedField}
+                >
                 {inputMode === "hand" ? (
-                  <div>
-                    <div className="notebook-stage min-h-0">
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="flex shrink-0 justify-end px-2 py-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setEditorExpanded(true)}
+                        className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
+                        aria-label="拡大"
+                      >
+                        <Maximize2 size={16} />
+                      </button>
+                    </div>
+                    {!editorExpanded && (
+                    <div className="notebook-stage min-h-0 flex-1">
                       <MultiPageCanvas
                         ref={canvasRef}
                         pages={pages}
@@ -439,16 +488,24 @@ export function CreateSheet() {
                         premium={hasPremium}
                       />
                     </div>
-                    <div className="px-4 py-2">{extras}</div>
+                    )}
+                    <details className="shrink-0 border-t border-gray-800 px-3 py-1 sm:open">
+                      <summary className="cursor-pointer py-1 text-[11px] font-bold text-muted">
+                        解答メモ・画像・AI
+                      </summary>
+                      <div className="pb-2">{extras}</div>
+                    </details>
                   </div>
                 ) : (
-                  <TypedNotebook
+                  !editorExpanded && (
+                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-20 sm:pb-0 [-webkit-overflow-scrolling:touch]">
+                    <TypedNotebook
                     pages={typedPages}
                     index={typedIndex}
                     onIndex={setTypedIndex}
-                    onChangeLatex={(latex) =>
+                    onChangeLatex={(latex, i = typedIndex) =>
                       setTypedPages((prev) =>
-                        prev.map((p, i) => (i === typedIndex ? { ...p, latex } : p)),
+                        prev.map((p, j) => (j === i ? { ...p, latex } : p)),
                       )
                     }
                     onAddPage={() => {
@@ -463,10 +520,14 @@ export function CreateSheet() {
                       setTypedIndex(Math.min(typedIndex, next.length - 1));
                     }}
                     footer={extras}
+                    expanded={editorExpanded}
+                    onToggleExpand={() => setEditorExpanded((v) => !v)}
                   />
+                  </div>
+                  )
                 )}
                 </div>
-                <div className="composer-footer border-t border-gray-800 px-4 pt-3">
+                <div className="composer-footer border-t border-gray-800 px-4 pb-20 pt-3 sm:pb-3">
                   {postError && <p className="mb-2 text-xs text-red-400">{postError}</p>}
                   <button
                     disabled={posting}
@@ -475,6 +536,7 @@ export function CreateSheet() {
                   >
                     {posting ? "送信中…" : isSprintProblem ? "運営に応募する" : "投稿する"}
                   </button>
+                </div>
                 </div>
               </div>
             )}
@@ -527,6 +589,17 @@ export function CreateSheet() {
                       placeholder="一言コメント（任意）"
                       className="w-full border-b border-gray-800 bg-transparent px-4 py-2 text-sm outline-none"
                     />
+                    <div className="flex items-center justify-end px-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditorExpanded(true)}
+                        className="rounded-md p-1 text-muted hover:bg-white/10"
+                        aria-label="拡大"
+                      >
+                        <Maximize2 size={16} />
+                      </button>
+                    </div>
+                    {!editorExpanded && (
                     <div className="notebook-stage min-h-0">
                       <MultiPageCanvas
                         ref={canvasRef}
@@ -535,16 +608,18 @@ export function CreateSheet() {
                         premium={hasPremium}
                       />
                     </div>
+                    )}
                     <div className="px-4 py-2">{photoRow}</div>
                   </div>
                 ) : (
+                  !editorExpanded && (
                   <TypedNotebook
                     pages={typedPages}
                     index={typedIndex}
                     onIndex={setTypedIndex}
-                    onChangeLatex={(latex) =>
+                    onChangeLatex={(latex, i = typedIndex) =>
                       setTypedPages((prev) =>
-                        prev.map((p, i) => (i === typedIndex ? { ...p, latex } : p)),
+                        prev.map((p, j) => (j === i ? { ...p, latex } : p)),
                       )
                     }
                     onAddPage={() => {
@@ -567,10 +642,13 @@ export function CreateSheet() {
                       </div>
                     }
                     footer={<div className="min-w-0">{photoRow}</div>}
+                    expanded={false}
+                    onToggleExpand={() => setEditorExpanded(true)}
                   />
+                  )
                 )}
                 </div>
-                <div className="composer-footer border-t border-gray-800 px-4 pt-3">
+                <div className="composer-footer border-t border-gray-800 px-4 pb-20 pt-3 sm:pb-3">
                   {quotingChallenge && (
                     <div className="mb-3">
                       <input
@@ -607,6 +685,7 @@ export function CreateSheet() {
                               id: p.id,
                               latex: wrapMathliveLatex(p.latex),
                               doodle: i,
+                              contentHeight: sharedTypedHeight(typedPages),
                             })),
                             problemId: quotePostId,
                             solutionFormat: "typed",
@@ -615,6 +694,7 @@ export function CreateSheet() {
                           });
                         } else {
                           const images = canvasRef.current?.exportPageImages() ?? [];
+                          const size = canvasRef.current?.getContentSize() ?? { w: 800, h: 280 };
                           res = await addSolution({
                             subject,
                             text: text.trim() || "引用解法を投稿した。",
@@ -623,6 +703,8 @@ export function CreateSheet() {
                               latex: "",
                               doodle: i,
                               image: images[i] || undefined,
+                              contentWidth: size.w,
+                              contentHeight: size.h,
                             })),
                             problemId: quotePostId,
                             solutionFormat: "handwriting",
@@ -642,6 +724,64 @@ export function CreateSheet() {
                   >
                     {posting ? "投稿中…" : "引用して公開"}
                   </button>
+                </div>
+              </div>
+            )}
+            {editorExpanded && (
+              <div className="absolute inset-0 z-30 flex min-h-0 flex-col bg-[#0b1220]">
+                <div className="flex shrink-0 items-center gap-2 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditorExpanded(false)}
+                    className="rounded-md p-1.5 text-muted hover:bg-white/10 hover:text-white"
+                    aria-label="メニュー"
+                  >
+                    <Menu size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorExpanded(false)}
+                    className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15"
+                  >
+                    <ArrowLeft size={14} />
+                    完了
+                  </button>
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col">
+                  {inputMode === "hand" ? (
+                    <div className="notebook-stage notebook-stage-expanded flex min-h-0 flex-1 flex-col">
+                      <MultiPageCanvas
+                        ref={canvasRef}
+                        pages={pages}
+                        onChange={setPages}
+                        premium={hasPremium}
+                        flush
+                      />
+                    </div>
+                  ) : (
+                    <TypedNotebook
+                      pages={typedPages}
+                      index={typedIndex}
+                      onIndex={setTypedIndex}
+                      onChangeLatex={(latex, i = typedIndex) =>
+                        setTypedPages((prev) =>
+                          prev.map((p, j) => (j === i ? { ...p, latex } : p)),
+                        )
+                      }
+                      onAddPage={() => {
+                        const id = `t-${Date.now()}`;
+                        setTypedPages((prev) => [...prev, { id, latex: "" }]);
+                        setTypedIndex(typedPages.length);
+                      }}
+                      onDeletePage={() => {
+                        if (typedPages.length <= 1) return;
+                        const next = typedPages.filter((_, i) => i !== typedIndex);
+                        setTypedPages(next);
+                        setTypedIndex(Math.min(typedIndex, next.length - 1));
+                      }}
+                      expanded
+                    />
+                  )}
                 </div>
               </div>
             )}

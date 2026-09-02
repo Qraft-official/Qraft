@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AppProvider } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
-import { ADSENSE_CLIENT_ID, adsenseScriptSrc, isAdsenseCrawler } from "@/lib/adsense";
+import { ADSENSE_CLIENT_ID, isAdsenseCrawler } from "@/lib/adsense";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -49,13 +49,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
-        {ADSENSE_CLIENT_ID ? (
-          <script
-            async
-            src={adsenseScriptSrc(ADSENSE_CLIENT_ID)}
-            crossOrigin="anonymous"
-          />
-        ) : null}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
+          crossOrigin="anonymous"
+        />
       </head>
       <body
         className="min-h-[100vh] min-h-dvh bg-[#0b1220] text-[#e7e9ea] antialiased"

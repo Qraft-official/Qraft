@@ -56,7 +56,11 @@ export function VisualMathEditor({
     mf.addEventListener("input", sync);
     mf.addEventListener("focusin", keepVkHidden);
     if (value && mf.value !== value) mf.value = value;
-    mf.focus();
+    try {
+      mf.focus();
+    } catch {
+      /* MathLive can throw if virtual-keyboard options are not ready yet. */
+    }
 
     return () => {
       detachMultiline();

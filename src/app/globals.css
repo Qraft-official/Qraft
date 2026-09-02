@@ -57,9 +57,35 @@ body {
   box-shadow: 0 0 24px rgba(168, 85, 247, 0.4);
 }
 
+.composer-dialog {
+  display: flex;
+  max-height: min(90vh, var(--composer-vvh, 100dvh));
+  height: min(90vh, var(--composer-vvh, 100dvh));
+  flex-direction: column;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+@media (min-width: 640px) {
+  .composer-dialog {
+    height: auto;
+    max-height: min(92vh, var(--composer-vvh, 52rem), 52rem);
+  }
+}
+
+.composer-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
 .notebook-stage {
   min-height: 14rem;
   height: clamp(16rem, 48dvh, 36rem);
+  touch-action: none;
 }
 
 @media (min-width: 768px) {

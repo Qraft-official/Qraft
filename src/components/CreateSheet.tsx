@@ -1,14 +1,15 @@
-"use client";
+﻿"use client";
 
 import { SUBJECTS } from "@/lib/constants";
 import { emptyCanvasPage } from "@/lib/draw-canvas";
 import { generateAiProblem } from "@/lib/premium";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
 import { useApp } from "@/lib/store";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type { CanvasPage, ProblemMode, Subject } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { Keyboard, PenLine, Sparkles, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { ImageUploadSection } from "./ImageUploadSection";
 import { MultiPageCanvas, type MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { QuoteEmbed } from "./QuoteEmbed";
@@ -40,8 +41,52 @@ export function CreateSheet() {
   const [solverAnswer, setSolverAnswer] = useState("");
   const [pulseToast, setPulseToast] = useState("");
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const quotePost = quotePostId ? getPost(quotePostId) : undefined;
   const quotingChallenge = openSolution && quotePost?.problemMode === "challenge";
+
+  useBodyScrollLock(open);
+
+  useEffect(() => {
+    if (!open) return;
+    const root = document.documentElement;
+    const apply = () => {
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      root.style.setProperty("--composer-vvh", `${Math.round(h)}px`);
+    };
+    apply();
+    window.visualViewport?.addEventListener("resize", apply);
+    window.visualViewport?.addEventListener("scroll", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", apply);
+      window.visualViewport?.removeEventListener("scroll", apply);
+      window.removeEventListener("resize", apply);
+      root.style.removeProperty("--composer-vvh");
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const onMove = (e: TouchEvent) => {
+      const scroller = scrollRef.current;
+      if (scroller && e.target instanceof Node && scroller.contains(e.target)) return;
+      e.preventDefault();
+    };
+    overlay.addEventListener("touchmove", onMove, { passive: false });
+    return () => overlay.removeEventListener("touchmove", onMove);
+  }, [open]);
+
+  const scrollFocusedField = (e: FocusEvent<HTMLDivElement>) => {
+    const el = e.target as HTMLElement;
+    if (!el.closest("input, textarea, select, math-field")) return;
+    window.setTimeout(() => {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 120);
+  };
 
   useEffect(() => {
     if (!composer.open) return;
@@ -253,7 +298,8 @@ export function CreateSheet() {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+          ref={overlayRef}
+          className="fixed inset-0 z-[60] flex items-end justify-center overflow-hidden overscroll-none bg-black/70 sm:items-center sm:p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -265,7 +311,7 @@ export function CreateSheet() {
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
             onClick={(e) => e.stopPropagation()}
-            className="flex h-[min(94dvh,100%)] max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-gray-800 bg-black sm:max-h-[min(92dvh,52rem)] sm:rounded-3xl md:max-w-2xl lg:max-w-4xl"
+            className="composer-dialog w-full max-w-lg rounded-t-3xl border border-gray-800 bg-black sm:rounded-3xl md:max-w-2xl lg:max-w-4xl"
           >
             {openProblem && (
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -277,6 +323,11 @@ export function CreateSheet() {
                     <X size={18} />
                   </button>
                 </div>
+                <div
+                  ref={scrollRef}
+                  className="composer-scroll pb-[max(1rem,env(safe-area-inset-bottom))]"
+                  onFocusCapture={scrollFocusedField}
+                >
                 <select
                   value={subject}
                   onChange={(e) => setSubject(e.target.value as Subject)}
@@ -344,8 +395,8 @@ export function CreateSheet() {
                 )}
                 {modeTabs}
                 {inputMode === "hand" ? (
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    <div className="notebook-stage min-h-0 flex-1">
+                  <div>
+                    <div className="notebook-stage min-h-0">
                       <MultiPageCanvas
                         ref={canvasRef}
                         pages={pages}
@@ -353,7 +404,7 @@ export function CreateSheet() {
                         premium={hasPremium}
                       />
                     </div>
-                    <div className="shrink-0 px-4 py-2">{extras}</div>
+                    <div className="px-4 py-2">{extras}</div>
                   </div>
                 ) : (
                   <TypedNotebook
@@ -379,7 +430,7 @@ export function CreateSheet() {
                     footer={extras}
                   />
                 )}
-                <div className="shrink-0 px-4 py-3">
+                <div className="px-4 py-3">
                   {postError && <p className="mb-2 text-xs text-red-400">{postError}</p>}
                   <button
                     disabled={posting}
@@ -388,6 +439,7 @@ export function CreateSheet() {
                   >
                     {posting ? "送信中…" : isSprintProblem ? "運営に応募する" : "投稿する"}
                   </button>
+                </div>
                 </div>
               </div>
             )}
@@ -420,10 +472,15 @@ export function CreateSheet() {
                     </button>
                   </div>
                 </div>
+                <div
+                  ref={scrollRef}
+                  className="composer-scroll pb-[max(1rem,env(safe-area-inset-bottom))]"
+                  onFocusCapture={scrollFocusedField}
+                >
                 {modeTabs}
                 {inputMode === "hand" ? (
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    <div className="max-h-[28%] shrink-0 overflow-y-auto border-b border-gray-800 bg-panel/40 px-3 pb-3 md:max-h-[32%]">
+                  <div>
+                    <div className="max-h-[28%] min-h-24 overflow-y-auto border-b border-gray-800 bg-panel/40 px-3 pb-3 md:max-h-40">
                       <p className="pt-2 text-[10px] font-bold tracking-wide text-muted">
                         引用する問題 · スクロールでいつでも確認できます
                       </p>
@@ -433,9 +490,9 @@ export function CreateSheet() {
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       placeholder="一言コメント（任意）"
-                      className="shrink-0 border-b border-gray-800 bg-transparent px-4 py-2 text-sm outline-none"
+                      className="w-full border-b border-gray-800 bg-transparent px-4 py-2 text-sm outline-none"
                     />
-                    <div className="notebook-stage min-h-0 flex-1">
+                    <div className="notebook-stage min-h-0">
                       <MultiPageCanvas
                         ref={canvasRef}
                         pages={pages}
@@ -443,7 +500,7 @@ export function CreateSheet() {
                         premium={hasPremium}
                       />
                     </div>
-                    <div className="shrink-0 px-4 py-2">{photoRow}</div>
+                    <div className="px-4 py-2">{photoRow}</div>
                   </div>
                 ) : (
                   <TypedNotebook
@@ -477,7 +534,7 @@ export function CreateSheet() {
                     footer={<div className="min-w-0">{photoRow}</div>}
                   />
                 )}
-                <div className="shrink-0 px-4 py-3">
+                <div className="px-4 py-3">
                   {quotingChallenge && (
                     <div className="mb-3">
                       <input
@@ -549,6 +606,7 @@ export function CreateSheet() {
                   >
                     {posting ? "投稿中…" : "引用して公開"}
                   </button>
+                </div>
                 </div>
               </div>
             )}

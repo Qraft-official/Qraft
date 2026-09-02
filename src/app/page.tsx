@@ -36,14 +36,14 @@ export default function HomePage() {
     { id: "lounge", label: "🏠 Lounge" },
   ];
 
+  const myId = me.id;
   const feed = useMemo(() => {
+    const others = posts.filter((p) => p.authorId !== myId);
     if (tab === "following") {
-      const followed = posts.filter(
-        (p) =>
-          p.kind !== "reply" &&
-          (follows.includes(p.authorId) || p.authorId === me.id),
+      const followed = others.filter(
+        (p) => p.kind !== "reply" && follows.includes(p.authorId),
       );
-      const boosted = posts.filter(
+      const boosted = others.filter(
         (p) =>
           p.kind !== "reply" &&
           reposts.includes(p.id) &&
@@ -61,8 +61,8 @@ export default function HomePage() {
       return [officialPost, ...extra];
     }
     if (tab === "lounge") return loungePosts;
-    return posts.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
-  }, [tab, posts, follows, me.id, officialPost, sprintUnlocked, community, reposts, loungePosts]);
+    return others.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
+  }, [tab, posts, follows, myId, officialPost, sprintUnlocked, community, reposts, loungePosts]);
 
   return (
     <div>

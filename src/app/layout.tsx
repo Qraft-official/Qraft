@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Sans_JP } from "next/font/google";
-import Script from "next/script";
 import { headers } from "next/headers";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AppProvider } from "@/lib/store";
@@ -36,7 +35,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#000000",
+  themeColor: "#0b1220",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
@@ -49,23 +48,22 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${noto.variable} h-full dark`}
       suppressHydrationWarning
     >
-      <body
-        className="min-h-[100vh] min-h-dvh bg-[#0b1220] text-[#e7e9ea] antialiased"
-        style={{ minHeight: "100vh", backgroundColor: "#0b1220" }}
-        suppressHydrationWarning
-      >
+      <head>
         {ADSENSE_CLIENT_ID ? (
-          <Script
-            id="google-adsense"
+          <script
             async
             src={adsenseScriptSrc(ADSENSE_CLIENT_ID)}
             crossOrigin="anonymous"
-            strategy="afterInteractive"
           />
         ) : null}
+      </head>
+      <body
+        className="min-h-[100vh] min-h-dvh bg-[#0b1220] text-[#e7e9ea] antialiased"
+        style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
+        suppressHydrationWarning
+      >
         <noscript>
           <div
-            id="qraft-noscript"
             style={{
               minHeight: "100vh",
               padding: "24px",
@@ -73,13 +71,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               color: "#e7e9ea",
             }}
           >
-            <p style={{ fontSize: "1.5rem", fontWeight: 900 }}>Qraft</p>
-            <p style={{ marginTop: "8px", fontSize: "0.875rem" }}>
+            <p style={{ fontSize: "1.5rem", fontWeight: 900, color: "#ffffff" }}>Qraft</p>
+            <p style={{ marginTop: "8px", fontSize: "0.875rem", color: "#ccff00" }}>クラフト</p>
+            <p style={{ marginTop: "8px", fontSize: "0.875rem", color: "#e7e9ea" }}>
               STEM creators のためのドパミン SNS
             </p>
           </div>
         </noscript>
-        <div id="qraft-root" style={{ minHeight: "100vh", backgroundColor: "#0b1220" }}>
+        <div id="qraft-root" style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}>
           <AppErrorBoundary>
             <AppProvider>
               <AppShell adsensePreview={adsensePreview}>{children}</AppShell>

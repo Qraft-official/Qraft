@@ -15,16 +15,22 @@ import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
-function BootSplash() {
+function SsrFallbackChrome({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="flex min-h-[100vh] min-h-dvh items-center justify-center bg-[#0b1220]"
-      style={{ minHeight: "100vh", backgroundColor: "#0b1220" }}
+      className="mx-auto min-h-[100vh] min-h-dvh w-full max-w-lg bg-[#0b1220] text-[#e7e9ea] md:max-w-2xl lg:max-w-4xl"
+      style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
       suppressHydrationWarning
     >
-      <p className="text-2xl font-black text-aha" suppressHydrationWarning>
-        Qraft
-      </p>
+      <header className="border-b border-gray-700 px-4 py-3" suppressHydrationWarning>
+        <p className="text-lg font-black tracking-tight text-white" suppressHydrationWarning>
+          Qraft<span className="ml-1" style={{ color: "#ccff00" }}>クラフト</span>
+        </p>
+        <p className="text-xs" style={{ color: "#8b98a5" }} suppressHydrationWarning>
+          STEM creators のためのドパミン SNS
+        </p>
+      </header>
+      {children}
     </div>
   );
 }
@@ -68,18 +74,6 @@ export function AppShell({
     </Suspense>
   );
 
-  if (adsensePreview) {
-    return (
-      <div
-        className="mx-auto min-h-[100vh] min-h-dvh w-full max-w-lg bg-[#0b1220] text-[#e7e9ea] md:max-w-2xl lg:max-w-4xl"
-        style={{ minHeight: "100vh", backgroundColor: "#0b1220" }}
-        suppressHydrationWarning
-      >
-        {children}
-      </div>
-    );
-  }
-
   if (isAuthCallback || isLegal || isInvite) {
     return (
       <>
@@ -89,11 +83,11 @@ export function AppShell({
     );
   }
 
-  if (!mounted || !ready || (authenticated && !profileHydrated)) {
+  if (adsensePreview || !mounted || !ready || (authenticated && !profileHydrated)) {
     return (
       <>
         {capture}
-        <BootSplash />
+        <SsrFallbackChrome>{children}</SsrFallbackChrome>
       </>
     );
   }

@@ -112,35 +112,99 @@ function abcKeys(shift: boolean): KeySpec[] {
   ];
 }
 
+export type InputMode = "math" | "text";
+
+const TEXT_KEYS: KeySpec[] = [
+  { id: "touten", label: "、", action: insert("、") },
+  { id: "kuten", label: "。", action: insert("。") },
+  { id: "nakaguro", label: "・", action: insert("・") },
+  { id: "chouon", label: "ー", action: insert("ー") },
+  { id: "bsT", label: "⌫", action: { type: "backspace" }, tone: "warn" },
+  { id: "excl", label: "！", action: insert("！") },
+  { id: "ques", label: "？", action: insert("？") },
+  { id: "kagiL", label: "「", action: insert("「") },
+  { id: "kagiR", label: "」", action: insert("」") },
+  { id: "entT", label: "↵", action: { type: "enter" }, tone: "accent" },
+  { id: "parenL", label: "（", action: insert("（") },
+  { id: "parenR", label: "）", action: insert("）") },
+  { id: "spT", label: "空白", action: insert(" "), span: 2 },
+  { id: "comma", label: "，", action: insert("，") },
+];
+
 export function MathKeyboard({
   onAction,
+  inputMode,
+  onInputModeChange,
 }: {
   onAction: (action: MathKeyAction) => void;
+  inputMode: InputMode;
+  onInputModeChange: (mode: InputMode) => void;
 }) {
   const [tab, setTab] = useState<TabId>("123");
   const [shift, setShift] = useState(false);
-  const cols = tab === "abc" ? 7 : tab === "fx" || tab === "sym" ? 4 : 5;
-  const keys = tab === "abc" ? abcKeys(shift) : KEYS[tab];
+  const textPad = inputMode === "text" && tab === "123";
+  const cols = textPad ? 5 : tab === "abc" ? 7 : tab === "fx" || tab === "sym" ? 4 : 5;
+  const keys = textPad ? TEXT_KEYS : tab === "abc" ? abcKeys(shift) : KEYS[tab];
 
   return (
     <div
-      className="shrink-0 max-h-[25dvh] border-t border-gray-800 bg-[#151c24] px-1.5 pt-1 pb-[max(0.3rem,env(safe-area-inset-bottom))]"
+      className="shrink-0 max-h-[28dvh] border-t border-gray-800 bg-[#151c24] px-1.5 pt-1 pb-[max(0.3rem,env(safe-area-inset-bottom))]"
       onPointerDown={(e) => e.preventDefault()}
     >
-      <div className="mb-1 grid grid-cols-4 gap-1">
+      <div className="mb-1 grid grid-cols-2 gap-1">
+        <button
+          type="button"
+          onClick={() => onInputModeChange("text")}
+          className={`flex items-center justify-center gap-1 rounded-md py-1 leading-none ${
+            inputMode === "text" ? "bg-aha text-black" : "bg-white/10 text-muted"
+          }`}
+        >
+          <span className="text-[11px] font-black">[文]</span>
+          <span className="text-[10px] font-bold">テキスト入力</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onInputModeChange("math")}
+          className={`flex items-center justify-center gap-1 rounded-md py-1 leading-none ${
+            inputMode === "math" ? "bg-aha text-black" : "bg-white/10 text-muted"
+          }`}
+        >
+          <span className="text-[11px] font-black">[√x]</span>
+          <span className="text-[10px] font-bold">数式入力</span>
+        </button>
+      </div>
+      <div className="mb-1 grid grid-cols-5 gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            onInputModeChange("text");
+            setTab("123");
+          }}
+          className={`touch-manipulation rounded-md px-0.5 py-1 leading-none ${
+            inputMode === "text" ? "bg-aha text-black" : "bg-white/10 text-muted"
+          }`}
+        >
+          <span className="text-[11px] font-black">あ/文</span>
+          <span className={`ml-0.5 text-[8px] font-bold ${inputMode === "text" ? "text-black/65" : "text-muted"}`}>
+            テキスト
+          </span>
+        </button>
         {TABS.map((tabItem) => {
-          const on = tab === tabItem.id;
+          const on = inputMode === "math" && tab === tabItem.id;
           return (
             <button
               key={tabItem.id}
               type="button"
-              onClick={() => setTab(tabItem.id)}
-              className={`touch-manipulation rounded-md px-1 py-1 leading-none ${
-                on ? "bg-aha text-black" : "bg-white/10 text-muted"
+              onClick={() => {
+                onInputModeChange("math");
+                setTab(tabItem.id);
+              }}
+              className={`touch-manipulation rounded-md px-0.5 py-1 leading-none ${
+                on ? "bg-neon text-white" : "bg-white/10 text-muted"
               }`}
             >
-              <span className="text-[12px] font-black">{tabItem.label}</span>
-              <span className={`ml-1 text-[9px] font-bold ${on ? "text-black/65" : "text-muted"}`}>
+              <span className="text-[11px] font-black">{tabItem.label}</span>
+              <span className={`ml-0.5 hidden text-[8px] font-bold sm:inline ${on ? "text-white/70" : "text-muted"}`}>
                 {tabItem.hint}
               </span>
             </button>

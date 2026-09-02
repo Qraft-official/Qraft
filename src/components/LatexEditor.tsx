@@ -4,7 +4,7 @@ import { LatexText } from "@/lib/latex";
 import { Menu } from "lucide-react";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { type MathKeyAction, MathKeyboard } from "./MathKeyboard";
+import { type InputMode, type MathKeyAction, MathKeyboard } from "./MathKeyboard";
 
 const FORMAT = [
   { id: "h2", label: "H2", wrap: false, insert: "## " },
@@ -44,6 +44,7 @@ export function LatexEditor({
   const draftRef = useRef(value);
   const pendingCaretRef = useRef<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [kbMode, setKbMode] = useState<InputMode>("math");
 
   const applyCaret = (pos: number) => {
     const el = textareaRef.current;
@@ -256,7 +257,9 @@ export function LatexEditor({
         </div>
         {footer && <div className="mt-2 min-w-0 shrink-0 pb-2">{footer}</div>}
       </div>
-      {keyboard && <MathKeyboard onAction={handleKeyboardClick} />}
+      {keyboard && (
+        <MathKeyboard onAction={handleKeyboardClick} inputMode={kbMode} onInputModeChange={setKbMode} />
+      )}
     </div>
   );
 }

@@ -99,7 +99,7 @@ export function EditProblemModal({
                   mode === "question" ? "border-aha bg-aha/10" : "border-gray-800 bg-panel"
                 }`}
               >
-                <p className="text-sm font-bold">教えて！Qraft</p>
+                <p className="text-sm font-bold">教えてQrafter!</p>
                 <p className="text-[11px] text-muted">
                   分からない問題や、みんなに解説してほしい問題を投稿します。
                 </p>

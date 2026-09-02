@@ -68,7 +68,7 @@ export type Post = {
   title?: string;
   solution?: string;
   isSprint?: boolean;
-  /** question = 教えて！Qraft, challenge = Challenger */
+  /** question = 教えてQrafter!, challenge = Challenger */
   problemMode?: ProblemMode;
   /** Author-only. Never sent to other clients from fetch. */
   correctAnswer?: string;

@@ -9,12 +9,23 @@ import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Keyboard, Maximize2, Menu, PenLine, Sparkles, X } from "lucide-react";
+import { ArrowLeft, HelpCircle, Keyboard, Maximize2, Menu, PenLine, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { ImageUploadSection } from "./ImageUploadSection";
 import { MultiPageCanvas, type MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { QuoteEmbed } from "./QuoteEmbed";
 import { TypedNotebook, type TypedPage } from "./TypedNotebook";
+
+const MODE_HELP = {
+  question: {
+    title: "教えてQrafter!",
+    body: "分からない問題や、みんなに解説してほしい問題を投稿します。",
+  },
+  challenge: {
+    title: "Challenger",
+    body: "自分で作った問題と正解を投稿します。正解の入力が必須です。単位は書かなくて構いません。",
+  },
+} as const;
 
 export function CreateSheet() {
   const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall } =
@@ -43,6 +54,7 @@ export function CreateSheet() {
   const [solverAnswer, setSolverAnswer] = useState("");
   const [pulseToast, setPulseToast] = useState("");
   const [editorExpanded, setEditorExpanded] = useState(false);
+  const [modeHelp, setModeHelp] = useState<null | "question" | "challenge">(null);
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -145,6 +157,7 @@ export function CreateSheet() {
       setTypedPages([{ id: "t-1", latex: "" }]);
       setTypedIndex(0);
       setPostMode("question");
+      setModeHelp(null);
       setCorrectAnswer("");
     }
     if (composer.mode === "solution") {
@@ -366,7 +379,15 @@ export function CreateSheet() {
             className="composer-dialog relative w-full max-w-lg rounded-t-3xl border border-gray-800 bg-black sm:rounded-3xl md:max-w-2xl lg:max-w-4xl"
           >
             {openProblem && (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+                {modeHelp && (
+                  <button
+                    type="button"
+                    className="absolute inset-0 z-20 cursor-default"
+                    aria-label="説明を閉じる"
+                    onClick={() => setModeHelp(null)}
+                  />
+                )}
                 <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 sm:px-4 sm:py-3">
                   <p className="text-sm font-bold">
                     {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
@@ -423,35 +444,81 @@ export function CreateSheet() {
                   </p>
                 )}
                 {!isSprintProblem && (
-                  <div className="mx-3 mb-1 grid grid-cols-2 gap-1 sm:mx-4 sm:mb-2 sm:gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPostMode("question")}
-                      className={`rounded-xl border px-2 py-1 text-left sm:rounded-2xl sm:px-3 sm:py-2 ${
-                        postMode === "question"
-                          ? "border-aha bg-aha/10"
-                          : "border-gray-800 bg-panel"
-                      }`}
-                    >
-                      <p className="text-[11px] font-bold sm:text-sm">教えて！Qraft</p>
-                      <p className="hidden text-[11px] leading-snug text-muted sm:block">
-                        分からない問題や、みんなに解説してほしい問題を投稿します。
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPostMode("challenge")}
-                      className={`rounded-xl border px-2 py-1 text-left sm:rounded-2xl sm:px-3 sm:py-2 ${
-                        postMode === "challenge"
-                          ? "border-orange-400 bg-orange-500/10"
-                          : "border-gray-800 bg-panel"
-                      }`}
-                    >
-                      <p className="text-[11px] font-bold sm:text-sm">Challenger</p>
-                      <p className="hidden text-[11px] leading-snug text-muted sm:block">
-                        自分で作った問題と正解を投稿します。（※正解の入力が必須です）
-                      </p>
-                    </button>
+                  <div className="relative mx-3 mb-1 grid grid-cols-2 gap-1 sm:mx-4 sm:mb-2 sm:gap-2">
+                    <div className="relative z-[21] flex items-stretch">
+                      <button
+                        type="button"
+                        onClick={() => setPostMode("question")}
+                        className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-2 py-1 text-left sm:rounded-l-2xl sm:px-3 sm:py-2 ${
+                          postMode === "question"
+                            ? "border-aha bg-aha/10"
+                            : "border-gray-800 bg-panel"
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold sm:text-sm">教えてQrafter!</p>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="教えてQrafter!の説明"
+                        aria-expanded={modeHelp === "question"}
+                        onClick={() =>
+                          setModeHelp((v) => (v === "question" ? null : "question"))
+                        }
+                        className={`flex items-center rounded-r-xl border border-l-0 px-1.5 sm:rounded-r-2xl sm:px-2 ${
+                          postMode === "question"
+                            ? "border-aha bg-aha/10 text-white/70"
+                            : "border-gray-800 bg-panel text-muted"
+                        }`}
+                      >
+                        <HelpCircle size={14} strokeWidth={2} />
+                      </button>
+                      {modeHelp === "question" && (
+                        <div
+                          role="dialog"
+                          className="absolute left-0 top-[calc(100%+6px)] z-30 w-[min(18rem,calc(200%+0.25rem))] rounded-xl border border-gray-700 bg-[#1a222c] px-3 py-2.5 text-left shadow-xl"
+                        >
+                          <p className="text-[11px] font-bold text-white">{MODE_HELP.question.title}</p>
+                          <p className="mt-1 text-[11px] leading-snug text-[#b8c0c8]">{MODE_HELP.question.body}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="relative z-[21] flex items-stretch">
+                      <button
+                        type="button"
+                        onClick={() => setPostMode("challenge")}
+                        className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-2 py-1 text-left sm:rounded-l-2xl sm:px-3 sm:py-2 ${
+                          postMode === "challenge"
+                            ? "border-orange-400 bg-orange-500/10"
+                            : "border-gray-800 bg-panel"
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold sm:text-sm">Challenger</p>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Challengerの説明"
+                        aria-expanded={modeHelp === "challenge"}
+                        onClick={() =>
+                          setModeHelp((v) => (v === "challenge" ? null : "challenge"))
+                        }
+                        className={`flex items-center rounded-r-xl border border-l-0 px-1.5 sm:rounded-r-2xl sm:px-2 ${
+                          postMode === "challenge"
+                            ? "border-orange-400 bg-orange-500/10 text-white/70"
+                            : "border-gray-800 bg-panel text-muted"
+                        }`}
+                      >
+                        <HelpCircle size={14} strokeWidth={2} />
+                      </button>
+                      {modeHelp === "challenge" && (
+                        <div
+                          role="dialog"
+                          className="absolute right-0 top-[calc(100%+6px)] z-30 w-[min(18rem,calc(200%+0.25rem))] rounded-xl border border-gray-700 bg-[#1a222c] px-3 py-2.5 text-left shadow-xl"
+                        >
+                          <p className="text-[11px] font-bold text-white">{MODE_HELP.challenge.title}</p>
+                          <p className="mt-1 text-[11px] leading-snug text-[#b8c0c8]">{MODE_HELP.challenge.body}</p>
+                        </div>
+                      )}
+                    </div>
                     {postMode === "challenge" && (
                       <div className="col-span-2">
                         <input

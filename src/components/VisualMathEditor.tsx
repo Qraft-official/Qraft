@@ -1,15 +1,17 @@
 "use client";
 
 import {
+  attachJapaneseTextMode,
   attachMultilineMathfield,
   attachPlainTextMenu,
   insertMathNewline,
   insertPlainTextIntoMathfield,
+  setMathfieldInputMode,
 } from "@/lib/mathlive";
 import type { MathfieldElement } from "mathlive";
 import { Maximize2, Menu } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { type MathKeyAction, MathKeyboard } from "./MathKeyboard";
+import { type InputMode, type MathKeyAction, MathKeyboard } from "./MathKeyboard";
 
 export function VisualMathEditor({
   value,
@@ -36,6 +38,9 @@ export function VisualMathEditor({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const [ready, setReady] = useState(false);
+  const [inputMode, setInputMode] = useState<InputMode>("math");
+  const inputModeRef = useRef<InputMode>("math");
+  inputModeRef.current = inputMode;
 
   useEffect(() => {
     let cancelled = false;
@@ -60,17 +65,29 @@ export function VisualMathEditor({
     window.mathVirtualKeyboard?.hide();
     attachPlainTextMenu(mf);
     const detachMultiline = attachMultilineMathfield(mf);
+    const detachJp = attachJapaneseTextMode(mf, (mode) => {
+      inputModeRef.current = mode;
+      setInputMode(mode);
+    });
 
     const sync = () => onChangeRef.current(mf.getValue("latex"));
     const keepVkHidden = () => window.mathVirtualKeyboard?.hide();
+    const onModeChange = () => {
+      const mode = mf.mode === "text" ? "text" : "math";
+      inputModeRef.current = mode;
+      setInputMode(mode);
+    };
     mf.addEventListener("input", sync);
     mf.addEventListener("focusin", keepVkHidden);
+    mf.addEventListener("mode-change", onModeChange);
     if (value && mf.value !== value) mf.value = value;
 
     return () => {
       detachMultiline();
+      detachJp();
       mf.removeEventListener("input", sync);
       mf.removeEventListener("focusin", keepVkHidden);
+      mf.removeEventListener("mode-change", onModeChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
@@ -83,13 +100,27 @@ export function VisualMathEditor({
 
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const applyInputMode = (mode: InputMode) => {
+    inputModeRef.current = mode;
+    setInputMode(mode);
+    const mf = fieldRef.current;
+    if (!mf) return;
+    setMathfieldInputMode(mf, mode);
+  };
+
   const insertVisual = (latex: string) => {
     const mf = fieldRef.current;
     if (!mf) return;
     mf.focus();
+    const needsMath = /[\\{}^_]/.test(latex);
+    if (needsMath && inputModeRef.current === "text") {
+      setMathfieldInputMode(mf, "math");
+      inputModeRef.current = "math";
+      setInputMode("math");
+    }
     mf.insert(latex, {
       focus: true,
-      format: "latex",
+      format: inputModeRef.current === "text" && !needsMath ? "plain-text" : "latex",
       insertionMode: "replaceSelection",
       selectionMode: "placeholder",
       scrollIntoView: true,
@@ -189,7 +220,13 @@ export function VisualMathEditor({
         )}
         {!expanded && footer && <div className="mt-2 min-w-0 shrink-0 pb-20 sm:pb-2">{footer}</div>}
       </div>
-      {showKeyboard && <MathKeyboard onAction={handleKeyboardClick} />}
+      {showKeyboard && (
+        <MathKeyboard
+          onAction={handleKeyboardClick}
+          inputMode={inputMode}
+          onInputModeChange={applyInputMode}
+        />
+      )}
     </div>
   );
 }

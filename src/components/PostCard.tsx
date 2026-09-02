@@ -193,7 +193,7 @@ export function PostCard({
                 )}
                 {post.kind === "problem" && post.problemMode !== "challenge" && (
                   <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300">
-                    教えて！Qraft
+                    教えてQrafter!
                   </span>
                 )}
                 {post.kind === "problem" && (

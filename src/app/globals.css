@@ -64,10 +64,6 @@ html.qraft-scroll-lock body {
   height: 100%;
 }
 
-html.qraft-scroll-lock body {
-  touch-action: none;
-}
-
 .composer-overlay {
   touch-action: none;
   overscroll-behavior: none;
@@ -75,9 +71,9 @@ html.qraft-scroll-lock body {
 
 .composer-dialog {
   display: flex;
-  max-height: min(90vh, var(--composer-vvh, 100dvh));
-  height: min(90vh, var(--composer-vvh, 100dvh));
   flex-direction: column;
+  max-height: min(90dvh, var(--composer-vvh, 90dvh));
+  height: min(90dvh, var(--composer-vvh, 90dvh));
   overflow: hidden;
   touch-action: pan-y;
 }
@@ -85,7 +81,7 @@ html.qraft-scroll-lock body {
 @media (min-width: 640px) {
   .composer-dialog {
     height: auto;
-    max-height: min(90vh, var(--composer-vvh, 52rem), 52rem);
+    max-height: min(90dvh, var(--composer-vvh, 52rem), 52rem);
   }
 }
 
@@ -100,22 +96,24 @@ html.qraft-scroll-lock body {
 
 .composer-footer {
   flex-shrink: 0;
-  padding-bottom: max(5rem, env(safe-area-inset-bottom));
-}
-
-@media (min-width: 640px) {
-  .composer-footer {
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-  }
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
 .notebook-stage {
-  flex: 1 1 auto;
-  min-height: 12rem;
-  max-height: none;
-  height: auto;
+  flex: 0 0 auto;
+  min-height: 10rem;
+  max-height: 15.5rem;
+  height: 15.5rem;
   overflow: hidden;
   touch-action: pan-y;
+}
+
+@media (min-width: 640px) {
+  .notebook-stage {
+    min-height: 12rem;
+    max-height: 20rem;
+    height: 20rem;
+  }
 }
 
 .notebook-stage.notebook-stage-expanded {

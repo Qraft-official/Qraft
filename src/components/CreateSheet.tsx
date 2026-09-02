@@ -93,8 +93,7 @@ export function CreateSheet() {
         e.preventDefault();
         return;
       }
-      if (target instanceof Element && target.closest(".notebook-stage")) return;
-
+      if (target instanceof Element && target.closest(".notebook-stage, math-field")) return;
       const scroller = scrollRef.current;
       if (!scroller || !scroller.contains(target)) {
         e.preventDefault();
@@ -181,24 +180,24 @@ export function CreateSheet() {
   const close = () => closeComposer();
 
   const modeTabs = (
-    <div className="flex shrink-0 gap-1 border-b border-gray-800 p-1 sm:p-2">
+    <div className="flex shrink-0 gap-1 px-3 py-1 sm:px-4 sm:py-2">
       <button
         type="button"
         onClick={() => setInputMode("hand")}
-        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold sm:py-2 sm:text-xs ${
+        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1 text-[11px] font-bold sm:py-2 sm:text-xs ${
           inputMode === "hand" ? "bg-aha text-black" : "bg-white/5 text-muted"
         }`}
       >
-        <PenLine size={14} /> 手書きノート
+        <PenLine size={14} /> 手書き
       </button>
       <button
         type="button"
         onClick={() => setInputMode("typed")}
-        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold sm:py-2 sm:text-xs ${
+        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1 text-[11px] font-bold sm:py-2 sm:text-xs ${
           inputMode === "typed" ? "bg-aha text-black" : "bg-white/5 text-muted"
         }`}
       >
-        <Keyboard size={14} /> 打ち込み式
+        <Keyboard size={14} /> 打ち込み
       </button>
     </div>
   );
@@ -368,7 +367,7 @@ export function CreateSheet() {
           >
             {openProblem && (
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="flex shrink-0 items-center justify-between px-3 py-1.5 sm:px-4 sm:py-3">
+                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 sm:px-4 sm:py-3">
                   <p className="text-sm font-bold">
                     {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
                   </p>
@@ -376,11 +375,15 @@ export function CreateSheet() {
                     <X size={18} />
                   </button>
                 </div>
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div
+                  ref={scrollRef}
+                  className="composer-scroll pb-8"
+                  onFocusCapture={scrollFocusedField}
+                >
                 <select
                   value={subject}
                   onChange={(e) => setSubject(e.target.value as Subject)}
-                  className="mx-3 mb-1 w-[calc(100%-1.5rem)] shrink-0 rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm sm:mx-4 sm:mb-2 sm:w-[calc(100%-2rem)] sm:py-2"
+                  className="mx-3 mt-2 mb-1 w-[calc(100%-1.5rem)] rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm sm:mx-4 sm:mb-2 sm:w-[calc(100%-2rem)] sm:py-2"
                 >
                   {SUBJECTS.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -392,44 +395,45 @@ export function CreateSheet() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="タイトル（任意）"
-                  className="mx-3 mb-1 w-[calc(100%-1.5rem)] shrink-0 rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm outline-none sm:mx-4 sm:mb-2 sm:w-[calc(100%-2rem)] sm:py-2"
+                  className="mx-3 mb-1 w-[calc(100%-1.5rem)] rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm outline-none sm:mx-4 sm:mb-2 sm:w-[calc(100%-2rem)] sm:py-2"
                 />
-                <div className="mx-3 mb-1 shrink-0 sm:mx-4 sm:mb-2">
-                  <p className="mb-1 text-[11px] font-bold text-muted">難易度</p>
-                  <div className="flex gap-1 overflow-x-auto">
+                <div className="mx-3 mb-1 sm:mx-4 sm:mb-2">
+                  <p className="mb-0.5 text-[10px] font-bold text-muted">難易度</p>
+                  <div className="aha-scroll flex flex-nowrap gap-1 overflow-x-auto pb-0.5">
                     {DIFFICULTY_LEVELS.map((d) => (
                       <button
                         key={d.id}
                         type="button"
                         onClick={() => setDifficultyLevel(d.id)}
-                        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold sm:px-2.5 sm:py-1 ${
                           difficultyLevel === d.id
                             ? "bg-aha text-black"
                             : "border border-gray-700 text-muted"
                         }`}
                       >
-                        {d.label} {d.hint}
+                        {d.label}
+                        <span className="hidden sm:inline"> {d.hint}</span>
                       </button>
                     ))}
                   </div>
                 </div>
                 {isSprintProblem && (
-                  <p className="mx-4 mb-2 text-[11px] text-muted">
+                  <p className="mx-3 mb-1 text-[11px] text-muted sm:mx-4 sm:mb-2">
                     応募内容は運営メールへ送られ、選別のうえ PULSE として配信されます。タイムラインにはすぐには載りません。
                   </p>
                 )}
                 {!isSprintProblem && (
-                  <div className="mx-3 mb-1 grid shrink-0 gap-1 sm:mx-4 sm:mb-2 sm:gap-2">
+                  <div className="mx-3 mb-1 grid grid-cols-2 gap-1 sm:mx-4 sm:mb-2 sm:gap-2">
                     <button
                       type="button"
                       onClick={() => setPostMode("question")}
-                      className={`rounded-xl border px-3 py-1.5 text-left sm:rounded-2xl sm:py-2 ${
+                      className={`rounded-xl border px-2 py-1 text-left sm:rounded-2xl sm:px-3 sm:py-2 ${
                         postMode === "question"
                           ? "border-aha bg-aha/10"
                           : "border-gray-800 bg-panel"
                       }`}
                     >
-                      <p className="text-sm font-bold">教えて！Qraft</p>
+                      <p className="text-[11px] font-bold sm:text-sm">教えて！Qraft</p>
                       <p className="hidden text-[11px] leading-snug text-muted sm:block">
                         分からない問題や、みんなに解説してほしい問題を投稿します。
                       </p>
@@ -437,38 +441,33 @@ export function CreateSheet() {
                     <button
                       type="button"
                       onClick={() => setPostMode("challenge")}
-                      className={`rounded-xl border px-3 py-1.5 text-left sm:rounded-2xl sm:py-2 ${
+                      className={`rounded-xl border px-2 py-1 text-left sm:rounded-2xl sm:px-3 sm:py-2 ${
                         postMode === "challenge"
                           ? "border-orange-400 bg-orange-500/10"
                           : "border-gray-800 bg-panel"
                       }`}
                     >
-                      <p className="text-sm font-bold">Challenger</p>
+                      <p className="text-[11px] font-bold sm:text-sm">Challenger</p>
                       <p className="hidden text-[11px] leading-snug text-muted sm:block">
                         自分で作った問題と正解を投稿します。（※正解の入力が必須です）
                       </p>
                     </button>
                     {postMode === "challenge" && (
-                      <div>
+                      <div className="col-span-2">
                         <input
                           value={correctAnswer}
                           onChange={(e) => setCorrectAnswer(e.target.value)}
                           placeholder="正解"
-                          className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
+                          className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm outline-none sm:py-2"
                         />
-                        <p className="mt-1 text-[11px] text-muted">※単位は書かなくていいです</p>
+                        <p className="mt-0.5 text-[11px] text-muted">※単位は書かなくていいです</p>
                       </div>
                     )}
                   </div>
                 )}
                 {modeTabs}
-                <div
-                  ref={scrollRef}
-                  className="flex min-h-0 flex-1 flex-col overflow-hidden"
-                  onFocusCapture={scrollFocusedField}
-                >
                 {inputMode === "hand" ? (
-                  <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="flex flex-col">
                     <div className="flex shrink-0 justify-end px-2 py-0.5">
                       <button
                         type="button"
@@ -480,7 +479,7 @@ export function CreateSheet() {
                       </button>
                     </div>
                     {!editorExpanded && (
-                    <div className="notebook-stage min-h-0 flex-1">
+                    <div className="notebook-stage mx-3 min-h-0 sm:mx-4">
                       <MultiPageCanvas
                         ref={canvasRef}
                         pages={pages}
@@ -489,17 +488,14 @@ export function CreateSheet() {
                       />
                     </div>
                     )}
-                    <details className="shrink-0 border-t border-gray-800 px-3 py-1 sm:open">
-                      <summary className="cursor-pointer py-1 text-[11px] font-bold text-muted">
-                        解答メモ・画像・AI
-                      </summary>
-                      <div className="pb-2">{extras}</div>
-                    </details>
+                    <div className="border-t border-gray-800 px-3 py-2 sm:px-4">
+                      <p className="mb-1 text-[11px] font-bold text-muted">解答メモ・画像・AI</p>
+                      {extras}
+                    </div>
                   </div>
                 ) : (
                   !editorExpanded && (
-                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-20 sm:pb-0 [-webkit-overflow-scrolling:touch]">
-                    <TypedNotebook
+                  <TypedNotebook
                     pages={typedPages}
                     index={typedIndex}
                     onIndex={setTypedIndex}
@@ -523,20 +519,18 @@ export function CreateSheet() {
                     expanded={editorExpanded}
                     onToggleExpand={() => setEditorExpanded((v) => !v)}
                   />
-                  </div>
                   )
                 )}
                 </div>
-                <div className="composer-footer border-t border-gray-800 px-4 pb-20 pt-3 sm:pb-3">
+                <div className="composer-footer border-t border-gray-800 px-4 pt-2 sm:pt-3">
                   {postError && <p className="mb-2 text-xs text-red-400">{postError}</p>}
                   <button
                     disabled={posting}
                     onClick={submitProblem}
-                    className="w-full rounded-full bg-neon py-3 text-sm font-bold text-white disabled:opacity-40"
+                    className="w-full rounded-full bg-neon py-2.5 text-sm font-bold text-white disabled:opacity-40 sm:py-3"
                   >
                     {posting ? "送信中…" : isSprintProblem ? "運営に応募する" : "投稿する"}
                   </button>
-                </div>
                 </div>
               </div>
             )}
@@ -571,7 +565,7 @@ export function CreateSheet() {
                 </div>
                 <div
                   ref={scrollRef}
-                  className="composer-scroll"
+                  className="composer-scroll pb-8"
                   onFocusCapture={scrollFocusedField}
                 >
                 {modeTabs}
@@ -648,7 +642,7 @@ export function CreateSheet() {
                   )
                 )}
                 </div>
-                <div className="composer-footer border-t border-gray-800 px-4 pb-20 pt-3 sm:pb-3">
+                <div className="composer-footer border-t border-gray-800 px-4 pt-2 sm:pt-3">
                   {quotingChallenge && (
                     <div className="mb-3">
                       <input

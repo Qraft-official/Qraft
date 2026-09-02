@@ -4,6 +4,15 @@ import { useEffect } from "react";
 
 const LOCK_CLASS = "qraft-scroll-lock";
 
+function isScrollableComposerTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      ".composer-scroll, .notebook-stage, .composer-dialog textarea, .composer-dialog input, .composer-dialog select, math-field",
+    ),
+  );
+}
+
 /** Lock document scroll while a full-screen sheet is open (iOS-safe). */
 export function useBodyScrollLock(locked: boolean) {
   useEffect(() => {
@@ -32,14 +41,21 @@ export function useBodyScrollLock(locked: boolean) {
     html.style.height = "100%";
     body.style.overflow = "hidden";
     body.style.overscrollBehavior = "none";
-    body.style.touchAction = "none";
     body.style.position = "fixed";
     body.style.top = `-${scrollY}px`;
     body.style.left = "0";
     body.style.right = "0";
     body.style.width = "100%";
 
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) return;
+      if (isScrollableComposerTarget(e.target)) return;
+      e.preventDefault();
+    };
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+
     return () => {
+      document.removeEventListener("touchmove", onTouchMove);
       html.classList.remove(LOCK_CLASS);
       html.style.overflow = prev.htmlOverflow;
       html.style.overscrollBehavior = prev.htmlOverscroll;

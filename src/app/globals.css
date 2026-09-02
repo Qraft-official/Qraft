@@ -23,9 +23,17 @@
 
 html,
 body {
-  background: #000;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: #0b1220;
   color: #e7e9ea;
-  min-height: 100%;
+}
+
+#qraft-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: #0b1220;
+  color: #e7e9ea;
 }
 
 body {

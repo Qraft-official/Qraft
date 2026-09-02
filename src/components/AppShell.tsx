@@ -18,7 +18,8 @@ import { Suspense, useEffect, useState } from "react";
 function BootSplash() {
   return (
     <div
-      className="flex min-h-dvh items-center justify-center bg-black"
+      className="flex min-h-[100vh] min-h-dvh items-center justify-center bg-[#0b1220]"
+      style={{ minHeight: "100vh", backgroundColor: "#0b1220" }}
       suppressHydrationWarning
     >
       <p className="text-2xl font-black text-aha" suppressHydrationWarning>
@@ -28,7 +29,13 @@ function BootSplash() {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  adsensePreview = false,
+}: {
+  children: React.ReactNode;
+  adsensePreview?: boolean;
+}) {
   const {
     ready,
     onboarded,
@@ -60,6 +67,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <InviteCapture />
     </Suspense>
   );
+
+  if (adsensePreview) {
+    return (
+      <div
+        className="mx-auto min-h-[100vh] min-h-dvh w-full max-w-lg bg-[#0b1220] text-[#e7e9ea] md:max-w-2xl lg:max-w-4xl"
+        style={{ minHeight: "100vh", backgroundColor: "#0b1220" }}
+        suppressHydrationWarning
+      >
+        {children}
+      </div>
+    );
+  }
 
   if (isAuthCallback || isLegal || isInvite) {
     return (

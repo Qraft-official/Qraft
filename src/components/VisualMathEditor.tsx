@@ -56,11 +56,6 @@ export function VisualMathEditor({
     mf.addEventListener("input", sync);
     mf.addEventListener("focusin", keepVkHidden);
     if (value && mf.value !== value) mf.value = value;
-    try {
-      mf.focus();
-    } catch {
-      /* MathLive can throw if virtual-keyboard options are not ready yet. */
-    }
 
     return () => {
       detachMultiline();
@@ -112,8 +107,8 @@ export function VisualMathEditor({
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-3 pt-2">
+    <div className="flex min-w-0 w-full flex-col">
+      <div className="px-3 pt-2">
         {header}
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <p className="text-[10px] font-bold tracking-wide text-muted">
@@ -150,7 +145,7 @@ export function VisualMathEditor({
           </div>
         </div>
         {!ready ? (
-          <div className="flex min-h-[10rem] flex-1 items-center justify-center rounded-xl border border-gray-800 bg-panel text-sm text-muted">
+          <div className="flex min-h-[10rem] items-center justify-center rounded-xl border border-gray-800 bg-panel text-sm text-muted">
             数式エディタを読み込み中…
           </div>
         ) : (
@@ -158,7 +153,7 @@ export function VisualMathEditor({
             ref={(el) => {
               fieldRef.current = el as MathfieldElement | null;
             }}
-            className="aha-mathfield aha-mathfield-visual min-h-[10rem] w-full min-w-0 flex-1 overflow-auto"
+            className="aha-mathfield aha-mathfield-visual min-h-[10rem] w-full min-w-0"
             default-mode="math"
             smart-mode="true"
           />

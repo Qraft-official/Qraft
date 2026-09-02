@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+const LOCK_CLASS = "qraft-scroll-lock";
+
 /** Lock document scroll while a full-screen sheet is open (iOS-safe). */
 export function useBodyScrollLock(locked: boolean) {
   useEffect(() => {
@@ -13,6 +15,7 @@ export function useBodyScrollLock(locked: boolean) {
     const prev = {
       htmlOverflow: html.style.overflow,
       htmlOverscroll: html.style.overscrollBehavior,
+      htmlHeight: html.style.height,
       bodyOverflow: body.style.overflow,
       bodyTouch: body.style.touchAction,
       bodyPos: body.style.position,
@@ -20,11 +23,15 @@ export function useBodyScrollLock(locked: boolean) {
       bodyLeft: body.style.left,
       bodyRight: body.style.right,
       bodyWidth: body.style.width,
+      bodyOverscroll: body.style.overscrollBehavior,
     };
 
+    html.classList.add(LOCK_CLASS);
     html.style.overflow = "hidden";
     html.style.overscrollBehavior = "none";
+    html.style.height = "100%";
     body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
     body.style.touchAction = "none";
     body.style.position = "fixed";
     body.style.top = `-${scrollY}px`;
@@ -33,9 +40,12 @@ export function useBodyScrollLock(locked: boolean) {
     body.style.width = "100%";
 
     return () => {
+      html.classList.remove(LOCK_CLASS);
       html.style.overflow = prev.htmlOverflow;
       html.style.overscrollBehavior = prev.htmlOverscroll;
+      html.style.height = prev.htmlHeight;
       body.style.overflow = prev.bodyOverflow;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
       body.style.touchAction = prev.bodyTouch;
       body.style.position = prev.bodyPos;
       body.style.top = prev.bodyTop;

@@ -57,6 +57,22 @@ body {
   box-shadow: 0 0 24px rgba(168, 85, 247, 0.4);
 }
 
+html.qraft-scroll-lock,
+html.qraft-scroll-lock body {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  height: 100%;
+}
+
+html.qraft-scroll-lock body {
+  touch-action: none;
+}
+
+.composer-overlay {
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
 .composer-dialog {
   display: flex;
   max-height: min(90vh, var(--composer-vvh, 100dvh));
@@ -69,7 +85,7 @@ body {
 @media (min-width: 640px) {
   .composer-dialog {
     height: auto;
-    max-height: min(92vh, var(--composer-vvh, 52rem), 52rem);
+    max-height: min(90vh, var(--composer-vvh, 52rem), 52rem);
   }
 }
 
@@ -82,9 +98,14 @@ body {
   touch-action: pan-y;
 }
 
+.composer-footer {
+  flex-shrink: 0;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
 .notebook-stage {
   min-height: 14rem;
-  height: clamp(16rem, 48dvh, 36rem);
+  height: clamp(16rem, 36dvh, 28rem);
   touch-action: none;
 }
 

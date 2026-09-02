@@ -22,6 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     profileHydrated,
     authenticated,
     openComposer,
+    composer,
     accentColor,
     feedbackOpen,
     closeFeedback,
@@ -81,7 +82,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="mx-auto min-h-dvh w-full max-w-lg bg-black md:max-w-2xl lg:max-w-4xl"
+      className={`mx-auto min-h-dvh w-full max-w-lg bg-black md:max-w-2xl lg:max-w-4xl ${
+        composer.open ? "max-h-dvh overflow-hidden" : ""
+      }`}
       style={{ ["--accent" as string]: accentColor }}
     >
       <FocusBgm />

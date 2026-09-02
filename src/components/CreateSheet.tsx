@@ -43,6 +43,7 @@ export function CreateSheet() {
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const touchYRef = useRef(0);
   const quotePost = quotePostId ? getPost(quotePostId) : undefined;
   const quotingChallenge = openSolution && quotePost?.problemMode === "challenge";
 
@@ -71,13 +72,47 @@ export function CreateSheet() {
     if (!open) return;
     const overlay = overlayRef.current;
     if (!overlay) return;
-    const onMove = (e: TouchEvent) => {
-      const scroller = scrollRef.current;
-      if (scroller && e.target instanceof Node && scroller.contains(e.target)) return;
-      e.preventDefault();
+
+    const onStart = (e: TouchEvent) => {
+      touchYRef.current = e.touches[0]?.clientY ?? 0;
     };
+
+    const onMove = (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY ?? 0;
+      const dy = touchYRef.current - y;
+      touchYRef.current = y;
+      const target = e.target;
+      if (!(target instanceof Node)) {
+        e.preventDefault();
+        return;
+      }
+      if (target instanceof Element && target.closest(".notebook-stage")) return;
+
+      const scroller = scrollRef.current;
+      if (!scroller || !scroller.contains(target)) {
+        e.preventDefault();
+        return;
+      }
+
+      const canScroll = scroller.scrollHeight > scroller.clientHeight + 1;
+      if (!canScroll) {
+        e.preventDefault();
+        return;
+      }
+
+      const atTop = scroller.scrollTop <= 0;
+      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+      if ((dy < 0 && atTop) || (dy > 0 && atBottom)) {
+        e.preventDefault();
+      }
+    };
+
+    overlay.addEventListener("touchstart", onStart, { passive: true });
     overlay.addEventListener("touchmove", onMove, { passive: false });
-    return () => overlay.removeEventListener("touchmove", onMove);
+    return () => {
+      overlay.removeEventListener("touchstart", onStart);
+      overlay.removeEventListener("touchmove", onMove);
+    };
   }, [open]);
 
   const scrollFocusedField = (e: FocusEvent<HTMLDivElement>) => {
@@ -299,7 +334,7 @@ export function CreateSheet() {
       {open && (
         <motion.div
           ref={overlayRef}
-          className="fixed inset-0 z-[60] flex items-end justify-center overflow-hidden overscroll-none bg-black/70 sm:items-center sm:p-4"
+          className="composer-overlay fixed inset-0 z-[60] flex items-end justify-center overflow-hidden overscroll-none bg-black/70 sm:items-center sm:p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -325,7 +360,7 @@ export function CreateSheet() {
                 </div>
                 <div
                   ref={scrollRef}
-                  className="composer-scroll pb-[max(1rem,env(safe-area-inset-bottom))]"
+                  className="composer-scroll"
                   onFocusCapture={scrollFocusedField}
                 >
                 <select
@@ -430,7 +465,8 @@ export function CreateSheet() {
                     footer={extras}
                   />
                 )}
-                <div className="px-4 py-3">
+                </div>
+                <div className="composer-footer border-t border-gray-800 px-4 pt-3">
                   {postError && <p className="mb-2 text-xs text-red-400">{postError}</p>}
                   <button
                     disabled={posting}
@@ -439,7 +475,6 @@ export function CreateSheet() {
                   >
                     {posting ? "送信中…" : isSprintProblem ? "運営に応募する" : "投稿する"}
                   </button>
-                </div>
                 </div>
               </div>
             )}
@@ -474,13 +509,13 @@ export function CreateSheet() {
                 </div>
                 <div
                   ref={scrollRef}
-                  className="composer-scroll pb-[max(1rem,env(safe-area-inset-bottom))]"
+                  className="composer-scroll"
                   onFocusCapture={scrollFocusedField}
                 >
                 {modeTabs}
                 {inputMode === "hand" ? (
                   <div>
-                    <div className="max-h-[28%] min-h-24 overflow-y-auto border-b border-gray-800 bg-panel/40 px-3 pb-3 md:max-h-40">
+                    <div className="border-b border-gray-800 bg-panel/40 px-3 pb-3">
                       <p className="pt-2 text-[10px] font-bold tracking-wide text-muted">
                         引用する問題 · スクロールでいつでも確認できます
                       </p>
@@ -534,7 +569,8 @@ export function CreateSheet() {
                     footer={<div className="min-w-0">{photoRow}</div>}
                   />
                 )}
-                <div className="px-4 py-3">
+                </div>
+                <div className="composer-footer border-t border-gray-800 px-4 pt-3">
                   {quotingChallenge && (
                     <div className="mb-3">
                       <input
@@ -606,7 +642,6 @@ export function CreateSheet() {
                   >
                     {posting ? "投稿中…" : "引用して公開"}
                   </button>
-                </div>
                 </div>
               </div>
             )}

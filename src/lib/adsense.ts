@@ -14,6 +14,8 @@ export const ADSENSE_FRAME_ANCESTORS = [
   "https://*.doubleclick.net",
   "https://*.googlesyndication.com",
   "https://tpc.googlesyndication.com",
+  "https://*.googleadservices.com",
+  "https://partner.googleadservices.com",
 ].join(" ");
 
 export const ADSENSE_FRAME_ANCESTORS_CSP = `frame-ancestors ${ADSENSE_FRAME_ANCESTORS}`;

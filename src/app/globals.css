@@ -180,6 +180,12 @@ html.qraft-scroll-lock body {
   display: none;
 }
 
+.qraft-math-kb {
+  max-height: 12.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .aha-ml-kb {
   position: relative;
   width: 100%;

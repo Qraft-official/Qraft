@@ -83,8 +83,44 @@ export function looksLikeJapaneseText(s: string) {
   return CJK_RE.test(s);
 }
 
-export function setMathfieldInputMode(mf: MathfieldElement, mode: "math" | "text") {
+function keyboardSink(mf: MathfieldElement): HTMLElement | null {
+  return (
+    mf.shadowRoot?.querySelector<HTMLElement>(".ML__keyboard-sink") ??
+    mf.querySelector<HTMLElement>(".ML__keyboard-sink")
+  );
+}
+
+/** MathLive defaults the hidden sink to `inputmode=none`, which blocks the OS keyboard. */
+export function setMathfieldOsKeyboard(mf: MathfieldElement, enabled: boolean) {
+  const sink = keyboardSink(mf);
+  if (enabled) {
+    mf.setAttribute("inputmode", "text");
+    if (sink) {
+      sink.setAttribute("inputmode", "text");
+      sink.setAttribute("enterkeyhint", "enter");
+      sink.setAttribute("autocapitalize", "sentences");
+      sink.setAttribute("autocorrect", "on");
+    }
+    return;
+  }
+  mf.setAttribute("inputmode", "none");
+  if (sink) {
+    sink.setAttribute("inputmode", "none");
+    sink.setAttribute("autocapitalize", "off");
+    sink.setAttribute("autocorrect", "off");
+  }
+}
+
+export function focusMathfieldForOsKeyboard(mf: MathfieldElement) {
+  setMathfieldOsKeyboard(mf, true);
+  const sink = keyboardSink(mf);
   mf.focus();
+  sink?.focus();
+}
+
+export function setMathfieldInputMode(mf: MathfieldElement, mode: "math" | "text") {
+  if (mode === "text") focusMathfieldForOsKeyboard(mf);
+  else mf.focus();
   if (mf.mode === mode) return;
   mf.executeCommand(["switchMode", mode]);
   if (mf.mode !== mode) mf.mode = mode;

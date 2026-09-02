@@ -7,6 +7,7 @@ import {
   insertMathNewline,
   insertPlainTextIntoMathfield,
   setMathfieldInputMode,
+  setMathfieldOsKeyboard,
 } from "@/lib/mathlive";
 import type { MathfieldElement } from "mathlive";
 import { Maximize2, Menu } from "lucide-react";
@@ -72,13 +73,18 @@ export function VisualMathEditor({
 
     const sync = () => onChangeRef.current(mf.getValue("latex"));
     const keepVkHidden = () => window.mathVirtualKeyboard?.hide();
+    const onFocusIn = () => {
+      keepVkHidden();
+      setMathfieldOsKeyboard(mf, inputModeRef.current === "text");
+    };
     const onModeChange = () => {
       const mode = mf.mode === "text" ? "text" : "math";
       inputModeRef.current = mode;
       setInputMode(mode);
+      setMathfieldOsKeyboard(mf, mode === "text");
     };
     mf.addEventListener("input", sync);
-    mf.addEventListener("focusin", keepVkHidden);
+    mf.addEventListener("focusin", onFocusIn);
     mf.addEventListener("mode-change", onModeChange);
     if (value && mf.value !== value) mf.value = value;
 
@@ -86,7 +92,7 @@ export function VisualMathEditor({
       detachMultiline();
       detachJp();
       mf.removeEventListener("input", sync);
-      mf.removeEventListener("focusin", keepVkHidden);
+      mf.removeEventListener("focusin", onFocusIn);
       mf.removeEventListener("mode-change", onModeChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,7 +111,18 @@ export function VisualMathEditor({
     setInputMode(mode);
     const mf = fieldRef.current;
     if (!mf) return;
+    setMathfieldOsKeyboard(mf, mode === "text");
     setMathfieldInputMode(mf, mode);
+    if (mode === "text") {
+      requestAnimationFrame(() => {
+        const el = fieldRef.current;
+        if (!el) return;
+        setMathfieldOsKeyboard(el, true);
+        setMathfieldInputMode(el, "text");
+      });
+    } else {
+      window.mathVirtualKeyboard?.hide();
+    }
   };
 
   const insertVisual = (latex: string) => {
@@ -114,6 +131,7 @@ export function VisualMathEditor({
     mf.focus();
     const needsMath = /[\\{}^_]/.test(latex);
     if (needsMath && inputModeRef.current === "text") {
+      setMathfieldOsKeyboard(mf, false);
       setMathfieldInputMode(mf, "math");
       inputModeRef.current = "math";
       setInputMode("math");

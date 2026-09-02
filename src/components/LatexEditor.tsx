@@ -258,7 +258,16 @@ export function LatexEditor({
         {footer && <div className="mt-2 min-w-0 shrink-0 pb-2">{footer}</div>}
       </div>
       {keyboard && (
-        <MathKeyboard onAction={handleKeyboardClick} inputMode={kbMode} onInputModeChange={setKbMode} />
+        <MathKeyboard
+          onAction={handleKeyboardClick}
+          inputMode={kbMode}
+          onInputModeChange={(mode) => {
+            setKbMode(mode);
+            if (mode === "text") {
+              requestAnimationFrame(() => textareaRef.current?.focus());
+            }
+          }}
+        />
       )}
     </div>
   );

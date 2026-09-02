@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Sans_JP } from "next/font/google";
+import Script from "next/script";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AppProvider } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
@@ -35,11 +36,20 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-                      <html
+    <html
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} ${noto.variable} h-full dark`}
       suppressHydrationWarning
     >
+      <head>
+        <Script
+          id="adsense"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
+          crossOrigin="anonymous"
+          strategy="beforeInteractive"
+        />
+      </head>
       <body className="min-h-full bg-black text-[#e7e9ea] antialiased" suppressHydrationWarning>
         <AppErrorBoundary>
           <AppProvider>

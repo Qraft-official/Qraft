@@ -57,6 +57,11 @@ import {
   toggleConfusedReaction,
 } from "./problem-reactions";
 import { asDifficulty, MOCK_PROBLEM_META, isProblemUuid } from "./difficulty";
+import {
+  deleteComment as persistDeleteComment,
+  fetchComments,
+  insertComment as persistInsertComment,
+} from "./comments";
 import { getSprintDayId, makeOfficialPost, remainingMs } from "./sprint";
 import { supabase } from "./supabase";
 import type {
@@ -137,7 +142,8 @@ type Store = {
     photo?: string;
     solverAnswer?: string;
   }) => Promise<{ error?: string }>;
-  addReply: (input: { replyToId: string; text: string }) => void;
+  addReply: (input: { replyToId: string; text: string }) => Promise<{ error?: string }>;
+  deleteComment: (id: string) => Promise<{ error?: string }>;
   startSprint: () => void;
   submitSprint: (pages: CanvasPage[]) => void;
   timeoutSprint: () => void;
@@ -209,6 +215,18 @@ function freshSprint(dayId: string): SprintRecord {
 
 const emptyComposer: Composer = { open: false };
 
+async function loadRemoteFeed() {
+  const remote = await fetchProblems();
+  const subjects: Record<string, Subject> = {};
+  for (const p of remote.posts) subjects[p.id] = p.subject;
+  const comments = await fetchComments(subjects);
+  return {
+    posts: [...remote.posts, ...comments.posts],
+    profiles: { ...remote.profiles, ...comments.profiles },
+    error: remote.error || comments.error,
+  };
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
@@ -221,6 +239,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reposts, setReposts] = useState<string[]>([]);
   const [ratings, setRatings] = useState<Ratings>({});
   const [extra, setExtra] = useState<Post[]>([]);
+  const [hiddenReplyIds, setHiddenReplyIds] = useState<string[]>([]);
   const [remotePosts, setRemotePosts] = useState<Post[]>([]);
   const [remoteUsers, setRemoteUsers] = useState<Record<string, User>>({});
   const [supabaseUid, setSupabaseUid] = useState<string | null>(null);
@@ -390,7 +409,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setAuthenticated(false);
           setProfileHydrated(true);
         }
-        const remote = await fetchProblems();
+        const remote = await loadRemoteFeed();
         if (cancelled) return;
         setRemotePosts(remote.posts);
         setRemoteUsers(remote.profiles);
@@ -422,7 +441,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (event === "SIGNED_OUT") return;
           afterSignIn(user);
           if (event === "INITIAL_SESSION") return;
-          void fetchProblems().then((remote) => {
+          void loadRemoteFeed().then((remote) => {
             setRemotePosts(remote.posts);
             setRemoteUsers((prev) => ({ ...prev, ...remote.profiles }));
           });
@@ -447,7 +466,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         "postgres_changes",
         { event: "*", schema: "public", table: "problems" },
         () => {
-          void fetchProblems().then((remote) => {
+          void loadRemoteFeed().then((remote) => {
             setRemotePosts(remote.posts);
             setRemoteUsers((prev) => ({ ...prev, ...remote.profiles }));
           });
@@ -583,6 +602,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const officialPost = sprintFromDb[0] ?? mockOfficial;
 
   const catalog = useMemo(() => {
+    const hidden = new Set(hiddenReplyIds);
     return [
       ...remotePosts,
       ...extra,
@@ -591,14 +611,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...MOCK_REPLIES,
       ...community,
       ...LOUNGE_POSTS,
-    ];
-  }, [extra, mockOfficial, community, remotePosts]);
+    ].filter((p) => !hidden.has(p.id));
+  }, [extra, mockOfficial, community, remotePosts, hiddenReplyIds]);
 
   const posts = useMemo(() => {
     const extras = extra;
+    const hidden = new Set(hiddenReplyIds);
     const seen = new Set<string>();
     const main = [...remotePosts, ...extra, mockOfficial, ...POSTS, ...MOCK_REPLIES]
       .filter((p) => {
+        if (hidden.has(p.id)) return false;
         if (seen.has(p.id)) return false;
         seen.add(p.id);
         return true;
@@ -616,11 +638,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         replyCount:
           p.kind === "reply"
             ? p.replyCount
-            : extras.filter((e) => e.kind === "reply" && e.replyToId === p.id).length +
-              MOCK_REPLIES.filter((e) => e.replyToId === p.id).length,
+            : extras.filter((e) => e.kind === "reply" && e.replyToId === p.id && !hidden.has(e.id)).length +
+              remotePosts.filter((e) => e.kind === "reply" && e.replyToId === p.id && !hidden.has(e.id)).length +
+              MOCK_REPLIES.filter((e) => e.replyToId === p.id && !hidden.has(e.id)).length,
       };
     });
-  }, [extra, mockOfficial, remotePosts, confusedCounts]);
+  }, [extra, mockOfficial, remotePosts, confusedCounts, hiddenReplyIds]);
 
   const getPost = useCallback(
     (id: string) =>
@@ -1038,13 +1061,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [supabaseUid, getPost],
   );
 
-  const addReply = useCallback((input: { replyToId: string; text: string }) => {
+  const addReply = useCallback(async (input: { replyToId: string; text: string }) => {
     const parent =
       extra.find((p) => p.id === input.replyToId) ||
+      remotePosts.find((p) => p.id === input.replyToId) ||
       POSTS.find((p) => p.id === input.replyToId) ||
       (input.replyToId.startsWith("sprint-") ? makeOfficialPost(getSprintDayId()) : undefined);
+    const localId = `reply-${Date.now()}`;
     const post: Post = {
-      id: `reply-${Date.now()}`,
+      id: localId,
       authorId: supabaseUid ?? ME_ID,
       kind: "reply",
       subject: parent?.subject ?? "math",
@@ -1071,7 +1096,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       },
       ...a,
     ]);
-  }, [extra, supabaseUid]);
+    if (isProblemUuid(input.replyToId)) {
+      const saved = await persistInsertComment({
+        postId: input.replyToId,
+        text: input.text,
+        subject: parent?.subject ?? "math",
+      });
+      if (saved.error) {
+        setExtra((p) => p.filter((x) => x.id !== localId));
+        return { error: saved.error };
+      }
+      if (saved.post) {
+        setExtra((p) => p.filter((x) => x.id !== localId));
+        setRemotePosts((p) => [saved.post!, ...p.filter((x) => x.id !== saved.post!.id)]);
+      }
+    }
+    return {};
+  }, [extra, remotePosts, supabaseUid]);
+
+  const deleteComment = useCallback(async (id: string) => {
+    const doomed =
+      extra.find((p) => p.id === id) ||
+      remotePosts.find((p) => p.id === id) ||
+      MOCK_REPLIES.find((p) => p.id === id);
+    const fromExtra = extra.some((p) => p.id === id);
+    const fromRemote = remotePosts.some((p) => p.id === id);
+    setExtra((p) => p.filter((x) => x.id !== id));
+    setRemotePosts((p) => p.filter((x) => x.id !== id));
+    setHiddenReplyIds((h) => (h.includes(id) ? h : [...h, id]));
+    if (isProblemUuid(id)) {
+      const { error } = await persistDeleteComment(id);
+      if (error) {
+        if (fromExtra && doomed) setExtra((p) => [doomed, ...p]);
+        if (fromRemote && doomed) setRemotePosts((p) => [doomed, ...p]);
+        setHiddenReplyIds((h) => h.filter((x) => x !== id));
+        return { error };
+      }
+    }
+    return {};
+  }, [extra, remotePosts]);
 
   const updateProfile = useCallback(
     async (patch: ProfilePatch) => {
@@ -1296,6 +1359,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     feedbackOpen,
     addSolution,
     addReply,
+    deleteComment,
     startSprint,
     submitSprint,
     timeoutSprint,

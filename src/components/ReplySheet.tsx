@@ -59,7 +59,7 @@ export function ReplySheet() {
               </div>
             </div>
             <div className="aha-scroll flex-1 overflow-y-auto px-4 py-3">
-              <CommentThread comments={comments} />
+              <CommentThread comments={comments} parentAuthorId={post.authorId} />
             </div>
             <div className="flex items-end gap-2 border-t border-gray-800 p-3">
               <UserAvatar user={me} className="h-8 w-8 text-sm" />

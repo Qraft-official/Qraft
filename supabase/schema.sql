@@ -467,4 +467,103 @@ create index if not exists referral_apply_log_ip_success_idx
 alter table public.referral_apply_log enable row level security;
 revoke all on public.referral_apply_log from anon, authenticated;
 
+create or replace function public.weekly_highlights()
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with since as (
+    select (now() - interval '7 days') as t
+  ),
+  rx as (
+    select r.problem_id, count(*)::int as n
+    from public.problem_reactions r
+    cross join since
+    where r.created_at >= since.t
+    group by r.problem_id
+  ),
+  by_author as (
+    select p.author_id, coalesce(sum(rx.n), 0)::int as n
+    from rx
+    join public.problems p on p.id = rx.problem_id
+    group by p.author_id
+  ),
+  qrafter as (
+    select pr.id, pr.name, pr.handle, ba.n as weekly_reactions
+    from by_author ba
+    join public.profiles pr on pr.id = ba.author_id
+    order by ba.n desc
+    limit 1
+  ),
+  question as (
+    select
+      p.id,
+      p.author_id,
+      p.title,
+      p.problem_text,
+      p.pages,
+      p.created_at,
+      p.confused_count,
+      (coalesce(rx.n, 0) + coalesce(p.confused_count, 0))::int as score
+    from public.problems p
+    left join rx on rx.problem_id = p.id
+    cross join since
+    where p.created_at >= since.t
+      and not coalesce(p.is_sprint, false)
+    order by score desc, p.created_at desc
+    limit 1
+  )
+  select jsonb_build_object(
+    'since', (select t from since),
+    'qrafter', (select to_jsonb(qrafter) from qrafter),
+    'question', (select to_jsonb(question) from question),
+    'by_problem', coalesce((select jsonb_object_agg(problem_id::text, n) from rx), '{}'::jsonb),
+    'by_author', coalesce((select jsonb_object_agg(author_id::text, n) from by_author), '{}'::jsonb)
+  );
+$$;
+
+revoke all on function public.weekly_highlights() from public;
+grant execute on function public.weekly_highlights() to anon, authenticated;
+
+create table if not exists public.comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.problems (id) on delete cascade,
+  author_id uuid not null references public.profiles (id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists comments_post_id_created_idx
+  on public.comments (post_id, created_at);
+
+alter table public.comments enable row level security;
+
+drop policy if exists "comments are readable" on public.comments;
+create policy "comments are readable"
+  on public.comments for select
+  using (true);
+
+drop policy if exists "users can insert own comments" on public.comments;
+create policy "users can insert own comments"
+  on public.comments for insert
+  with check (author_id = (select auth.uid()));
+
+drop policy if exists "authors or post owners can delete comments" on public.comments;
+create policy "authors or post owners can delete comments"
+  on public.comments for delete
+  using (
+    author_id = (select auth.uid())
+    or exists (
+      select 1
+      from public.problems p
+      where p.id = comments.post_id
+        and p.author_id = (select auth.uid())
+    )
+  );
+
+grant select on public.comments to anon, authenticated;
+grant insert, delete on public.comments to authenticated;
+
 

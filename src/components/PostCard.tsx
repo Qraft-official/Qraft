@@ -616,7 +616,7 @@ export function PostCard({
           {threadOpen && (
             <div className="mt-3 border-t border-gray-800 pt-2">
               <p className="text-[11px] font-bold text-muted">コメント</p>
-              <CommentThread comments={comments} compact />
+              <CommentThread comments={comments} compact parentAuthorId={post.authorId} />
             </div>
           )}
         </div>

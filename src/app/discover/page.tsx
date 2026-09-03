@@ -1,38 +1,46 @@
 "use client";
 
-import { NotePages } from "@/components/NotePages";
 import { PostCard } from "@/components/PostCard";
 import { UserAvatar } from "@/components/UserAvatar";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { SUBJECTS } from "@/lib/constants";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { avgStars, useApp } from "@/lib/store";
-import type { HallMode, Subject, Tier, User } from "@/lib/types";
-import { Crown, Search } from "lucide-react";
+import type { HallMode, Post, Subject, Tier, User } from "@/lib/types";
+import { userIsVerified } from "@/lib/verified";
+import { computeWeeklyRankings, fetchWeeklyReactionBoosts, type WeeklyQrafter } from "@/lib/weekly";
+import { Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type PrimaryTab = "posts" | "users" | "trend" | Subject;
+type PrimaryTab = "posts" | "users" | "hall" | Subject;
+type RankingType = "question" | "qrafter";
 
 const PRIMARY_TABS: { id: PrimaryTab; label: string }[] = [
   { id: "posts", label: "投稿" },
   { id: "users", label: "ユーザー" },
-  { id: "trend", label: "トレンド" },
+  { id: "hall", label: "殿堂入り" },
   ...SUBJECTS.map((s) => ({ id: s.id as PrimaryTab, label: s.label })),
 ];
 
 export default function DiscoverPage() {
-  const { posts, users, me, follows, toggleFollow, searchUsers } = useApp();
+  const { posts, users, me, follows, toggleFollow, searchUsers, userOf } = useApp();
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<PrimaryTab>("posts");
   const [difficulty, setDifficulty] = useState<Tier | "all">("all");
-  const [hall, setHall] = useState(true);
   const [mode, setMode] = useState<HallMode>("problems");
+  const [rankingType, setRankingType] = useState<RankingType>("question");
+  const [weeklyBoost, setWeeklyBoost] = useState<{
+    byProblem: Record<string, number>;
+    byAuthor: Record<string, number>;
+  }>({ byProblem: {}, byAuthor: {} });
 
   const subject: Subject | "all" =
     tab === "math" || tab === "physics" || tab === "chemistry" ? tab : "all";
   const showUsers = tab === "users";
-  const showPosts = !showUsers;
-  const useHall = tab === "trend" || (tab === "posts" && hall);
+  const searching = q.trim().length > 0;
+  const showWeekly = !showUsers && tab !== "hall" && !searching;
+  const showHall = tab === "hall" || (tab !== "users" && searching);
 
   useEffect(() => {
     if (!showUsers) return;
@@ -42,7 +50,11 @@ export default function DiscoverPage() {
     return () => window.clearTimeout(t);
   }, [q, showUsers, searchUsers]);
 
-  const ranked = useMemo(() => {
+  useEffect(() => {
+    void fetchWeeklyReactionBoosts().then(setWeeklyBoost);
+  }, []);
+
+  const weeklyPool = useMemo(() => {
     let list = posts.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
     if (subject !== "all") list = list.filter((p) => p.subject === subject);
     if (difficulty !== "all") {
@@ -50,11 +62,32 @@ export default function DiscoverPage() {
         (p) => p.kind !== "problem" || (p.difficultyLevel ?? 3) === difficulty,
       );
     }
-    if (q.trim()) {
+    return list;
+  }, [posts, subject, difficulty]);
+
+  const weekly = useMemo(
+    () =>
+      computeWeeklyRankings(
+        weeklyPool,
+        userOf,
+        weeklyBoost.byProblem,
+        weeklyBoost.byAuthor,
+      ),
+    [weeklyPool, userOf, weeklyBoost],
+  );
+
+  const hallList = useMemo(() => {
+    let list = posts.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
+    if (subject !== "all") list = list.filter((p) => p.subject === subject);
+    if (difficulty !== "all") {
+      list = list.filter(
+        (p) => p.kind !== "problem" || (p.difficultyLevel ?? 3) === difficulty,
+      );
+    }
+    if (searching) {
       const n = q.toLowerCase();
       list = list.filter((p) => p.text.toLowerCase().includes(n));
     }
-    if (!useHall) return list;
     if (mode === "problems") {
       return list
         .filter((p) => p.kind === "problem")
@@ -70,7 +103,7 @@ export default function DiscoverPage() {
           avgStars(b.eleganceSum, b.eleganceCount) -
           avgStars(a.eleganceSum, a.eleganceCount),
       );
-  }, [posts, q, subject, difficulty, useHall, mode]);
+  }, [posts, q, searching, subject, difficulty, mode]);
 
   const matchedUsers = useMemo(() => {
     const n = q.trim().toLowerCase().replace(/^@/, "");
@@ -91,7 +124,7 @@ export default function DiscoverPage() {
   }, [users, q, me.id]);
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-[600px]">
       <header className="sticky top-0 z-30 border-b border-gray-800 bg-black/80 backdrop-blur">
         <div className="px-4 pt-3">
           <div className="flex items-center gap-2 rounded-full bg-[#202327] px-4 py-2.5">
@@ -146,7 +179,7 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {showPosts && (
+      {!showUsers && (
         <>
           <div className="flex gap-1 overflow-x-auto border-b border-gray-800 px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <TextTab
@@ -166,82 +199,222 @@ export default function DiscoverPage() {
             ))}
           </div>
 
-          {tab !== "trend" && (
-            <div className="flex items-center justify-between px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setHall((v) => !v)}
-                className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
-                  hall ? "bg-aha text-black" : "border border-gray-700 text-muted"
-                }`}
-              >
-                <Crown size={14} /> 殿堂入り
-              </button>
-              {useHall && (
-                <div className="flex rounded-full bg-panel p-0.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setMode("problems")}
-                    className={`rounded-full px-3 py-1.5 ${mode === "problems" ? "bg-neon text-white" : "text-muted"}`}
-                  >
-                    👑 クイズ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode("solutions")}
-                    className={`rounded-full px-3 py-1.5 ${mode === "solutions" ? "bg-neon text-white" : "text-muted"}`}
-                  >
-                    🧠 解法
-                  </button>
-                </div>
-              )}
-            </div>
+          {showWeekly && (
+            <WeeklyRankingFeed
+              rankingType={rankingType}
+              onRankingType={setRankingType}
+              questions={weekly.weeklyQuestions}
+              qrafters={weekly.weeklyQrafters}
+              meId={me.id}
+              follows={follows}
+              onFollow={toggleFollow}
+            />
           )}
 
-          {tab === "trend" && (
-            <div className="flex items-center justify-between px-4 py-3">
-              <p className="flex items-center gap-1 text-xs font-bold text-aha">
-                <Crown size={14} /> トレンド
-              </p>
-              <div className="flex rounded-full bg-panel p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setMode("problems")}
-                  className={`rounded-full px-3 py-1.5 ${mode === "problems" ? "bg-neon text-white" : "text-muted"}`}
-                >
-                  👑 クイズ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("solutions")}
-                  className={`rounded-full px-3 py-1.5 ${mode === "solutions" ? "bg-neon text-white" : "text-muted"}`}
-                >
-                  🧠 解法
-                </button>
-              </div>
-            </div>
+          {showHall && (
+            <HallFeed
+              searching={searching}
+              mode={mode}
+              onMode={setMode}
+              posts={hallList}
+            />
           )}
-
-          {useHall && ranked[0] && (
-            <div className="mx-4 mb-3 rounded-2xl border border-aha/30 bg-aha/5 p-3">
-              <p className="text-[11px] font-bold text-aha">
-                {mode === "problems" ? "殿堂入りクイズ #1" : "殿堂入り解法 #1"}
-              </p>
-              {ranked[0].pages && <NotePages pages={ranked[0].pages} />}
-            </div>
-          )}
-
-          {ranked.map((p, i) => (
-            <div key={p.id} className="relative">
-              {useHall && (
-                <span className="absolute left-2 top-3 z-10 text-xs font-black text-aha">
-                  #{i + 1}
-                </span>
-              )}
-              <PostCard post={p} />
-            </div>
-          ))}
         </>
+      )}
+    </div>
+  );
+}
+
+function WeeklyRankingFeed({
+  rankingType,
+  onRankingType,
+  questions,
+  qrafters,
+  meId,
+  follows,
+  onFollow,
+}: {
+  rankingType: RankingType;
+  onRankingType: (v: RankingType) => void;
+  questions: Post[];
+  qrafters: WeeklyQrafter[];
+  meId: string;
+  follows: string[];
+  onFollow: (userId: string) => void;
+}) {
+  return (
+    <div>
+      <div className="my-1 flex border-b border-slate-800">
+        <button
+          type="button"
+          onClick={() => onRankingType("question")}
+          className={`flex-1 py-2.5 text-center text-sm font-bold ${
+            rankingType === "question"
+              ? "border-b-2 border-lime-400 text-lime-400"
+              : "border-b-2 border-transparent text-slate-400"
+          }`}
+        >
+          🔥 Weekly Question
+        </button>
+        <button
+          type="button"
+          onClick={() => onRankingType("qrafter")}
+          className={`flex-1 py-2.5 text-center text-sm font-bold ${
+            rankingType === "qrafter"
+              ? "border-b-2 border-lime-400 text-lime-400"
+              : "border-b-2 border-transparent text-slate-400"
+          }`}
+        >
+          👑 Weekly Qrafter
+        </button>
+      </div>
+      <p className="px-4 py-2 text-[11px] text-slate-400">集計期間: 直近7日間</p>
+
+      {rankingType === "question" ? (
+        questions.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-muted">今週の名問はまだありません。</p>
+        ) : (
+          questions.map((post, i) => (
+            <div key={post.id} className="relative">
+              <RankBadge rank={i + 1} />
+              <PostCard post={post} />
+            </div>
+          ))
+        )
+      ) : qrafters.length === 0 ? (
+        <p className="px-4 py-8 text-center text-sm text-muted">
+          今週のリアクション集計はまだありません。
+        </p>
+      ) : (
+        <div className="divide-y divide-gray-800">
+          {qrafters.map((row, i) => (
+            <QrafterRankRow
+              key={row.user.id}
+              rank={i + 1}
+              user={row.user}
+              weeklyReactions={row.weeklyReactions}
+              isMe={row.user.id === meId}
+              following={follows.includes(row.user.id)}
+              onFollow={() => onFollow(row.user.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HallFeed({
+  searching,
+  mode,
+  onMode,
+  posts,
+}: {
+  searching: boolean;
+  mode: HallMode;
+  onMode: (v: HallMode) => void;
+  posts: Post[];
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between px-4 py-3">
+        <p className="text-xs font-bold text-lime-400">
+          {searching ? "検索結果" : "歴代の高評価投稿"}
+        </p>
+        <div className="flex rounded-full bg-panel p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => onMode("problems")}
+            className={`rounded-full px-3 py-1.5 ${mode === "problems" ? "bg-neon text-white" : "text-muted"}`}
+          >
+            クイズ
+          </button>
+          <button
+            type="button"
+            onClick={() => onMode("solutions")}
+            className={`rounded-full px-3 py-1.5 ${mode === "solutions" ? "bg-neon text-white" : "text-muted"}`}
+          >
+            解法
+          </button>
+        </div>
+      </div>
+      {posts.length === 0 ? (
+        <p className="px-4 py-8 text-center text-sm text-muted">
+          {searching ? "一致する投稿が見つかりません" : "まだ投稿がありません"}
+        </p>
+      ) : (
+        posts.map((p, i) => (
+          <div key={p.id} className="relative">
+            <RankBadge rank={i + 1} />
+            <PostCard post={p} />
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function RankBadge({ rank }: { rank: number }) {
+  const tone =
+    rank === 1
+      ? "bg-yellow-400 text-black font-bold"
+      : rank === 2
+        ? "bg-lime-400 text-black font-bold"
+        : rank === 3
+          ? "bg-[#b87333] text-white font-bold"
+          : "text-muted font-semibold";
+  return (
+    <span
+      className={`absolute left-2 top-3 z-10 rounded-md px-1.5 py-0.5 text-[11px] ${tone}`}
+    >
+      #{rank}
+    </span>
+  );
+}
+
+function QrafterRankRow({
+  rank,
+  user,
+  weeklyReactions,
+  isMe,
+  following,
+  onFollow,
+}: {
+  rank: number;
+  user: User;
+  weeklyReactions: number;
+  isMe: boolean;
+  following: boolean;
+  onFollow: () => void;
+}) {
+  const verified = userIsVerified(user);
+  return (
+    <div className="relative flex items-center justify-between gap-3 px-4 py-3">
+      <RankBadge rank={rank} />
+      <Link href={`/u/${user.handle}`} className="ml-10 flex min-w-0 flex-1 items-center gap-3">
+        <UserAvatar user={user} className="h-12 w-12 text-xl" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1">
+            <p className="truncate text-sm font-bold">{user.name}</p>
+            <VerifiedBadge show={verified} />
+          </div>
+          <p className="truncate text-xs text-muted">@{user.handle}</p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            今週のリアクション{" "}
+            <span className="font-bold text-lime-400">{weeklyReactions}</span>
+          </p>
+        </div>
+      </Link>
+      {!isMe && (
+        <button
+          type="button"
+          onClick={onFollow}
+          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${
+            following ? "border border-gray-700" : "bg-white text-black"
+          }`}
+        >
+          {following ? "フォロー中" : "フォロー"}
+        </button>
       )}
     </div>
   );

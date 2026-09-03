@@ -235,7 +235,7 @@ export function LatexEditor({
           onKeyDown={(e) => {
             if (e.key === "Enter") e.stopPropagation();
           }}
-          className={`min-w-0 w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 font-mono text-sm leading-relaxed whitespace-pre-wrap outline-none focus:border-neon ${
+          className={`min-w-0 w-full max-w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 font-mono text-sm leading-relaxed break-words whitespace-pre-wrap outline-none [overflow-wrap:anywhere] [word-break:break-word] focus:border-neon ${
             docked
               ? "min-h-[8rem] flex-1 resize-none overflow-y-auto"
               : tall

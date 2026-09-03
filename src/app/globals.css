@@ -195,6 +195,8 @@ html.qraft-scroll-lock body {
 .aha-mathfield {
   display: block;
   box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   border: 1px solid #1f2937;
   border-radius: 0.75rem;
   background: #15202b;
@@ -203,6 +205,8 @@ html.qraft-scroll-lock body {
   padding: 0.75rem 0.85rem;
   outline: none;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   --hue: 270;
   --contains-highlight-background-color: rgba(168, 85, 247, 0.25);
 }
@@ -225,7 +229,11 @@ html.qraft-scroll-lock body {
 
 .aha-mathfield::part(content),
 .aha-mathfield::part(menu-toggle) {
+  display: block;
+  max-width: 100%;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .aha-mathfield-visual::part(virtual-keyboard-toggle) {

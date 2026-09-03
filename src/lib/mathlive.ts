@@ -26,32 +26,84 @@ function escapeLatexText(src: string) {
   return src.replace(/\\/g, "\\backslash ").replace(/[{}]/g, (ch) => `\\${ch}`);
 }
 
-export function insertMathNewline(mf: MathfieldElement) {
-  mf.focus();
-  if (mf.mode === "text") {
-    const ok = mf.insert("\n", {
-      focus: true,
-      format: "latex",
-      insertionMode: "replaceSelection",
-      selectionMode: "after",
-      scrollIntoView: true,
-    });
-    if (ok) {
-      mf.dispatchEvent(new Event("input", { bubbles: true }));
-      return;
-    }
-  }
-  mf.insert("\\\\", {
-    focus: true,
-    format: "latex",
-    insertionMode: "replaceSelection",
-    selectionMode: "after",
-    scrollIntoView: true,
-  });
+function emitMathfieldInput(mf: MathfieldElement) {
   mf.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-/** Enable mixed text/math display mode and Enter = newline (not submit). */
+function insertOpts(format: "latex" | "plain-text") {
+  return {
+    focus: true,
+    format,
+    insertionMode: "replaceSelection" as const,
+    selectionMode: "after" as const,
+    scrollIntoView: true,
+  };
+}
+
+export function insertMathNewline(mf: MathfieldElement) {
+  mf.focus();
+  if (mf.mode === "text") {
+    if (mf.insert("\n", insertOpts("plain-text"))) {
+      emitMathfieldInput(mf);
+      return;
+    }
+    if (mf.insert("\n", insertOpts("latex"))) {
+      emitMathfieldInput(mf);
+      return;
+    }
+  }
+  mf.insert("\\\\", insertOpts("latex"));
+  emitMathfieldInput(mf);
+}
+
+function isDeleteInputType(type: string) {
+  return (
+    type === "deleteContentBackward" ||
+    type === "deleteContentForward" ||
+    type === "deleteByCut" ||
+    type === "deleteSoftLineBackward" ||
+    type === "deleteSoftLineForward" ||
+    type === "deleteWordBackward" ||
+    type === "deleteWordForward" ||
+    type === "deleteHardLineBackward" ||
+    type === "deleteHardLineForward" ||
+    type === "deleteContent"
+  );
+}
+
+function isNewlineInput(ie: InputEvent) {
+  if (ie.inputType === "insertLineBreak" || ie.inputType === "insertParagraph") return true;
+  if (ie.inputType === "insertText" && (ie.data === "\n" || ie.data === "\r\n")) return true;
+  return false;
+}
+
+function deleteBackwardOrForward(mf: MathfieldElement, forward: boolean) {
+  mf.executeCommand(forward ? "deleteForward" : "deleteBackward");
+  emitMathfieldInput(mf);
+}
+
+function sinkAndHost(mf: MathfieldElement): EventTarget[] {
+  const sink = keyboardSink(mf);
+  return sink ? [mf, sink] : [mf];
+}
+
+function addCapture(
+  targets: EventTarget[],
+  type: string,
+  handler: EventListener,
+) {
+  for (const t of targets) t.addEventListener(type, handler, true);
+}
+
+function removeCapture(
+  targets: EventTarget[],
+  type: string,
+  handler: EventListener,
+) {
+  for (const t of targets) t.removeEventListener(type, handler, true);
+}
+
+/** Enable mixed text/math display mode and map OS Enter/Backspace (incl. IME). */
 export function attachMultilineMathfield(mf: MathfieldElement) {
   mf.smartMode = true;
   mf.smartFence = true;
@@ -59,19 +111,72 @@ export function attachMultilineMathfield(mf: MathfieldElement) {
   mf.setAttribute("smart-mode", "true");
   mf.setAttribute("default-mode", "math");
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== "Enter" || e.isComposing) return;
-    e.preventDefault();
-    e.stopPropagation();
-    insertMathNewline(mf);
+  const handledEvents = new WeakSet<Event>();
+
+  const onKeyDown = (e: Event) => {
+    if (handledEvents.has(e)) return;
+    handledEvents.add(e);
+    const ke = e as KeyboardEvent;
+    if (ke.isComposing || ke.key === "Process" || ke.keyCode === 229) return;
+    if (ke.key === "Enter") {
+      ke.preventDefault();
+      ke.stopPropagation();
+      insertMathNewline(mf);
+      return;
+    }
+    if (ke.key === "Backspace" || ke.key === "Delete") {
+      ke.preventDefault();
+      ke.stopPropagation();
+      deleteBackwardOrForward(mf, ke.key === "Delete");
+    }
   };
+
+  const onBeforeInput = (e: Event) => {
+    if (handledEvents.has(e)) return;
+    handledEvents.add(e);
+    const ie = e as InputEvent;
+    if (ie.isComposing) return;
+    if (isNewlineInput(ie)) {
+      ie.preventDefault();
+      ie.stopPropagation();
+      insertMathNewline(mf);
+      return;
+    }
+    if (isDeleteInputType(ie.inputType)) {
+      ie.preventDefault();
+      ie.stopPropagation();
+      const forward =
+        ie.inputType === "deleteContentForward" ||
+        ie.inputType === "deleteSoftLineForward" ||
+        ie.inputType === "deleteWordForward" ||
+        ie.inputType === "deleteHardLineForward";
+      deleteBackwardOrForward(mf, forward);
+    }
+  };
+
   const onChange = (e: Event) => {
     e.stopPropagation();
   };
-  mf.addEventListener("keydown", onKeyDown, true);
+
+  const bindTargets = () => sinkAndHost(mf);
+  let targets = bindTargets();
+  addCapture(targets, "keydown", onKeyDown);
+  addCapture(targets, "beforeinput", onBeforeInput);
   mf.addEventListener("change", onChange);
+
+  const rebind = () => {
+    removeCapture(targets, "keydown", onKeyDown);
+    removeCapture(targets, "beforeinput", onBeforeInput);
+    targets = bindTargets();
+    addCapture(targets, "keydown", onKeyDown);
+    addCapture(targets, "beforeinput", onBeforeInput);
+  };
+  mf.addEventListener("focusin", rebind);
+
   return () => {
-    mf.removeEventListener("keydown", onKeyDown, true);
+    mf.removeEventListener("focusin", rebind);
+    removeCapture(targets, "keydown", onKeyDown);
+    removeCapture(targets, "beforeinput", onBeforeInput);
     mf.removeEventListener("change", onChange);
   };
 }
@@ -118,9 +223,39 @@ export function focusMathfieldForOsKeyboard(mf: MathfieldElement) {
   sink?.focus();
 }
 
-export function setMathfieldInputMode(mf: MathfieldElement, mode: "math" | "text") {
-  if (mode === "text") focusMathfieldForOsKeyboard(mf);
-  else mf.focus();
+export function applyMathfieldModePolicy(mf: MathfieldElement, mode: "math" | "text") {
+  if (mode === "text") {
+    mf.smartMode = false;
+    mf.defaultMode = "text";
+    mf.setAttribute("smart-mode", "false");
+    mf.setAttribute("default-mode", "text");
+    setMathfieldOsKeyboard(mf, true);
+    return;
+  }
+  mf.smartMode = true;
+  mf.defaultMode = "math";
+  mf.setAttribute("smart-mode", "true");
+  mf.setAttribute("default-mode", "math");
+  setMathfieldOsKeyboard(mf, false);
+}
+
+export function setMathfieldInputMode(
+  mf: MathfieldElement,
+  mode: "math" | "text",
+  opts: { focus?: boolean } = {},
+) {
+  const shouldFocus = opts.focus !== false;
+  applyMathfieldModePolicy(mf, mode);
+  const sink = keyboardSink(mf);
+  const active = document.activeElement;
+  const alreadyFocused =
+    active === mf ||
+    active === sink ||
+    (active instanceof Node && Boolean(mf.shadowRoot?.contains(active)));
+  if (shouldFocus && !alreadyFocused) {
+    if (mode === "text") focusMathfieldForOsKeyboard(mf);
+    else mf.focus();
+  }
   if (mf.mode === mode) return;
   mf.executeCommand(["switchMode", mode]);
   if (mf.mode !== mode) mf.mode = mode;

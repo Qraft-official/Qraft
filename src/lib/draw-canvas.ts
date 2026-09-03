@@ -5,6 +5,15 @@ export function emptyCanvasPage(id = `p-${Math.random().toString(36).slice(2, 9)
 }
 
 const LINE_HEIGHT = 1.35;
+const NOTE_EDGE_PAD = 8;
+
+export function wrapWidthForText(t: CanvasText, canvasWidth?: number) {
+  const boxW = t.width && t.width > 8 ? t.width : Number.POSITIVE_INFINITY;
+  const remain =
+    canvasWidth != null ? Math.max(8, canvasWidth - t.x - NOTE_EDGE_PAD) : boxW;
+  const maxW = Math.min(boxW, remain);
+  return Number.isFinite(maxW) ? maxW : 0;
+}
 
 function wrapLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   if (!text) return [""];
@@ -27,9 +36,10 @@ function wrapLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 export function layoutTextLines(
   ctx: CanvasRenderingContext2D,
   t: CanvasText,
+  canvasWidth?: number,
 ) {
   ctx.font = `600 ${t.fontSize}px ui-sans-serif, system-ui, sans-serif`;
-  const maxW = t.width ?? 0;
+  const maxW = wrapWidthForText(t, canvasWidth);
   const out: string[] = [];
   for (const para of (t.text || " ").split("\n")) {
     out.push(...wrapLine(ctx, para, maxW));
@@ -37,10 +47,19 @@ export function layoutTextLines(
   return out;
 }
 
-export function textBounds(t: CanvasText) {
-  const lines = (t.text || " ").split("\n").length;
-  const w = t.width ?? Math.max(80, (t.text.length || 1) * t.fontSize * 0.62);
-  const h = t.height ?? Math.max(t.fontSize * LINE_HEIGHT, lines * t.fontSize * LINE_HEIGHT);
+export function textBounds(t: CanvasText, canvasWidth?: number) {
+  const maxW = wrapWidthForText(t, canvasWidth);
+  const charW = t.fontSize * 0.95;
+  const cols = maxW >= 8 ? Math.max(1, Math.floor(maxW / charW)) : Number.POSITIVE_INFINITY;
+  let lineCount = 0;
+  for (const para of (t.text || " ").split("\n")) {
+    const len = Math.max(1, [...para].length);
+    lineCount += Number.isFinite(cols) ? Math.max(1, Math.ceil(len / (cols as number))) : 1;
+  }
+  const w =
+    t.width ??
+    (maxW >= 8 ? maxW : Math.max(80, (t.text.length || 1) * t.fontSize * 0.62));
+  const h = t.height ?? Math.max(t.fontSize * LINE_HEIGHT, lineCount * t.fontSize * LINE_HEIGHT);
   return { w, h };
 }
 
@@ -115,7 +134,7 @@ export function drawPage(
     if (skipTextId && t.id === skipTextId) continue;
     ctx.font = `600 ${t.fontSize}px ui-sans-serif, system-ui, sans-serif`;
     ctx.fillStyle = t.color;
-    const lines = layoutTextLines(ctx, t);
+    const lines = layoutTextLines(ctx, t, w);
     const lh = t.fontSize * LINE_HEIGHT;
     lines.forEach((line, i) => {
       ctx.fillText(line || " ", t.x, t.y + i * lh);

@@ -23,19 +23,53 @@ function pageFrameStyle(page: NotePage): CSSProperties | undefined {
   return undefined;
 }
 
-function PageBody({ page, index }: { page: NotePage; index: number }) {
+function NoteMeta({ title, memo }: { title?: string; memo?: string }) {
+  if (!title && !memo) return null;
+  return (
+    <div className="relative z-10 max-w-full border-b border-white/10 px-3 pb-2 pt-3">
+      {title ? (
+        <h2 className="max-w-full text-[15px] font-black leading-snug text-white [overflow-wrap:anywhere] [word-break:break-word]">
+          {title}
+        </h2>
+      ) : null}
+      {memo ? (
+        <p
+          className={`max-w-full whitespace-pre-wrap text-[13px] leading-relaxed text-[#c9d1d9] [overflow-wrap:anywhere] [word-break:break-word] ${
+            title ? "mt-1" : ""
+          }`}
+        >
+          {memo}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PageBody({
+  page,
+  index,
+  title,
+  memo,
+}: {
+  page: NotePage;
+  index: number;
+  title?: string;
+  memo?: string;
+}) {
   const imageSrc = isDisplayImageSrc(page.image) ? page.image : undefined;
+  const showMeta = index === 0 && Boolean(title || memo);
   return (
     <div
-      className="paper-grid relative w-full overflow-visible rounded-2xl border border-gray-800 bg-[#0b1220]"
+      className="paper-grid relative w-full max-w-full overflow-hidden rounded-2xl border border-gray-800 bg-[#0b1220]"
       style={pageFrameStyle(page)}
     >
+      {showMeta ? <NoteMeta title={title} memo={memo} /> : null}
       {imageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={imageSrc}
           alt={`ノート ${index + 1}ページ`}
-          className="pointer-events-none block h-auto w-full select-none rounded-2xl"
+          className="pointer-events-none block h-auto w-full max-w-full select-none rounded-2xl"
           draggable={false}
         />
       ) : (
@@ -59,10 +93,10 @@ function PageBody({ page, index }: { page: NotePage; index: number }) {
               />
             </svg>
           )}
-          <div className="relative z-10 flex min-h-[8rem] flex-col p-3">
+          <div className="relative z-10 flex min-h-[8rem] max-w-full flex-col overflow-hidden p-3">
             {page.latex ? (
-              <div className="mt-1">
-                <LatexText text={page.latex} className="text-sm" />
+              <div className="mt-1 max-w-full [overflow-wrap:anywhere] [word-break:break-word]">
+                <LatexText text={page.latex} className="max-w-full text-sm" />
               </div>
             ) : null}
           </div>
@@ -72,7 +106,17 @@ function PageBody({ page, index }: { page: NotePage; index: number }) {
   );
 }
 
-export function NotePages({ pages, className = "" }: { pages: NotePage[]; className?: string }) {
+export function NotePages({
+  pages,
+  className = "",
+  title,
+  memo,
+}: {
+  pages: NotePage[];
+  className?: string;
+  title?: string;
+  memo?: string;
+}) {
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(0);
   const swipe = useRef<{ x: number; y: number; id: number } | null>(null);
@@ -132,7 +176,7 @@ export function NotePages({ pages, className = "" }: { pages: NotePage[]; classN
             exit={{ x: dir === 0 ? 0 : dir * -36, opacity: 0.35 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
-            <PageBody page={page} index={current} />
+            <PageBody page={page} index={current} title={title} memo={memo} />
           </motion.div>
         </AnimatePresence>
 

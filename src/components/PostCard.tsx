@@ -40,18 +40,28 @@ function isTypedNotebook(post: Post) {
   return post.kind === "solution" && !post.pages?.length;
 }
 
+function cardMeta(post: Post) {
+  const title = post.title?.trim() ?? "";
+  const memo = post.solution?.trim() ?? "";
+  let body = post.text ?? "";
+  if (title) {
+    const prefix = `**${title}**\n\n`;
+    if (body.startsWith(prefix)) body = body.slice(prefix.length);
+    if (body.trim() === title) body = "";
+  }
+  if (body.trim() === "手書きの問題") body = "";
+  return { title, memo, body };
+}
+
 function typedNotebookPages(post: Post) {
-  const title = post.title?.trim();
   const pages = post.pages;
   if (pages?.some((p) => Boolean(isDisplayImageSrc(p.image)) || Boolean(p.latex?.trim()))) {
-    if (!title) return pages;
-    return pages.map((p, i) => {
-      if (i !== 0 || isDisplayImageSrc(p.image) || p.latex.includes(title)) return p;
-      return { ...p, latex: `**${title}**\n\n${p.latex}` };
-    });
+    return pages;
   }
-  if (post.text.trim()) {
-    return [{ id: `${post.id}-typed`, latex: post.text, doodle: 0 }];
+  const { body } = cardMeta(post);
+  const latex = body.trim() || (!post.title?.trim() ? post.text.trim() : "");
+  if (latex) {
+    return [{ id: `${post.id}-typed`, latex, doodle: 0 }];
   }
   return [];
 }
@@ -120,6 +130,10 @@ export function PostCard({
   const comments = repliesTo(post.id).filter((p) => p.kind === "reply");
   const typed = isTypedNotebook(post);
   const typedPages = typed ? typedNotebookPages(post) : [];
+  const meta = cardMeta(post);
+  const hasNotebook = typedPages.length > 0 || Boolean(post.pages && post.pages.length > 0);
+  const showCaption = !typed && Boolean(meta.body.trim());
+  const metaOnly = !hasNotebook && Boolean(meta.title || meta.memo);
 
   useEffect(() => {
     if (!repostOpen) return;
@@ -374,9 +388,19 @@ export function PostCard({
             </div>
           </div>
 
-          {!typed && (
-            <Link href={`/p/${post.id}`} className="mt-2 block">
-              <LatexText text={post.text} className="text-[15px] text-[#e7e9ea]" />
+          {metaOnly && (
+            <div className="mt-2 max-w-full">
+              <NotePages
+                pages={[{ id: `${post.id}-meta`, latex: "", doodle: 0 }]}
+                title={meta.title}
+                memo={meta.memo}
+              />
+            </div>
+          )}
+
+          {showCaption && (
+            <Link href={`/p/${post.id}`} className="mt-2 block max-w-full">
+              <LatexText text={meta.body} className="max-w-full text-[15px] text-[#e7e9ea]" />
             </Link>
           )}
 
@@ -406,11 +430,11 @@ export function PostCard({
             <div
               className={
                 authorVerified(author.id)
-                  ? "mt-2 rounded-2xl border border-amber-400/50 p-1 shadow-[0_0_20px_rgba(251,191,36,0.15)]"
-                  : ""
+                  ? "mt-2 max-w-full rounded-2xl border border-amber-400/50 p-1 shadow-[0_0_20px_rgba(251,191,36,0.15)]"
+                  : "max-w-full"
               }
             >
-              <NotePages pages={typedPages} />
+              <NotePages pages={typedPages} title={meta.title} memo={meta.memo} />
             </div>
           )}
 
@@ -427,11 +451,11 @@ export function PostCard({
             <div
               className={
                 authorVerified(author.id)
-                  ? "mt-2 rounded-2xl border border-amber-400/50 p-1 shadow-[0_0_20px_rgba(251,191,36,0.15)]"
-                  : ""
+                  ? "mt-2 max-w-full rounded-2xl border border-amber-400/50 p-1 shadow-[0_0_20px_rgba(251,191,36,0.15)]"
+                  : "max-w-full"
               }
             >
-              <NotePages pages={post.pages} />
+              <NotePages pages={post.pages} title={meta.title} memo={meta.memo} />
             </div>
           )}
 

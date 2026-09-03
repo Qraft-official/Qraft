@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  applyMathfieldModePolicy,
   attachJapaneseTextMode,
   attachMultilineMathfield,
   attachPlainTextMenu,
@@ -75,16 +76,33 @@ export function VisualMathEditor({
     const keepVkHidden = () => window.mathVirtualKeyboard?.hide();
     const onFocusIn = () => {
       keepVkHidden();
+      applyMathfieldModePolicy(mf, inputModeRef.current);
+      if (inputModeRef.current === "text" && mf.mode !== "text") {
+        setMathfieldInputMode(mf, "text", { focus: false });
+      }
       setMathfieldOsKeyboard(mf, inputModeRef.current === "text");
     };
+    const onFocusOut = (e: Event) => {
+      const fe = e as FocusEvent;
+      const next = fe.relatedTarget;
+      if (next instanceof Node && (mf.contains(next) || mf.shadowRoot?.contains(next))) return;
+      keepVkHidden();
+      // Keep the user-selected [文]/[√x] mode; do not fall back to math + VK.
+    };
+    let revertingMode = false;
     const onModeChange = () => {
-      const mode = mf.mode === "text" ? "text" : "math";
-      inputModeRef.current = mode;
-      setInputMode(mode);
-      setMathfieldOsKeyboard(mf, mode === "text");
+      if (revertingMode) return;
+      if (inputModeRef.current !== "text" || mf.mode === "text") return;
+      revertingMode = true;
+      try {
+        setMathfieldInputMode(mf, "text", { focus: false });
+      } finally {
+        revertingMode = false;
+      }
     };
     mf.addEventListener("input", sync);
     mf.addEventListener("focusin", onFocusIn);
+    mf.addEventListener("focusout", onFocusOut);
     mf.addEventListener("mode-change", onModeChange);
     if (value && mf.value !== value) mf.value = value;
 
@@ -93,6 +111,7 @@ export function VisualMathEditor({
       detachJp();
       mf.removeEventListener("input", sync);
       mf.removeEventListener("focusin", onFocusIn);
+      mf.removeEventListener("focusout", onFocusOut);
       mf.removeEventListener("mode-change", onModeChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,13 +130,13 @@ export function VisualMathEditor({
     setInputMode(mode);
     const mf = fieldRef.current;
     if (!mf) return;
-    setMathfieldOsKeyboard(mf, mode === "text");
+    applyMathfieldModePolicy(mf, mode);
     setMathfieldInputMode(mf, mode);
     if (mode === "text") {
       requestAnimationFrame(() => {
         const el = fieldRef.current;
         if (!el) return;
-        setMathfieldOsKeyboard(el, true);
+        applyMathfieldModePolicy(el, "text");
         setMathfieldInputMode(el, "text");
       });
     } else {

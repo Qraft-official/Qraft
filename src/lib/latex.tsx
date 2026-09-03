@@ -114,7 +114,7 @@ function formatText(value: string) {
 export function LatexText({ text, className = "" }: { text: string; className?: string }) {
   const blocks = useMemo(() => splitCode(text), [text]);
   return (
-    <div className={`whitespace-pre-wrap break-words leading-relaxed [&_.katex-display]:my-2 [&_.katex-display]:block ${className}`}>
+    <div className={`max-w-full whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere] [word-break:break-word] [&_.katex]:max-w-full [&_.katex-display]:my-2 [&_.katex-display]:block [&_.katex-display]:max-w-full ${className}`}>
       {blocks.map((b, bi) => {
         if (b.type === "code") {
           return (

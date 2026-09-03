@@ -11,6 +11,7 @@ import {
   rasterizePageBlob,
   sharedNotebookHeight,
   textBounds,
+  wrapWidthForText,
   type ResizeCorner,
 } from "@/lib/draw-canvas";
 import type { CanvasPage, CanvasText, Stroke } from "@/lib/types";
@@ -366,6 +367,8 @@ export const MultiPageCanvas = forwardRef<
     }
 
     if (textTool) {
+      const canvasW = canvas.getBoundingClientRect().width || sizeRef.current.w;
+      const width = Math.max(64, Math.min(180, canvasW - pt.x - 8));
       const next: CanvasText = {
         id: uid(),
         x: pt.x,
@@ -373,12 +376,12 @@ export const MultiPageCanvas = forwardRef<
         text: "",
         color,
         fontSize: 22,
-        width: 180,
+        width,
         height: 48,
       };
       lastKind.current = "text";
       patchPage((p) => ({ ...p, texts: [...pageTexts(p), next] }), pageIndex);
-      setEditSize({ w: 180, h: 48 });
+      setEditSize({ w: width, h: 48 });
       setSelectedId(next.id);
       setEditingId(next.id);
       setEditValue("");
@@ -498,11 +501,17 @@ export const MultiPageCanvas = forwardRef<
         />
         {showOverlay && activeBox && (
           <div
-            className="absolute z-30"
+            className="absolute z-30 max-w-full"
             style={{
               left: activeBox.x,
               top: activeBox.y,
-              width: boxSize.w,
+              width: Math.min(
+                boxSize.w,
+                wrapWidthForText(
+                  { ...activeBox, width: boxSize.w },
+                  wrapEls.current[pageIndex]?.getBoundingClientRect().width || sizeRef.current.w,
+                ),
+              ),
               height: boxSize.h,
               pointerEvents: "auto",
               touchAction: "none",
@@ -539,7 +548,7 @@ export const MultiPageCanvas = forwardRef<
                     if (e.key === "Escape") finishEdit();
                     e.stopPropagation();
                   }}
-                  className="h-full w-full resize-none rounded-md border-2 border-aha bg-black/85 px-1.5 py-0.5 font-semibold leading-[1.35] whitespace-pre-wrap text-white outline-none"
+                  className="h-full w-full max-w-full resize-none rounded-md border-2 border-aha bg-black/85 px-1.5 py-0.5 font-semibold leading-[1.35] break-words whitespace-pre-wrap text-white outline-none [overflow-wrap:anywhere] [word-break:break-word]"
                   style={{
                     color: activeBox.color,
                     fontSize: activeBox.fontSize,

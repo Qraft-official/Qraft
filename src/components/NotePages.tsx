@@ -1,8 +1,9 @@
 "use client";
 
+import { fontSizeClass } from "@/lib/constants";
 import { LatexText } from "@/lib/latex";
 import { isDisplayImageSrc } from "@/lib/problem-images";
-import type { NotePage } from "@/lib/types";
+import type { FontSize, NotePage } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
@@ -50,11 +51,13 @@ function PageBody({
   index,
   title,
   memo,
+  fontSize,
 }: {
   page: NotePage;
   index: number;
   title?: string;
   memo?: string;
+  fontSize?: FontSize;
 }) {
   const imageSrc = isDisplayImageSrc(page.image) ? page.image : undefined;
   const showMeta = index === 0 && Boolean(title || memo);
@@ -96,7 +99,7 @@ function PageBody({
           <div className="relative z-10 flex min-h-[8rem] max-w-full flex-col p-3">
             {page.latex ? (
               <div className="mt-1 max-w-full [overflow-wrap:anywhere] [word-break:break-word]">
-                <LatexText text={page.latex} className="max-w-full text-sm" />
+                <LatexText text={page.latex} className={`max-w-full ${fontSizeClass(fontSize)}`} />
               </div>
             ) : null}
           </div>
@@ -111,11 +114,13 @@ export function NotePages({
   className = "",
   title,
   memo,
+  fontSize,
 }: {
   pages: NotePage[];
   className?: string;
   title?: string;
   memo?: string;
+  fontSize?: FontSize;
 }) {
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(0);
@@ -176,7 +181,7 @@ export function NotePages({
             exit={{ x: dir === 0 ? 0 : dir * -36, opacity: 0.35 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
-            <PageBody page={page} index={current} title={title} memo={memo} />
+            <PageBody page={page} index={current} title={title} memo={memo} fontSize={fontSize} />
           </motion.div>
         </AnimatePresence>
 

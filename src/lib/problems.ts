@@ -6,7 +6,7 @@ import { asDifficulty } from "./difficulty";
 import { persistHandwritingPages, firstDrawingUrl } from "./problem-images";
 import { supabase } from "./supabase";
 import { userIsVerified } from "./verified";
-import type { NotePage, Post, Subject, User } from "./types";
+import type { FontSize, NotePage, Post, Subject, User } from "./types";
 
 export type ProblemRow = {
   id: string;
@@ -28,6 +28,7 @@ export type ProblemRow = {
   is_hard_spotlight?: boolean | null;
   promoted?: boolean | null;
   promoted_at?: string | null;
+  font_size?: string | null;
 };
 
 export type ProfileRow = {
@@ -50,6 +51,7 @@ export type NewProblem = {
   mode?: ProblemMode;
   correctAnswer?: string | null;
   difficultyLevel?: number;
+  fontSize?: FontSize;
 };
 
 export type ProblemPatch = {
@@ -62,10 +64,16 @@ export type ProblemPatch = {
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
 
 const PROBLEM_COLUMNS =
-  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at";
+  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, font_size";
 
 export function asSubject(value: string): Subject {
   return SUBJECTS.includes(value as Subject) ? (value as Subject) : "math";
+}
+
+const FONT_SIZE_VALUES: FontSize[] = ["sm", "base", "lg", "xl"];
+function asFontSize(value?: string | null): FontSize | undefined {
+  if (!value) return undefined;
+  return FONT_SIZE_VALUES.includes(value as FontSize) ? (value as FontSize) : undefined;
 }
 
 export function fallbackUser(id: string, profile?: ProfileRow | null): User {
@@ -151,6 +159,7 @@ export function problemToPost(row: ProblemRow, viewerId?: string | null): Post {
     isHardSpotlight: !!row.is_hard_spotlight,
     promoted: !!row.promoted,
     promotedAt: row.promoted_at ?? undefined,
+    fontSize: asFontSize(row.font_size),
   };
 }
 
@@ -249,6 +258,7 @@ export async function insertProblem(input: NewProblem): Promise<{
       mode: challenge.mode,
       correct_answer: challenge.correct_answer,
       difficulty_level: asDifficulty(input.difficultyLevel),
+      font_size: input.fontSize ?? null,
     })
     .select(PROBLEM_COLUMNS)
     .single();

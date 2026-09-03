@@ -1,6 +1,7 @@
 export type Subject = "math" | "physics" | "chemistry";
 export type Tier = 1 | 2 | 3 | 4 | 5;
 export type PostKind = "problem" | "solution" | "sprint" | "reply";
+export type FontSize = "sm" | "base" | "lg" | "xl";
 export type ProblemMode = "question" | "challenge" | "aha";
 export type ChallengeGrade = "correct" | "incorrect";
 export type FeedTab = "foryou" | "following" | "sprint" | "lounge";
@@ -82,6 +83,7 @@ export type Post = {
   promoted?: boolean;
   promotedAt?: string;
   challengeGrade?: ChallengeGrade;
+  fontSize?: FontSize;
 };
 
 export type RatingKind = "aha" | "elegance";

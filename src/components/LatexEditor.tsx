@@ -1,6 +1,8 @@
 "use client";
 
+import { FONT_SIZES, fontSizeClass } from "@/lib/constants";
 import { LatexText } from "@/lib/latex";
+import type { FontSize } from "@/lib/types";
 import { Menu } from "lucide-react";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -31,6 +33,8 @@ export function LatexEditor({
   keyboard,
   header,
   footer,
+  fontSize,
+  onFontSizeChange,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -39,6 +43,8 @@ export function LatexEditor({
   keyboard?: boolean;
   header?: ReactNode;
   footer?: ReactNode;
+  fontSize?: FontSize;
+  onFontSizeChange?: (fs: FontSize) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const draftRef = useRef(value);
@@ -192,6 +198,25 @@ export function LatexEditor({
               {f.label}
             </button>
           ))}
+          {onFontSizeChange && (
+            <div className="ml-1 flex items-center gap-0.5">
+              {FONT_SIZES.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => onFontSizeChange(f.id)}
+                  className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                    (fontSize ?? "sm") === f.id
+                      ? "bg-aha text-black"
+                      : "text-muted hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="relative ml-auto shrink-0">
             <button
               type="button"
@@ -250,7 +275,7 @@ export function LatexEditor({
         >
           <p className="mb-1 text-[10px] font-bold tracking-wide text-muted">LIVE PREVIEW · KaTeX</p>
           {value.trim() ? (
-            <LatexText text={value} className="max-w-full break-words text-sm [&_.katex-display]:overflow-x-auto" />
+            <LatexText text={value} className={`max-w-full break-words ${fontSizeClass(fontSize)} [&_.katex-display]:overflow-x-auto`} />
           ) : (
             <p className="text-xs text-muted">$数式$ と見出しがここに描画されます。</p>
           )}

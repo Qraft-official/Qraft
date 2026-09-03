@@ -1,5 +1,7 @@
 "use client";
 
+import { FONT_SIZES } from "@/lib/constants";
+import type { FontSize } from "@/lib/types";
 import {
   applyMathfieldModePolicy,
   attachJapaneseTextMode,
@@ -25,6 +27,8 @@ export function VisualMathEditor({
   compact = false,
   showChrome,
   showKeyboard = true,
+  fontSize,
+  onFontSizeChange,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -35,6 +39,8 @@ export function VisualMathEditor({
   compact?: boolean;
   showChrome?: boolean;
   showKeyboard?: boolean;
+  fontSize?: FontSize;
+  onFontSizeChange?: (fs: FontSize) => void;
 }) {
   const fieldRef = useRef<MathfieldElement | null>(null);
   const onChangeRef = useRef(onChange);
@@ -197,6 +203,24 @@ export function VisualMathEditor({
             視覚数式エディタ · 枠をタップして中に入力
           </p>
           <div className="flex items-center gap-1">
+            {onFontSizeChange && (
+              <div className="flex items-center gap-0.5">
+                {FONT_SIZES.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => onFontSizeChange(f.id)}
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                      (fontSize ?? "sm") === f.id
+                        ? "bg-aha text-black"
+                        : "text-muted hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {onToggleExpand && (
               <button
                 type="button"

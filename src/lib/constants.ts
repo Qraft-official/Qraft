@@ -1,4 +1,15 @@
-import type { Subject, Tier } from "./types";
+import type { FontSize, Subject, Tier } from "./types";
+
+export const FONT_SIZES: { id: FontSize; label: string; class: string }[] = [
+  { id: "sm", label: "小", class: "text-sm" },
+  { id: "base", label: "標準", class: "text-base" },
+  { id: "lg", label: "大", class: "text-lg" },
+  { id: "xl", label: "特大", class: "text-xl" },
+];
+
+export function fontSizeClass(fs?: FontSize): string {
+  return FONT_SIZES.find((f) => f.id === fs)?.class ?? "text-sm";
+}
 
 export const ME_ID = "u-me";
 export const DEV_USER_IDS = ["u-me"] as const;

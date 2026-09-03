@@ -42,16 +42,6 @@ function insertOpts(format: "latex" | "plain-text") {
 
 export function insertMathNewline(mf: MathfieldElement) {
   mf.focus();
-  if (mf.mode === "text") {
-    if (mf.insert("\n", insertOpts("plain-text"))) {
-      emitMathfieldInput(mf);
-      return;
-    }
-    if (mf.insert("\n", insertOpts("latex"))) {
-      emitMathfieldInput(mf);
-      return;
-    }
-  }
   mf.insert("\\\\", insertOpts("latex"));
   emitMathfieldInput(mf);
 }

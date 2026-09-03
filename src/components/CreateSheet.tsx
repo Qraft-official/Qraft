@@ -6,7 +6,7 @@ import { generateAiProblem } from "@/lib/premium";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
 import { useApp } from "@/lib/store";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
-import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
+import type { CanvasPage, FontSize, ProblemMode, Subject, Tier } from "@/lib/types";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, HelpCircle, Keyboard, Maximize2, Menu, PenLine, Sparkles, X } from "lucide-react";
@@ -78,6 +78,7 @@ export function CreateSheet() {
   const [difficultyLevel, setDifficultyLevel] = useState<Tier>(3);
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [solverAnswer, setSolverAnswer] = useState("");
+  const [fontSize, setFontSize] = useState<FontSize>("base");
   const [pulseToast, setPulseToast] = useState("");
   const [editorExpanded, setEditorExpanded] = useState(false);
   const [modeHelp, setModeHelp] = useState<ProblemMode | null>(null);
@@ -188,6 +189,7 @@ export function CreateSheet() {
       setPostMode("question");
       setModeHelp(null);
       setCorrectAnswer("");
+      setFontSize("base");
     }
     if (composer.mode === "solution") {
       setText("");
@@ -199,6 +201,7 @@ export function CreateSheet() {
       setPostError("");
       setPosting(false);
       setSolverAnswer("");
+      setFontSize("base");
       const q = getPost(composer.quotePostId);
       if (q) setSubject(q.subject);
     }
@@ -318,6 +321,7 @@ export function CreateSheet() {
           mode: isSprintProblem ? "aha" : postMode,
           correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
           difficultyLevel,
+          fontSize: fontSize !== "base" ? fontSize : undefined,
           pages: typedPages.map((p, i) => ({
             id: p.id,
             latex: wrapMathliveLatex(p.latex),
@@ -579,6 +583,8 @@ export function CreateSheet() {
                     footer={extras}
                     expanded={editorExpanded}
                     onToggleExpand={() => setEditorExpanded((v) => !v)}
+                    fontSize={fontSize}
+                    onFontSizeChange={setFontSize}
                   />
                   )
                 )}
@@ -698,6 +704,8 @@ export function CreateSheet() {
                     footer={<div className="min-w-0">{photoRow}</div>}
                     expanded={false}
                     onToggleExpand={() => setEditorExpanded(true)}
+                    fontSize={fontSize}
+                    onFontSizeChange={setFontSize}
                   />
                   )
                 )}
@@ -744,6 +752,7 @@ export function CreateSheet() {
                             })),
                             problemId: quotePostId,
                             solutionFormat: "typed",
+                            fontSize: fontSize !== "base" ? fontSize : undefined,
                             photo,
                             solverAnswer: quotingChallenge ? solverAnswer : undefined,
                           });
@@ -836,6 +845,8 @@ export function CreateSheet() {
                         setTypedIndex(Math.min(typedIndex, next.length - 1));
                       }}
                       expanded
+                      fontSize={fontSize}
+                      onFontSizeChange={setFontSize}
                     />
                   )}
                 </div>

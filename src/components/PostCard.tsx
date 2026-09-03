@@ -6,6 +6,7 @@ import { isActivePromotion } from "@/lib/recommend";
 import { referralFetch } from "@/lib/referral-client";
 import { sharePost } from "@/lib/share";
 import { isDisplayImageSrc } from "@/lib/problem-images";
+import { fontSizeClass } from "@/lib/constants";
 import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
@@ -400,7 +401,7 @@ export function PostCard({
 
           {showCaption && (
             <Link href={`/p/${post.id}`} className="mt-2 block max-w-full">
-              <LatexText text={meta.body} className="max-w-full text-[15px] text-[#e7e9ea]" />
+              <LatexText text={meta.body} className={`max-w-full ${fontSizeClass(post.fontSize)} text-[#e7e9ea]`} />
             </Link>
           )}
 
@@ -434,7 +435,7 @@ export function PostCard({
                   : "max-w-full"
               }
             >
-              <NotePages pages={typedPages} title={meta.title} memo={meta.memo} />
+              <NotePages pages={typedPages} title={meta.title} memo={meta.memo} fontSize={post.fontSize} />
             </div>
           )}
 
@@ -455,7 +456,7 @@ export function PostCard({
                   : "max-w-full"
               }
             >
-              <NotePages pages={post.pages} title={meta.title} memo={meta.memo} />
+              <NotePages pages={post.pages} title={meta.title} memo={meta.memo} fontSize={post.fontSize} />
             </div>
           )}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import type { FontSize } from "@/lib/types";
 import type { ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -18,6 +19,8 @@ export function TypedNotebook({
   footer,
   expanded,
   onToggleExpand,
+  fontSize,
+  onFontSizeChange,
 }: {
   pages: TypedPage[];
   index: number;
@@ -29,6 +32,8 @@ export function TypedNotebook({
   footer?: ReactNode;
   expanded?: boolean;
   onToggleExpand?: () => void;
+  fontSize?: FontSize;
+  onFontSizeChange?: (fs: FontSize) => void;
 }) {
   const page = pages[index] ?? pages[0];
 
@@ -77,6 +82,8 @@ export function TypedNotebook({
             onChange={(latex) => onChangeLatex(latex, index)}
             expanded
             showKeyboard
+            fontSize={fontSize}
+            onFontSizeChange={onFontSizeChange}
           />
         )
       ) : (
@@ -94,6 +101,8 @@ export function TypedNotebook({
                   showChrome={i === 0}
                   showKeyboard={i === index}
                   onToggleExpand={i === 0 ? onToggleExpand : undefined}
+                  fontSize={fontSize}
+                  onFontSizeChange={i === 0 ? onFontSizeChange : undefined}
                 />
               </div>
             ))}

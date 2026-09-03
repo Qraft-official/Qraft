@@ -69,6 +69,7 @@ import type {
   ActivityItem,
   CanvasPage,
   Composer,
+  FontSize,
   Post,
   ProfilePatch,
   RatingKind,
@@ -142,6 +143,7 @@ type Store = {
     solutionFormat?: "handwriting" | "typed";
     photo?: string;
     solverAnswer?: string;
+    fontSize?: FontSize;
   }) => Promise<{ error?: string }>;
   addReply: (input: { replyToId: string; text: string }) => Promise<{ error?: string }>;
   deleteComment: (id: string) => Promise<{ error?: string }>;
@@ -997,6 +999,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       solutionFormat?: "handwriting" | "typed";
       photo?: string;
       solverAnswer?: string;
+      fontSize?: FontSize;
     }) => {
       if (!input.problemId) return { error: "引用する問題がありません" };
       const {
@@ -1040,6 +1043,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         solutionFormat: format,
         solverAnswer: isChallenge ? solverAnswer : undefined,
         challengeGrade,
+        fontSize: input.fontSize,
         createdAt: new Date().toISOString(),
         replyCount: 0,
         repostCount: 0,

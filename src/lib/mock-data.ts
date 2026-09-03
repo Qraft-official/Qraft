@@ -214,6 +214,8 @@ export const POSTS: Post[] = [
     subject: "math",
     problemId: "p1",
     solutionFormat: "typed",
+    title: "置換で一発",
+    solution: "検算は a=b=c=√3。最大値は 3/2。",
     text: "## 方針\n$a=x+\\frac{1}{x}$ と置くと $a+b+c=abc$ がきれいになる。\n\n$$\\sum_{cyc}\\frac{1}{a^2+1}=\\frac{3}{2}$$\n\n**検算** は $a=b=c=\\sqrt{3}$。\n\n```python\nprint(3 / 2)\n```",
     createdAt: "2026-08-29T19:40:00",
     replyCount: 5,

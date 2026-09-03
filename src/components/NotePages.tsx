@@ -60,7 +60,7 @@ function PageBody({
   const showMeta = index === 0 && Boolean(title || memo);
   return (
     <div
-      className="paper-grid relative w-full max-w-full overflow-hidden rounded-2xl border border-gray-800 bg-[#0b1220]"
+      className="paper-grid relative w-full max-w-full overflow-visible rounded-2xl border border-gray-800 bg-[#0b1220]"
       style={pageFrameStyle(page)}
     >
       {showMeta ? <NoteMeta title={title} memo={memo} /> : null}
@@ -93,7 +93,7 @@ function PageBody({
               />
             </svg>
           )}
-          <div className="relative z-10 flex min-h-[8rem] max-w-full flex-col overflow-hidden p-3">
+          <div className="relative z-10 flex min-h-[8rem] max-w-full flex-col p-3">
             {page.latex ? (
               <div className="mt-1 max-w-full [overflow-wrap:anywhere] [word-break:break-word]">
                 <LatexText text={page.latex} className="max-w-full text-sm" />

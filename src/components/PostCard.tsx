@@ -131,9 +131,7 @@ export function PostCard({
   const typed = isTypedNotebook(post);
   const typedPages = typed ? typedNotebookPages(post) : [];
   const meta = cardMeta(post);
-  const hasNotebook = typedPages.length > 0 || Boolean(post.pages && post.pages.length > 0);
   const showCaption = !typed && Boolean(meta.body.trim());
-  const metaOnly = !hasNotebook && Boolean(meta.title || meta.memo);
 
   useEffect(() => {
     if (!repostOpen) return;
@@ -388,13 +386,21 @@ export function PostCard({
             </div>
           </div>
 
-          {metaOnly && (
-            <div className="mt-2 max-w-full">
-              <NotePages
-                pages={[{ id: `${post.id}-meta`, latex: "", doodle: 0 }]}
-                title={meta.title}
-                memo={meta.memo}
-              />
+          {(meta.title || meta.memo) && (
+            <div className="mt-2 flex max-w-full flex-col gap-1">
+              {meta.title && (
+                <Link
+                  href={`/p/${post.id}`}
+                  className="max-w-full text-lg font-bold leading-snug text-white [overflow-wrap:anywhere] [word-break:break-word]"
+                >
+                  {meta.title}
+                </Link>
+              )}
+              {meta.memo && (
+                <p className="max-w-full whitespace-pre-wrap text-[15px] leading-relaxed text-[#e7e9ea] [overflow-wrap:anywhere] [word-break:break-word]">
+                  {meta.memo}
+                </p>
+              )}
             </div>
           )}
 
@@ -434,7 +440,7 @@ export function PostCard({
                   : "max-w-full"
               }
             >
-              <NotePages pages={typedPages} title={meta.title} memo={meta.memo} />
+              <NotePages pages={typedPages} />
             </div>
           )}
 
@@ -455,7 +461,7 @@ export function PostCard({
                   : "max-w-full"
               }
             >
-              <NotePages pages={post.pages} title={meta.title} memo={meta.memo} />
+              <NotePages pages={post.pages} />
             </div>
           )}
 

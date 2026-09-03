@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Sans_JP } from "next/font/google";
-import Script from "next/script";
 import { headers } from "next/headers";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AppProvider } from "@/lib/store";
@@ -50,18 +49,23 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
       suppressHydrationWarning
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(adsbygoogle = window.adsbygoogle || []).push({google_ad_client: "ca-pub-3606701928621609", enable_page_level_ads: true});`,
+          }}
+        />
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body
         className="min-h-[100vh] min-h-dvh bg-[#0b1220] text-[#e7e9ea] antialiased"
         style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
         suppressHydrationWarning
       >
-        <Script
-          id="adsense-init"
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
-          crossOrigin="anonymous"
-          strategy="beforeInteractive"
-        />
         <noscript>
           <div
             style={{

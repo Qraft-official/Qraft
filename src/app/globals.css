@@ -81,23 +81,31 @@ html.qraft-scroll-lock body {
   display: flex;
   flex-direction: column;
   width: 100%;
+  max-width: 600px;
+  height: fit-content;
   max-height: min(90vh, var(--composer-vvh, 90vh));
-  height: min(90vh, var(--composer-vvh, 90vh));
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   touch-action: pan-y;
 }
 
 @media (min-width: 640px) {
   .composer-dialog {
-    height: min(90vh, var(--composer-vvh, 90vh));
-    max-height: 90vh;
+    height: fit-content;
+    max-height: min(90vh, var(--composer-vvh, 90vh));
   }
+}
+
+.composer-dialog.composer-dialog-expanded {
+  height: min(90vh, var(--composer-vvh, 90vh));
+  max-height: min(90vh, var(--composer-vvh, 90vh));
+  overflow: hidden;
 }
 
 .composer-scroll {
   min-height: 0;
-  flex: 1 1 auto;
-  overflow-y: auto;
+  flex: 0 0 auto;
+  overflow: visible;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;

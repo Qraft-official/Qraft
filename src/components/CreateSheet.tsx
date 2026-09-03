@@ -193,12 +193,12 @@ export function CreateSheet() {
   const close = () => closeComposer();
 
   const modeTabs = (
-    <div className="flex shrink-0 gap-1 px-3 py-1 sm:px-4 sm:py-2">
+    <div className="flex shrink-0 gap-1 px-4 py-2">
       <button
         type="button"
         onClick={() => setInputMode("hand")}
-        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1 text-[11px] font-bold sm:py-2 sm:text-xs ${
-          inputMode === "hand" ? "bg-aha text-black" : "bg-white/5 text-muted"
+        className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
+          inputMode === "hand" ? "bg-aha text-black" : "border border-gray-800 text-muted"
         }`}
       >
         <PenLine size={14} /> 手書き
@@ -206,8 +206,8 @@ export function CreateSheet() {
       <button
         type="button"
         onClick={() => setInputMode("typed")}
-        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1 text-[11px] font-bold sm:py-2 sm:text-xs ${
-          inputMode === "typed" ? "bg-aha text-black" : "bg-white/5 text-muted"
+        className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
+          inputMode === "typed" ? "bg-aha text-black" : "border border-gray-800 text-muted"
         }`}
       >
         <Keyboard size={14} /> 打ち込み
@@ -222,9 +222,9 @@ export function CreateSheet() {
         onChange={(e) => setSolutionDraft(e.target.value)}
         placeholder="解答メモ（任意・非公開でも可）"
         rows={2}
-        className="w-full resize-none rounded-xl border border-gray-800 bg-panel px-3 py-2 text-xs outline-none"
+        className="w-full resize-none border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
       />
-      <div className="rounded-2xl border border-gray-800 bg-panel p-2">
+      <div className="border-b border-gray-800 pb-2">
         <p className="mb-1 flex items-center gap-1 text-[11px] font-bold">
           <Sparkles size={12} className="text-aha" /> AI問題メーカー
         </p>
@@ -233,7 +233,7 @@ export function CreateSheet() {
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             placeholder="例: コーシー・シュワルツ"
-            className="min-w-0 flex-1 rounded-xl border border-gray-800 bg-black px-2 py-1.5 text-xs outline-none"
+            className="min-w-0 flex-1 border-0 bg-transparent px-0 py-1.5 text-xs outline-none"
           />
           <button
             type="button"
@@ -364,22 +364,25 @@ export function CreateSheet() {
       {open && (
         <motion.div
           ref={overlayRef}
-          className="composer-overlay fixed inset-0 z-[60] flex items-end justify-center overflow-hidden overscroll-none bg-black/70 sm:items-center sm:p-4"
+        className="composer-overlay fixed inset-0 z-[60] flex items-center justify-center overflow-hidden overscroll-none bg-black/70 p-3 sm:p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={close}
         >
           <motion.div
+            ref={scrollRef}
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
             onClick={(e) => e.stopPropagation()}
-            className="composer-dialog relative w-full max-w-lg max-h-[90vh] rounded-t-3xl border border-gray-800 bg-black sm:max-w-2xl sm:rounded-3xl md:max-w-3xl"
+            className={`composer-dialog relative mx-auto w-full max-w-[600px] rounded-2xl border border-gray-800 bg-black ${
+              editorExpanded ? "composer-dialog-expanded" : "h-fit max-h-[90vh] overflow-y-auto"
+            }`}
           >
             {openProblem && (
-              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="relative flex h-fit flex-col">
                 {modeHelp && (
                   <button
                     type="button"
@@ -388,7 +391,7 @@ export function CreateSheet() {
                     onClick={() => setModeHelp(null)}
                   />
                 )}
-                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 sm:px-4 sm:py-3">
+                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-4 py-2">
                   <p className="text-sm font-bold">
                     {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
                   </p>
@@ -397,14 +400,13 @@ export function CreateSheet() {
                   </button>
                 </div>
                 <div
-                  ref={scrollRef}
-                  className="composer-scroll flex min-h-0 flex-col gap-1 pb-8 sm:gap-2 sm:pb-6"
+                  className="composer-scroll flex flex-col"
                   onFocusCapture={scrollFocusedField}
                 >
                 <select
                   value={subject}
                   onChange={(e) => setSubject(e.target.value as Subject)}
-                  className="mx-3 mt-2 mb-1 w-[calc(100%-1.5rem)] rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm sm:mx-4 sm:mb-2 sm:w-[calc(100%-2rem)] sm:py-2"
+                  className="w-full border-0 border-b border-gray-800 bg-transparent px-4 py-2.5 text-sm outline-none"
                 >
                   {SUBJECTS.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -416,9 +418,9 @@ export function CreateSheet() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="タイトル（任意）"
-                  className="mx-3 mb-1 w-[calc(100%-1.5rem)] rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm outline-none sm:mx-4 sm:mb-2 sm:w-[calc(100%-2rem)] sm:py-2"
+                  className="w-full border-0 border-b border-gray-800 bg-transparent px-4 py-2.5 text-lg font-semibold outline-none placeholder:text-muted"
                 />
-                <div className="mx-3 mb-1 sm:mx-4 sm:mb-2">
+                <div className="border-b border-gray-800 px-4 py-2">
                   <p className="mb-0.5 text-[10px] font-bold text-muted">難易度</p>
                   <div className="aha-scroll flex flex-nowrap gap-1 overflow-x-auto pb-0.5">
                     {DIFFICULTY_LEVELS.map((d) => (
@@ -439,20 +441,20 @@ export function CreateSheet() {
                   </div>
                 </div>
                 {isSprintProblem && (
-                  <p className="mx-3 mb-1 text-[11px] text-muted sm:mx-4 sm:mb-2">
+                  <p className="border-b border-gray-800 px-4 py-2 text-[11px] text-muted">
                     応募内容は運営メールへ送られ、選別のうえ PULSE として配信されます。タイムラインにはすぐには載りません。
                   </p>
                 )}
                 {!isSprintProblem && (
-                  <div className="relative mx-3 mb-1 grid grid-cols-2 gap-1 sm:mx-4 sm:mb-2 sm:gap-2">
+                  <div className="relative grid grid-cols-2 gap-2 border-b border-gray-800 px-4 py-2">
                     <div className="relative z-[21] flex items-stretch">
                       <button
                         type="button"
                         onClick={() => setPostMode("question")}
-                        className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-2 py-1 text-left sm:rounded-l-2xl sm:px-3 sm:py-2 ${
+                        className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-2 py-1.5 text-left ${
                           postMode === "question"
                             ? "border-aha bg-aha/10"
-                            : "border-gray-800 bg-panel"
+                            : "border-gray-800 bg-transparent"
                         }`}
                       >
                         <p className="text-[11px] font-bold sm:text-sm">教えてQrafter!</p>
@@ -464,10 +466,10 @@ export function CreateSheet() {
                         onClick={() =>
                           setModeHelp((v) => (v === "question" ? null : "question"))
                         }
-                        className={`flex items-center rounded-r-xl border border-l-0 px-1.5 sm:rounded-r-2xl sm:px-2 ${
+                        className={`flex items-center rounded-r-xl border border-l-0 px-1.5 ${
                           postMode === "question"
                             ? "border-aha bg-aha/10 text-white/70"
-                            : "border-gray-800 bg-panel text-muted"
+                            : "border-gray-800 bg-transparent text-muted"
                         }`}
                       >
                         <HelpCircle size={14} strokeWidth={2} />
@@ -486,10 +488,10 @@ export function CreateSheet() {
                       <button
                         type="button"
                         onClick={() => setPostMode("challenge")}
-                        className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-2 py-1 text-left sm:rounded-l-2xl sm:px-3 sm:py-2 ${
+                        className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-2 py-1.5 text-left ${
                           postMode === "challenge"
                             ? "border-orange-400 bg-orange-500/10"
-                            : "border-gray-800 bg-panel"
+                            : "border-gray-800 bg-transparent"
                         }`}
                       >
                         <p className="text-[11px] font-bold sm:text-sm">Challenger</p>
@@ -501,10 +503,10 @@ export function CreateSheet() {
                         onClick={() =>
                           setModeHelp((v) => (v === "challenge" ? null : "challenge"))
                         }
-                        className={`flex items-center rounded-r-xl border border-l-0 px-1.5 sm:rounded-r-2xl sm:px-2 ${
+                        className={`flex items-center rounded-r-xl border border-l-0 px-1.5 ${
                           postMode === "challenge"
                             ? "border-orange-400 bg-orange-500/10 text-white/70"
-                            : "border-gray-800 bg-panel text-muted"
+                            : "border-gray-800 bg-transparent text-muted"
                         }`}
                       >
                         <HelpCircle size={14} strokeWidth={2} />
@@ -525,7 +527,7 @@ export function CreateSheet() {
                           value={correctAnswer}
                           onChange={(e) => setCorrectAnswer(e.target.value)}
                           placeholder="正解"
-                          className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-1.5 text-sm outline-none sm:py-2"
+                          className="w-full border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
                         />
                         <p className="mt-0.5 text-[11px] text-muted">※単位は書かなくていいです</p>
                       </div>
@@ -546,7 +548,7 @@ export function CreateSheet() {
                       </button>
                     </div>
                     {!editorExpanded && (
-                    <div className="notebook-stage mx-3 min-h-0 sm:mx-4">
+                    <div className="notebook-stage mx-4 min-h-0">
                       <MultiPageCanvas
                         ref={canvasRef}
                         pages={pages}
@@ -555,7 +557,7 @@ export function CreateSheet() {
                       />
                     </div>
                     )}
-                    <div className="border-t border-gray-800 px-3 py-2 sm:px-4">
+                    <div className="border-t border-gray-800 px-4 py-2">
                       <p className="mb-1 text-[11px] font-bold text-muted">解答メモ・画像・AI</p>
                       {extras}
                     </div>
@@ -589,22 +591,22 @@ export function CreateSheet() {
                   )
                 )}
                 </div>
-                <div className="composer-footer border-t border-gray-800 px-4 pt-2 sm:pt-3">
-                  {postError && <p className="mb-2 text-xs text-red-400">{postError}</p>}
+                <div className="composer-footer flex items-center justify-end gap-3 border-t border-gray-800 px-4 py-2">
+                  {postError && <p className="mr-auto text-xs text-red-400">{postError}</p>}
                   <button
                     disabled={posting}
                     onClick={submitProblem}
-                    className="w-full rounded-full bg-neon py-2.5 text-sm font-bold text-white disabled:opacity-40 sm:py-3"
+                    className="inline-block rounded-full bg-neon px-5 py-1.5 text-sm font-bold text-white disabled:opacity-40"
                   >
-                    {posting ? "送信中…" : isSprintProblem ? "運営に応募する" : "投稿する"}
+                    {posting ? "送信中…" : isSprintProblem ? "応募する" : "投稿する"}
                   </button>
                 </div>
               </div>
             )}
 
             {openSolution && (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-800 px-3 py-2.5">
+              <div className="relative flex h-fit flex-col">
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-800 px-4 py-2">
                   <div className="flex min-w-0 items-center gap-2">
                     {inputMode === "hand" ? (
                       <PenLine size={16} className="shrink-0 text-aha" />
@@ -617,7 +619,7 @@ export function CreateSheet() {
                     <select
                       value={subject}
                       onChange={(e) => setSubject(e.target.value as Subject)}
-                      className="max-w-[5.5rem] rounded-lg border border-gray-800 bg-panel px-1.5 py-1 text-xs"
+                      className="max-w-[5.5rem] border-0 bg-transparent px-1 py-1 text-xs outline-none"
                     >
                       {SUBJECTS.map((s) => (
                         <option key={s.id} value={s.id}>
@@ -631,14 +633,13 @@ export function CreateSheet() {
                   </div>
                 </div>
                 <div
-                  ref={scrollRef}
-                  className="composer-scroll flex min-h-0 flex-col gap-1 pb-8 sm:gap-2 sm:pb-6"
+                  className="composer-scroll flex flex-col"
                   onFocusCapture={scrollFocusedField}
                 >
                 {modeTabs}
                 {inputMode === "hand" ? (
                   <div>
-                    <div className="border-b border-gray-800 bg-panel/40 px-3 pb-3">
+                    <div className="border-b border-gray-800 px-4 pb-3">
                       <p className="pt-2 text-[10px] font-bold tracking-wide text-muted">
                         引用する問題 · スクロールでいつでも確認できます
                       </p>
@@ -661,7 +662,7 @@ export function CreateSheet() {
                       </button>
                     </div>
                     {!editorExpanded && (
-                    <div className="notebook-stage min-h-0">
+                    <div className="notebook-stage mx-4 min-h-0">
                       <MultiPageCanvas
                         ref={canvasRef}
                         pages={pages}
@@ -695,7 +696,7 @@ export function CreateSheet() {
                       setTypedIndex(Math.min(typedIndex, next.length - 1));
                     }}
                     header={
-                      <div className="mb-2 shrink-0 rounded-2xl border border-gray-800 bg-panel/40 px-1 pb-1">
+                      <div className="mb-2 shrink-0 border-b border-gray-800 px-4 pb-2">
                         <p className="px-2 pt-2 text-[10px] font-bold tracking-wide text-muted">
                           引用する問題 · 上にスクロールして確認
                         </p>
@@ -709,19 +710,20 @@ export function CreateSheet() {
                   )
                 )}
                 </div>
-                <div className="composer-footer border-t border-gray-800 px-4 pt-2 sm:pt-3">
+                <div className="composer-footer flex flex-col items-stretch gap-2 border-t border-gray-800 px-4 py-2">
                   {quotingChallenge && (
-                    <div className="mb-3">
+                    <div>
                       <input
                         value={solverAnswer}
                         onChange={(e) => setSolverAnswer(e.target.value)}
                         placeholder="あなたの答え"
-                        className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm outline-none"
+                        className="w-full border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
                       />
                       <p className="mt-1 text-[11px] text-muted">※単位は書かなくていいです</p>
                     </div>
                   )}
-                  {postError && <p className="mb-2 text-xs text-red-400">{postError}</p>}
+                  <div className="flex items-center justify-end gap-3">
+                  {postError && <p className="mr-auto text-xs text-red-400">{postError}</p>}
                   <button
                     disabled={
                       posting ||
@@ -781,10 +783,11 @@ export function CreateSheet() {
                         close();
                       })();
                     }}
-                    className="w-full rounded-full bg-aha py-3 text-sm font-bold text-black disabled:opacity-40"
+                    className="inline-block rounded-full bg-aha px-5 py-1.5 text-sm font-bold text-black disabled:opacity-40"
                   >
-                    {posting ? "投稿中…" : "引用して公開"}
+                    {posting ? "投稿中…" : "投稿する"}
                   </button>
+                  </div>
                 </div>
               </div>
             )}

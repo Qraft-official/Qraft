@@ -7,6 +7,7 @@ import { AppProvider } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
 import { ADSENSE_CLIENT_ID, isAdsenseCrawler } from "@/lib/adsense";
 import "./globals.css";
+import React from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,7 +51,11 @@ export const viewport: Viewport = {
   themeColor: "#0b1220",
 };
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const ua = (await headers()).get("user-agent");
   const adsensePreview = isAdsenseCrawler(ua);
 

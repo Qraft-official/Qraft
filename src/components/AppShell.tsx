@@ -55,13 +55,20 @@ export function AppShell({
   } = useApp();
   const path = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [inAdFrame, setInAdFrame] = useState(false);
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
   const isLegal = path === "/terms" || path === "/privacy";
   const isInvite = path.startsWith("/i/");
+  const crawlerSafe = adsensePreview || inAdFrame;
 
   useEffect(() => {
     setMounted(true);
+    try {
+      setInAdFrame(window.self !== window.top);
+    } catch {
+      setInAdFrame(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -83,7 +90,7 @@ export function AppShell({
     );
   }
 
-  if (adsensePreview || !mounted || !ready || (authenticated && !profileHydrated)) {
+  if (crawlerSafe || !mounted || !ready || (authenticated && !profileHydrated)) {
     return (
       <>
         {capture}

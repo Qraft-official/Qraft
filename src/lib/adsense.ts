@@ -22,7 +22,9 @@ export const ADSENSE_FRAME_ANCESTORS_CSP = `frame-ancestors ${ADSENSE_FRAME_ANCE
 
 export function isAdsenseCrawler(userAgent: string | null | undefined) {
   if (!userAgent) return false;
-  return /Mediapartners-Google|AdsBot-Google|Google-Adsense|Googlebot/i.test(userAgent);
+  return /Mediapartners-Google|AdsBot-Google|Google-Adsense|Googlebot|APIs-Google|FeedFetcher-Google/i.test(
+    userAgent,
+  );
 }
 
 export function adsenseScriptSrc(clientId: string) {

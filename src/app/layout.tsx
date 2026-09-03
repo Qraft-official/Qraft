@@ -50,19 +50,18 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
       suppressHydrationWarning
     >
-      <head>
-        <Script
-          id="google-adsense"
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
-          strategy="beforeInteractive"
-          crossOrigin="anonymous"
-        />
-      </head>
       <body
         className="min-h-[100vh] min-h-dvh bg-[#0b1220] text-[#e7e9ea] antialiased"
         style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
         suppressHydrationWarning
       >
+        <Script
+          id="adsense-init"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
+          crossOrigin="anonymous"
+          strategy="beforeInteractive"
+        />
         <noscript>
           <div
             style={{
@@ -80,6 +79,21 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </noscript>
         <div id="qraft-root" style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}>
+          <header
+            style={{
+              borderBottom: "1px solid #374151",
+              padding: "12px 16px",
+              backgroundColor: "#0b1220",
+              color: "#e7e9ea",
+            }}
+          >
+            <p style={{ fontSize: "1.125rem", fontWeight: 900, color: "#ffffff", margin: 0 }}>
+              Qraft<span style={{ marginLeft: 4, color: "#ccff00" }}>クラフト</span>
+            </p>
+            <p style={{ fontSize: 12, color: "#8b98a5", margin: "4px 0 0" }}>
+              STEM creators のためのドパミン SNS
+            </p>
+          </header>
           <AppErrorBoundary>
             <AppProvider>
               <AppShell adsensePreview={adsensePreview}>{children}</AppShell>

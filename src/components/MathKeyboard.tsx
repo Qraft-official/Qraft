@@ -129,7 +129,7 @@ export function MathKeyboard({
   const keys = tab === "abc" ? abcKeys(shift) : KEYS[tab];
 
   return (
-    <div className="qraft-math-kb shrink-0 border-t border-gray-800 bg-[#151c24] px-1 pt-0.5 pb-[max(0.15rem,env(safe-area-inset-bottom))]">
+    <div className="qraft-math-kb w-full min-w-0 shrink-0 border-t border-gray-800 bg-[#151c24] px-1 pt-0.5 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:px-2">
       <div className="mb-0.5 grid grid-cols-2 gap-0.5">
         <button
           type="button"

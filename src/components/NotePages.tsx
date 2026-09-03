@@ -1,6 +1,7 @@
 "use client";
 
 import { LatexText } from "@/lib/latex";
+import { isDisplayImageSrc } from "@/lib/problem-images";
 import type { NotePage } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -17,21 +18,22 @@ const PATHS = [
 const SWIPE_PX = 48;
 
 function pageFrameStyle(page: NotePage): CSSProperties | undefined {
-  if (page.image) return undefined;
+  if (isDisplayImageSrc(page.image)) return undefined;
   if (page.contentHeight) return { minHeight: page.contentHeight };
   return undefined;
 }
 
 function PageBody({ page, index }: { page: NotePage; index: number }) {
+  const imageSrc = isDisplayImageSrc(page.image) ? page.image : undefined;
   return (
     <div
       className="paper-grid relative w-full overflow-visible rounded-2xl border border-gray-800 bg-[#0b1220]"
       style={pageFrameStyle(page)}
     >
-      {page.image ? (
+      {imageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={page.image}
+          src={imageSrc}
           alt={`ノート ${index + 1}ページ`}
           className="pointer-events-none block h-auto w-full select-none rounded-2xl"
           draggable={false}

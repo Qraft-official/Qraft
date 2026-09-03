@@ -425,4 +425,27 @@ before insert or update of handle on public.profiles
 for each row
 execute function public.enforce_reserved_handle();
 
+-- Handwriting canvases are stored as PNG in Storage; DB keeps public URLs only.
+insert into storage.buckets (id, name, public)
+values ('problem-images', 'problem-images', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "problem-images public read" on storage.objects;
+create policy "problem-images public read"
+on storage.objects
+for select
+to public
+using (bucket_id = 'problem-images');
+
+drop policy if exists "problem-images authenticated upload" on storage.objects;
+create policy "problem-images authenticated upload"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'problem-images'
+  and (storage.foldername(name))[1] = 'drawings'
+  and (storage.foldername(name))[2] = (select auth.uid())::text
+);
+
 

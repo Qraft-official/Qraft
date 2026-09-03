@@ -5,6 +5,7 @@ import { difficultyLabel } from "@/lib/difficulty";
 import { isActivePromotion } from "@/lib/recommend";
 import { referralFetch } from "@/lib/referral-client";
 import { sharePost } from "@/lib/share";
+import { isDisplayImageSrc } from "@/lib/problem-images";
 import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
@@ -42,10 +43,10 @@ function isTypedNotebook(post: Post) {
 function typedNotebookPages(post: Post) {
   const title = post.title?.trim();
   const pages = post.pages;
-  if (pages?.some((p) => Boolean(p.image) || Boolean(p.latex?.trim()))) {
+  if (pages?.some((p) => Boolean(isDisplayImageSrc(p.image)) || Boolean(p.latex?.trim()))) {
     if (!title) return pages;
     return pages.map((p, i) => {
-      if (i !== 0 || p.image || p.latex.includes(title)) return p;
+      if (i !== 0 || isDisplayImageSrc(p.image) || p.latex.includes(title)) return p;
       return { ...p, latex: `**${title}**\n\n${p.latex}` };
     });
   }
@@ -201,7 +202,8 @@ export function PostCard({
                     オリジナル問題
                     {post.solutionFormat === "typed"
                       ? " · 打ち込み"
-                      : post.solutionFormat === "handwriting" || post.pages?.some((p) => p.image)
+                      : post.solutionFormat === "handwriting" ||
+                          post.pages?.some((p) => isDisplayImageSrc(p.image))
                         ? " · 手書き"
                         : ""}
                   </span>
@@ -407,7 +409,7 @@ export function PostCard({
             </div>
           )}
 
-          {post.photo && !post.pages?.some((p) => p.image) && (
+          {post.photo && isDisplayImageSrc(post.photo) && !post.pages?.some((p) => isDisplayImageSrc(p.image)) && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={post.photo}

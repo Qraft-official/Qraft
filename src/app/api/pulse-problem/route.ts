@@ -39,10 +39,13 @@ export async function POST(request: Request) {
 
   const email = user.email || "(メールなし)";
   const attachment = attachmentFromPhoto(photo);
+  const photoUrl = /^https?:\/\//i.test(photo) ? photo : "";
   const photoNote = photo
     ? attachment
       ? "問題画像を添付しています。"
-      : "問題画像はサイズが大きいためメール添付を省略しました。"
+      : photoUrl
+        ? `問題画像: ${photoUrl}`
+        : "問題画像はサイズが大きいためメール添付を省略しました。"
     : "画像なし";
 
   const text = [
@@ -82,6 +85,7 @@ export async function POST(request: Request) {
     <p><strong>解答メモ / 解説</strong></p>
     ${preHtml(solution || "（なし）")}
     <p>${escapeHtml(photoNote)}</p>
+    ${photoUrl ? `<p><img src="${escapeHtml(photoUrl)}" alt="手書き問題" style="max-width:100%;height:auto;border-radius:12px"/></p>` : ""}
   `;
 
   try {

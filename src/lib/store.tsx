@@ -70,6 +70,7 @@ import type {
   User,
 } from "./types";
 import { sendPulseProblemMail } from "./dev-mail-client";
+import { firstDrawingUrl, persistHandwritingPages } from "./problem-images";
 import {
   ensureWelcomeNotification,
   fetchNotifications,
@@ -128,6 +129,7 @@ type Store = {
     subject: Subject;
     text: string;
     pages?: { id: string; latex: string; doodle: number; image?: string; contentWidth?: number; contentHeight?: number }[];
+    drawingBlobs?: (Blob | null)[];
     problemId?: string;
     solutionFormat?: "handwriting" | "typed";
     photo?: string;
@@ -808,15 +810,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { error: "投稿するにはログインしてください" };
     }
     const authorId = session.user.id || me.id;
+    const hydrated = await persistHandwritingPages(authorId, input.pages, input.drawingBlobs);
+    if (hydrated.error) return { error: hydrated.error };
+    const pages = hydrated.pages;
+    const photo = firstDrawingUrl(pages, input.photo) ?? input.photo;
+    const prepared = { ...input, pages, photo, drawingBlobs: undefined };
 
-    if (input.isSprint) {
+    if (prepared.isSprint) {
       const mail = await sendPulseProblemMail({
-        title: input.title ?? "",
-        text: input.text,
-        subject: input.subject,
-        solution: input.solution,
-        format: input.format,
-        photo: input.photo || input.pages?.find((p) => p.image)?.image,
+        title: prepared.title ?? "",
+        text: prepared.text,
+        subject: prepared.subject,
+        solution: prepared.solution,
+        format: prepared.format,
+        photo: prepared.photo || pages?.find((p) => p.image)?.image,
         authorId,
         authorName: me.name,
         authorHandle: me.handle,
@@ -826,7 +833,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const { post, error } = await insertProblem({
-      ...input,
+      ...prepared,
       isSprint: false,
       authorId,
     });
@@ -896,12 +903,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       subject: Subject;
       text: string;
       pages?: { id: string; latex: string; doodle: number; image?: string; contentWidth?: number; contentHeight?: number }[];
+      drawingBlobs?: (Blob | null)[];
       problemId?: string;
       solutionFormat?: "handwriting" | "typed";
       photo?: string;
       solverAnswer?: string;
     }) => {
       if (!input.problemId) return { error: "引用する問題がありません" };
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const authorId = session?.user.id ?? supabaseUid ?? ME_ID;
+      if (input.drawingBlobs?.some(Boolean) && !session?.user.id) {
+        return { error: "投稿するにはログインしてください" };
+      }
       const problem = getPost(input.problemId);
       const isChallenge = problem?.problemMode === "challenge";
       const solverAnswer = (input.solverAnswer ?? "").trim();
@@ -919,15 +934,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           challengeGrade = res.data.correct === true ? "correct" : "incorrect";
         }
       }
-      const format = input.solutionFormat ?? (input.pages?.length ? "handwriting" : "typed");
+      const hydrated = await persistHandwritingPages(authorId, input.pages, input.drawingBlobs);
+      if (hydrated.error) return { error: hydrated.error };
+      const pages = hydrated.pages;
+      const photo = firstDrawingUrl(pages, input.photo) ?? input.photo;
+      const format = input.solutionFormat ?? (pages?.length ? "handwriting" : "typed");
       const post: Post = {
         id: `local-sol-${Date.now()}`,
-        authorId: supabaseUid ?? ME_ID,
+        authorId,
         kind: "solution",
         subject: input.subject,
         text: input.text,
-        photo: input.photo,
-        pages: input.pages,
+        photo,
+        pages,
         problemId: input.problemId,
         solutionFormat: format,
         solverAnswer: isChallenge ? solverAnswer : undefined,

@@ -156,7 +156,7 @@ export function hitTestText(texts: CanvasText[] | undefined, x: number, y: numbe
   return undefined;
 }
 
-export function rasterizePage(page: CanvasPage, cssW: number, cssH: number) {
+function rasterizePageCanvas(page: CanvasPage, cssW: number, cssH: number) {
   const canvas = document.createElement("canvas");
   const dpr = 2;
   const w = Math.max(1, Math.round(cssW));
@@ -164,10 +164,26 @@ export function rasterizePage(page: CanvasPage, cssW: number, cssH: number) {
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return "";
+  if (!ctx) return null;
   ctx.scale(dpr, dpr);
   drawPage(ctx, page, w, h);
-  return canvas.toDataURL("image/png");
+  return canvas;
+}
+
+export function rasterizePage(page: CanvasPage, cssW: number, cssH: number) {
+  return rasterizePageCanvas(page, cssW, cssH)?.toDataURL("image/png") ?? "";
+}
+
+export function rasterizePageBlob(page: CanvasPage, cssW: number, cssH: number) {
+  const canvas = rasterizePageCanvas(page, cssW, cssH);
+  if (!canvas) return Promise.resolve(null);
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+}
+
+export function pageHasInk(page: CanvasPage) {
+  return page.strokes.length > 0 || (page.texts?.length ?? 0) > 0;
 }
 
 const NOTE_MIN_H = 280;

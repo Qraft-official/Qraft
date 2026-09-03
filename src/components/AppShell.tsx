@@ -118,22 +118,25 @@ export function AppShell({
 
   return (
     <div
-      className={`mx-auto min-h-dvh w-full max-w-lg bg-black md:max-w-2xl lg:max-w-4xl ${
-        composer.open ? "max-h-dvh overflow-hidden" : ""
-      }`}
       style={{ ["--accent" as string]: accentColor }}
       suppressHydrationWarning
     >
-      <FocusBgm />
-      {capture}
-      {children}
-      {!hideChrome && (
-        <>
-          <div className="h-24" />
-          <Fab onClick={() => openComposer({ open: true, mode: "problem" })} />
-          <BottomNav />
-        </>
-      )}
+      <div
+        className={`mx-auto min-h-dvh w-full max-w-lg bg-black md:max-w-2xl lg:max-w-4xl ${
+          composer.open ? "max-h-dvh overflow-hidden" : ""
+        }`}
+      >
+        <FocusBgm />
+        {capture}
+        {children}
+        {!hideChrome && (
+          <>
+            <div className="h-24" />
+            <Fab onClick={() => openComposer({ open: true, mode: "problem" })} />
+            <BottomNav />
+          </>
+        )}
+      </div>
       <CreateSheet />
       <ReplySheet />
       <PremiumModal />

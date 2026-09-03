@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Sans_JP } from "next/font/google";
 import { headers } from "next/headers";
+import Script from "next/script";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AppProvider } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
@@ -26,6 +27,17 @@ const noto = Noto_Sans_JP({
 export const metadata: Metadata = {
   title: "Qraft",
   description: "STEM creators のためのドパミン SNS",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/apple-icon.png",
+  },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Qraft",
+    statusBarStyle: "black-translucent",
+  },
   ...(ADSENSE_CLIENT_ID
     ? { other: { "google-adsense-account": ADSENSE_CLIENT_ID } }
     : {}),
@@ -49,23 +61,19 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
       suppressHydrationWarning
     >
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(adsbygoogle = window.adsbygoogle || []).push({google_ad_client: "ca-pub-3606701928621609", enable_page_level_ads: true});`,
-          }}
-        />
-        <script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
-          crossOrigin="anonymous"
-        />
-      </head>
       <body
         className="min-h-[100vh] min-h-dvh bg-[#0b1220] text-[#e7e9ea] antialiased"
         style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
         suppressHydrationWarning
       >
+        {/* 原因だった adsense-init を削除し、SDKの読み込みのみ残しています */}
+        <Script
+          id="adsense-sdk"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
         <noscript>
           <div
             style={{

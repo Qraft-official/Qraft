@@ -297,7 +297,7 @@ export function CreateSheet() {
           })),
         };
       } else {
-        const images = canvasRef.current?.exportPageImages() ?? [];
+        const images = (await canvasRef.current?.exportPageBlobs()) ?? [];
         const size = canvasRef.current?.getContentSize() ?? { w: 800, h: 280 };
         const hasInk =
           images.some(Boolean) ||
@@ -312,17 +312,17 @@ export function CreateSheet() {
           text: title.trim() || "手書きの問題",
           title,
           solution: solutionDraft,
-          photo: images.find(Boolean) || photo,
+          photo,
           isSprint: isSprintProblem,
           format: "handwriting",
           mode: isSprintProblem ? "question" : postMode,
           correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
           difficultyLevel,
+          drawingBlobs: images,
           pages: pages.map((p, i) => ({
             id: p.id,
             latex: "",
             doodle: i,
-            image: images[i] || undefined,
             contentWidth: size.w,
             contentHeight: size.h,
           })),
@@ -376,7 +376,7 @@ export function CreateSheet() {
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
             onClick={(e) => e.stopPropagation()}
-            className="composer-dialog relative w-full max-w-lg rounded-t-3xl border border-gray-800 bg-black sm:rounded-3xl md:max-w-2xl lg:max-w-4xl"
+            className="composer-dialog relative w-full max-w-lg max-h-[90vh] rounded-t-3xl border border-gray-800 bg-black sm:max-w-2xl sm:rounded-3xl md:max-w-3xl"
           >
             {openProblem && (
               <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -398,7 +398,7 @@ export function CreateSheet() {
                 </div>
                 <div
                   ref={scrollRef}
-                  className="composer-scroll pb-8"
+                  className="composer-scroll flex min-h-0 flex-col gap-1 pb-8 sm:gap-2 sm:pb-6"
                   onFocusCapture={scrollFocusedField}
                 >
                 <select
@@ -632,7 +632,7 @@ export function CreateSheet() {
                 </div>
                 <div
                   ref={scrollRef}
-                  className="composer-scroll pb-8"
+                  className="composer-scroll flex min-h-0 flex-col gap-1 pb-8 sm:gap-2 sm:pb-6"
                   onFocusCapture={scrollFocusedField}
                 >
                 {modeTabs}
@@ -754,16 +754,16 @@ export function CreateSheet() {
                             solverAnswer: quotingChallenge ? solverAnswer : undefined,
                           });
                         } else {
-                          const images = canvasRef.current?.exportPageImages() ?? [];
+                          const images = (await canvasRef.current?.exportPageBlobs()) ?? [];
                           const size = canvasRef.current?.getContentSize() ?? { w: 800, h: 280 };
                           res = await addSolution({
                             subject,
                             text: text.trim() || "引用解法を投稿した。",
+                            drawingBlobs: images,
                             pages: pages.map((p, i) => ({
                               id: p.id,
                               latex: "",
                               doodle: i,
-                              image: images[i] || undefined,
                               contentWidth: size.w,
                               contentHeight: size.h,
                             })),

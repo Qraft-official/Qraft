@@ -3,7 +3,7 @@ import { ME_ID } from "./constants";
 import { ensureProfile } from "./auth";
 import { asProblemMode, type ProblemMode } from "./challenge";
 import { asDifficulty } from "./difficulty";
-import { supabase } from "./supabase";
+import { persistHandwritingPages, firstDrawingUrl } from "./problem-images";
 import { userIsVerified } from "./verified";
 import type { NotePage, Post, Subject, User } from "./types";
 
@@ -43,6 +43,7 @@ export type NewProblem = {
   photo?: string;
   isSprint?: boolean;
   pages?: NotePage[];
+  drawingBlobs?: (Blob | null)[];
   format?: "handwriting" | "typed";
   authorId?: string;
   mode?: ProblemMode;
@@ -103,7 +104,7 @@ function asNotePages(value: unknown): NotePage[] | undefined {
       id: p.id,
       latex: typeof p.latex === "string" ? p.latex : "",
       doodle: typeof p.doodle === "number" ? p.doodle : 0,
-      image: typeof p.image === "string" ? p.image : undefined,
+      image: typeof p.image === "string" && p.image && !p.image.startsWith("{") ? p.image : undefined,
       contentWidth: typeof p.contentWidth === "number" ? p.contentWidth : undefined,
       contentHeight: typeof p.contentHeight === "number" ? p.contentHeight : undefined,
     });
@@ -224,6 +225,15 @@ export async function insertProblem(input: NewProblem): Promise<{
     return { post: null, error: "Challenger モードでは正解の入力が必須です" };
   }
 
+  const hydrated = await persistHandwritingPages(authorId, input.pages, input.drawingBlobs);
+  if (hydrated.error) return { post: null, error: hydrated.error };
+  const pages = hydrated.pages ?? null;
+  const drawingUrl = firstDrawingUrl(pages ?? undefined, input.photo);
+  const photo =
+    input.format === "handwriting"
+      ? drawingUrl ?? (input.photo && !input.photo.startsWith("data:") ? input.photo : null)
+      : (input.photo ?? null);
+
   const { data, error } = await supabase
     .from("problems")
     .insert({
@@ -232,10 +242,10 @@ export async function insertProblem(input: NewProblem): Promise<{
       problem_text: input.text,
       solution: input.solution?.trim() || null,
       subject: input.subject,
-      photo: input.photo ?? null,
+      photo,
       is_sprint: false,
       sprint_day: null,
-      pages: input.pages ?? null,
+      pages,
       problem_format: input.format ?? null,
       mode: challenge.mode,
       correct_answer: challenge.correct_answer,

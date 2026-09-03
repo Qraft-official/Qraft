@@ -166,11 +166,11 @@ export function VisualMathEditor({
   };
 
   const chrome = showChrome ?? !expanded;
-  const fieldMax = compact ? "max-h-[360px]" : "max-h-[360px]";
+  const fieldMax = "max-h-[360px] w-full min-w-0 sm:max-h-[28rem]";
 
   return (
     <div className={`flex min-h-0 min-w-0 w-full flex-col ${expanded ? "flex-1" : ""}`}>
-      <div className={expanded ? "flex min-h-0 flex-1 flex-col" : compact ? "pt-1" : "px-3 pt-2"}>
+      <div className={expanded ? "flex min-h-0 min-w-0 w-full flex-1 flex-col" : compact ? "w-full min-w-0 pt-1" : "w-full min-w-0 px-3 pt-2 sm:px-4"}>
         {header}
         {chrome && (
         <div className="mb-1.5 flex items-center justify-between gap-2">

@@ -80,7 +80,7 @@ export function TypedNotebook({
           />
         )
       ) : (
-        <div className="flex flex-col gap-3 px-3 pb-2">
+        <div className="flex w-full min-w-0 flex-col gap-3 px-3 pb-2 sm:gap-4 sm:px-4">
           <div className="flex flex-col gap-4">
             {pages.map((p, i) => (
               <div key={p.id} onPointerDown={() => onIndex(i)}>

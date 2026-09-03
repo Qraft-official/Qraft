@@ -6,7 +6,9 @@ import {
   emptyCanvasPage,
   hitResizeHandle,
   hitTestText,
+  pageHasInk,
   rasterizePage,
+  rasterizePageBlob,
   sharedNotebookHeight,
   textBounds,
   type ResizeCorner,
@@ -61,6 +63,7 @@ function applyResize(
 
 export type MultiPageCanvasHandle = {
   exportPageImages: () => string[];
+  exportPageBlobs: () => Promise<(Blob | null)[]>;
   getContentSize: () => { w: number; h: number };
 };
 
@@ -213,7 +216,20 @@ export const MultiPageCanvas = forwardRef<
       flushEdit();
       const { w, h } = sizeRef.current;
       const tall = sharedNotebookHeight(pagesRef.current);
-      return pagesRef.current.map((p) => rasterizePage(p, w, Math.max(h, tall)));
+      return pagesRef.current.map((p) =>
+        pageHasInk(p) ? rasterizePage(p, w, Math.max(h, tall)) : "",
+      );
+    },
+    exportPageBlobs: async () => {
+      flushEdit();
+      const { w, h } = sizeRef.current;
+      const tall = sharedNotebookHeight(pagesRef.current);
+      const height = Math.max(h, tall);
+      return Promise.all(
+        pagesRef.current.map((p) =>
+          pageHasInk(p) ? rasterizePageBlob(p, w, height) : Promise.resolve(null),
+        ),
+      );
     },
     getContentSize: () => {
       const h = sharedNotebookHeight(pagesRef.current);

@@ -7,13 +7,40 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-export function formatAuthError(message: string | null | undefined) {
+export const SIGNUP_HANDLE_TAKEN = "そのアカウントIDは既に登録されています。";
+export const SIGNUP_EMAIL_TAKEN = "そのメールアドレスは既に登録されています。";
+export const SIGNUP_DUP_UNKNOWN =
+  "このアカウントIDまたはメールアドレスは既に登録されています。";
+
+export function formatAuthError(message: string | null | undefined, code?: string | null) {
   const raw = (message ?? "").trim();
-  if (!raw) return "認証に失敗しました";
-  if (/unsupported provider/i.test(raw) || /provider is not enabled/i.test(raw)) {
+  const blob = `${code ?? ""} ${raw}`;
+  if (!raw && !code) return "認証に失敗しました";
+  if (/unsupported provider/i.test(blob) || /provider is not enabled/i.test(blob)) {
     return "メールアドレスとパスワードでログインしてください。";
   }
-  return raw;
+  if (
+    raw === SIGNUP_HANDLE_TAKEN ||
+    /profiles_handle|duplicate key.*\bhandle\b|unique.*\bhandle\b|このアカウントIDは既に/i.test(blob)
+  ) {
+    return SIGNUP_HANDLE_TAKEN;
+  }
+  if (
+    raw === SIGNUP_EMAIL_TAKEN ||
+    /user_already_exists|email_exists/i.test(code ?? "") ||
+    /already registered|already been registered|user already exists|email address (is )?already|already.*email/i.test(
+      blob,
+    )
+  ) {
+    return SIGNUP_EMAIL_TAKEN;
+  }
+  if (
+    raw === SIGNUP_DUP_UNKNOWN ||
+    /database error saving new user|duplicate key|unique constraint|23505/i.test(blob)
+  ) {
+    return SIGNUP_DUP_UNKNOWN;
+  }
+  return raw || "認証に失敗しました";
 }
 
 export function emailRedirectTo() {
@@ -228,7 +255,7 @@ export async function savePublicProfile(
 
   if (error) {
     if (error.code === "23505" || /duplicate|unique/i.test(error.message)) {
-      return { error: "このアカウントIDは既に使われています。別のIDを指定してください" };
+      return { error: SIGNUP_HANDLE_TAKEN };
     }
     if (/RESERVED_HANDLE/i.test(error.message)) {
       return { error: RESERVED_HANDLE_ERROR };

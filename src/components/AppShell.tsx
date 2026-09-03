@@ -90,11 +90,22 @@ export function AppShell({
     );
   }
 
-  if (crawlerSafe || !mounted || !ready || (authenticated && !profileHydrated)) {
+  if (crawlerSafe) {
     return (
       <>
         {capture}
         <SsrFallbackChrome>{children}</SsrFallbackChrome>
+      </>
+    );
+  }
+
+  if (!mounted || !ready || (authenticated && !profileHydrated)) {
+    return (
+      <>
+        {capture}
+        <div className="mx-auto flex min-h-dvh w-full max-w-lg items-center justify-center bg-black px-6 text-sm text-muted">
+          読み込み中…
+        </div>
       </>
     );
   }
@@ -123,7 +134,7 @@ export function AppShell({
     >
       <div
         className={`mx-auto min-h-dvh w-full max-w-lg bg-black md:max-w-2xl lg:max-w-4xl ${
-          composer.open ? "max-h-dvh overflow-hidden" : ""
+          composer.open ? "overflow-hidden" : ""
         }`}
       >
         <FocusBgm />

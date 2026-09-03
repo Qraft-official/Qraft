@@ -119,7 +119,7 @@ export function SettingsScreen() {
         </div>
       </header>
 
-      <div className="lg:flex lg:min-h-[70dvh]">
+      <div className="lg:flex">
         <nav className="shrink-0 border-b border-gray-800 lg:w-64 lg:border-b-0 lg:border-r">
           <ul className="p-2">
             {SETTINGS_TABS.map((t) => {

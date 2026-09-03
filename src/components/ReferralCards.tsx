@@ -1,6 +1,6 @@
 "use client";
 
-import { getDeviceId, savePendingReferralCode } from "@/lib/device-id";
+import { getDeviceId, hasReferralAppliedOnDevice, savePendingReferralCode } from "@/lib/device-id";
 import {
   CAMPAIGN_INVITE_TARGET,
   canShowReferralApplyForm,
@@ -97,7 +97,7 @@ function WelcomeMissionText({
 }
 
 export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
-  const { referralMe, applyReferralCode } = useApp();
+  const { referralMe, referralReady, applyReferralCode } = useApp();
   const [now, setNow] = useState(Date.now());
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -115,7 +115,21 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
     [claim, now],
   );
 
-  if (!referralMe) return null;
+  if (!referralReady) {
+    return (
+      <div className="rounded-2xl border border-gray-800 px-4 py-3 text-[12px] text-muted">
+        紹介情報を読み込み中…
+      </div>
+    );
+  }
+
+  if (!referralMe) {
+    return (
+      <div className="rounded-2xl border border-gray-800 px-4 py-3 text-[12px] text-muted">
+        紹介情報を表示できません。画面を再読み込みしてください。
+      </div>
+    );
+  }
 
   if (!claim) {
     if (!canShowReferralApplyForm(referralMe, now)) return null;
@@ -139,6 +153,11 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
             onClick={() => {
               setBusy(true);
               setError("");
+              if (hasReferralAppliedOnDevice()) {
+                setBusy(false);
+                setError("この端末では既に紹介コードが適用されています");
+                return;
+              }
               savePendingReferralCode(code);
               void applyReferralCode(code.trim(), getDeviceId()).then((res) => {
                 setBusy(false);
@@ -214,11 +233,24 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
 }
 
 export function ReferralInviteCard() {
-  const { referralMe, recordCampaignTap } = useApp();
+  const { referralMe, referralReady, recordCampaignTap } = useApp();
   const [copied, setCopied] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
   const [busy, setBusy] = useState<"follow" | "post" | null>(null);
-  if (!referralMe?.code) return null;
+  if (!referralReady) {
+    return (
+      <div className="rounded-2xl border border-gray-800 px-4 py-3 text-[12px] text-muted">
+        キャンペーン情報を読み込み中…
+      </div>
+    );
+  }
+  if (!referralMe?.code) {
+    return (
+      <div className="rounded-2xl border border-gray-800 px-4 py-3 text-[12px] text-muted">
+        紹介コードを取得できませんでした。画面を再読み込みしてください。
+      </div>
+    );
+  }
   const inviteUrl = inviteUrlFromCode(referralMe.code);
   const invited = Math.min(referralMe.inviteSuccessCount ?? 0, CAMPAIGN_INVITE_TARGET);
   const followDone = Boolean(referralMe.xFollowTapped);

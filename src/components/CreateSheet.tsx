@@ -377,8 +377,8 @@ export function CreateSheet() {
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
             onClick={(e) => e.stopPropagation()}
-            className={`composer-dialog relative mx-auto w-full max-w-[600px] rounded-2xl border border-gray-800 bg-black ${
-              editorExpanded ? "composer-dialog-expanded" : "h-fit max-h-[90vh] overflow-y-auto"
+            className={`composer-dialog relative mx-auto h-fit w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-800 bg-black sm:max-w-2xl md:max-w-3xl ${
+              editorExpanded ? "composer-dialog-expanded overflow-hidden" : ""
             }`}
           >
             {openProblem && (
@@ -400,7 +400,7 @@ export function CreateSheet() {
                   </button>
                 </div>
                 <div
-                  className="composer-scroll flex flex-col"
+                  className="composer-scroll flex w-full min-w-0 flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
                 <select
@@ -633,7 +633,7 @@ export function CreateSheet() {
                   </div>
                 </div>
                 <div
-                  className="composer-scroll flex flex-col"
+                  className="composer-scroll flex w-full min-w-0 flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
                 {modeTabs}

@@ -448,4 +448,23 @@ with check (
   and (storage.foldername(name))[2] = (select auth.uid())::text
 );
 
+create table if not exists public.referral_apply_log (
+  id uuid primary key default gen_random_uuid(),
+  ip text not null,
+  device_id text,
+  user_id uuid references public.profiles (id) on delete set null,
+  success boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists referral_apply_log_ip_created_idx
+  on public.referral_apply_log (ip, created_at desc);
+
+create index if not exists referral_apply_log_ip_success_idx
+  on public.referral_apply_log (ip)
+  where success;
+
+alter table public.referral_apply_log enable row level security;
+revoke all on public.referral_apply_log from anon, authenticated;
+
 

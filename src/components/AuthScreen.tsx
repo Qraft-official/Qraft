@@ -214,7 +214,7 @@ export function AuthScreen() {
             </label>
           )}
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-sm font-bold text-red-500">{error}</p>}
           {info && <p className="text-xs text-aha">{info}</p>}
 
           {mode === "signup" && (

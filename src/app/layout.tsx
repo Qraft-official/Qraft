@@ -62,12 +62,12 @@ export default async function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${geistSans.variable} ${geistMono.variable} ${noto.variable} h-full dark`}
+      className={`${geistSans.variable} ${geistMono.variable} ${noto.variable} dark`}
       style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
       suppressHydrationWarning
     >
       <body
-        className="min-h-[100vh] min-h-dvh bg-[#0b1220] text-[#e7e9ea] antialiased"
+        className="bg-[#0b1220] text-[#e7e9ea] antialiased"
         style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
         suppressHydrationWarning
       >
@@ -95,7 +95,8 @@ export default async function RootLayout({
             </p>
           </div>
         </noscript>
-        <div id="qraft-root" style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}>
+        <div id="qraft-root">
+          {adsensePreview ? (
           <header
             style={{
               borderBottom: "1px solid #374151",
@@ -111,6 +112,7 @@ export default async function RootLayout({
               STEM creators のためのドパミン SNS
             </p>
           </header>
+          ) : null}
           <AppErrorBoundary>
             <AppProvider>
               <AppShell adsensePreview={adsensePreview}>{children}</AppShell>

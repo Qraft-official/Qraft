@@ -128,13 +128,19 @@ export async function applyReferralCode(input: {
   refereeId: string;
   code: string;
   deviceId: string;
+  clientIp?: string;
+  cookieApplied?: boolean;
 }): Promise<{ error?: string; me?: ReferralMe }> {
   const admin = adminSupabase();
   if (!admin) return { error: "紹介プログラムの設定がありません。" };
   const code = input.code.trim().toUpperCase();
   const deviceId = input.deviceId.trim();
+  const clientIp = (input.clientIp || "unknown").slice(0, 64);
   if (!code) return { error: "紹介コードを入力してください。" };
   if (deviceId.length < 8) return { error: "端末情報を確認できませんでした。別のブラウザでお試しください。" };
+  if (input.cookieApplied) {
+    return { error: "この端末では既に紹介コードが適用されています" };
+  }
 
   const { data: existing } = await admin
     .from("referral_claims")
@@ -142,6 +148,41 @@ export async function applyReferralCode(input: {
     .eq("referee_id", input.refereeId)
     .maybeSingle();
   if (existing) return { error: "紹介コードはすでに適用済みです。" };
+
+  const { data: deviceHit } = await admin
+    .from("referral_claims")
+    .select("referee_id")
+    .eq("device_id", deviceId)
+    .maybeSingle();
+  if (deviceHit) {
+    return { error: "この端末では既に紹介コードが適用されています" };
+  }
+
+  const { data: ipHit } = await admin
+    .from("referral_apply_log")
+    .select("id")
+    .eq("ip", clientIp)
+    .eq("success", true)
+    .limit(1)
+    .maybeSingle();
+  if (ipHit && clientIp !== "unknown") {
+    await admin.from("referral_apply_log").insert({
+      ip: clientIp,
+      device_id: deviceId,
+      user_id: input.refereeId,
+      success: false,
+    });
+    return { error: "この端末では既に紹介コードが適用されています" };
+  }
+
+  const { count: recentCount } = await admin
+    .from("referral_apply_log")
+    .select("id", { count: "exact", head: true })
+    .eq("ip", clientIp)
+    .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
+  if ((recentCount ?? 0) >= 20 && clientIp !== "unknown") {
+    return { error: "この端末では既に紹介コードが適用されています" };
+  }
 
   const { data: self } = await admin
     .from("profiles")
@@ -156,15 +197,6 @@ export async function applyReferralCode(input: {
   const createdAt = createdRaw ? new Date(createdRaw).getTime() : NaN;
   if (!Number.isFinite(createdAt) || Date.now() - createdAt >= REFERRAL_APPLY_HOURS * 3600000) {
     return { error: "紹介コードの入力期限（登録から7日以内）を過ぎています。" };
-  }
-
-  const { data: deviceHit } = await admin
-    .from("referral_claims")
-    .select("referee_id")
-    .eq("device_id", deviceId)
-    .maybeSingle();
-  if (deviceHit) {
-    return { error: "同一の端末では紹介コードを複数回使えません。" };
   }
 
   const { data: referrer } = await admin
@@ -190,11 +222,24 @@ export async function applyReferralCode(input: {
     login_streak: 1,
   });
   if (error) {
+    await admin.from("referral_apply_log").insert({
+      ip: clientIp,
+      device_id: deviceId,
+      user_id: input.refereeId,
+      success: false,
+    });
     if (/duplicate|unique/i.test(error.message)) {
-      return { error: "同一の端末では紹介コードを複数回使えません。" };
+      return { error: "この端末では既に紹介コードが適用されています" };
     }
     return { error: error.message };
   }
+
+  await admin.from("referral_apply_log").insert({
+    ip: clientIp,
+    device_id: deviceId,
+    user_id: input.refereeId,
+    success: true,
+  });
 
   await admin.from("profiles").update({ premium_trial_until: trialUntil }).eq("id", input.refereeId);
   await admin.from("notifications").insert({

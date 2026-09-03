@@ -23,17 +23,25 @@
 
 html,
 body {
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 100%;
   background-color: #0b1220;
   color: #e7e9ea;
 }
 
+html {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body {
+  overflow: visible;
+}
+
 #qraft-root {
-  min-height: 100vh;
   min-height: 100dvh;
   background-color: #0b1220;
   color: #e7e9ea;
+  overflow: visible;
 }
 
 body {
@@ -81,7 +89,6 @@ html.qraft-scroll-lock body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 600px;
   height: fit-content;
   max-height: min(90vh, var(--composer-vvh, 90vh));
   overflow-x: hidden;
@@ -212,9 +219,18 @@ html.qraft-scroll-lock body {
   overflow-y: auto;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 768px) {
+  .notebook-stage {
+    min-height: 14rem;
+    max-height: 24rem;
+    height: 22rem;
+  }
   .qraft-math-kb {
-    max-height: 16rem;
+    max-height: none;
+  }
+  .aha-mathfield-visual {
+    min-height: 12rem;
+    max-height: 32rem;
   }
 }
 

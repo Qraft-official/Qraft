@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -14,6 +15,7 @@ import {
   emailRedirectTo,
   ensureProfile,
   formatAuthError,
+  SIGNUP_HANDLE_TAKEN,
   handleFromUser,
   fetchLearningProfile,
   saveLearningProfile,
@@ -24,7 +26,7 @@ import {
 } from "./auth";
 import { isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "./handle";
 import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
-import { getDeviceId, takePendingReferralCode } from "./device-id";
+import { getDeviceId, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
 import { referralFetch } from "./referral-client";
 import { isVerifiedCreator, isComplimentaryPremiumAccount, LOUNGE_POSTS } from "./premium";
@@ -153,6 +155,7 @@ type Store = {
   isDeveloper: boolean;
   hasPremium: boolean;
   referralMe: ReferralMe | null;
+  referralReady: boolean;
   refreshReferral: () => Promise<void>;
   applyReferralCode: (code: string, deviceId: string) => Promise<{ error?: string }>;
   recordCampaignTap: (type: "x_follow" | "x_post") => Promise<{ error?: string }>;
@@ -228,6 +231,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [composer, setComposer] = useState<Composer>(emptyComposer);
   const [subscribed, setSubscribed] = useState(false);
   const [referralMe, setReferralMe] = useState<ReferralMe | null>(null);
+  const [referralReady, setReferralReady] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -245,6 +249,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const dayId = getSprintDayId();
+    setOnboarded(load(STORAGE_KEYS.onboarded, false));
     setTiers(load(STORAGE_KEYS.tiers, USER_MAP[ME_ID].tiers));
     setFollows(load(STORAGE_KEYS.follows, INITIAL_FOLLOWS));
     setLikes(load(STORAGE_KEYS.likes, [] as string[]));
@@ -268,6 +273,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSprint(freshSprint(dayId));
     }
 
+    const hydratedUidRef = { current: null as string | null };
+
     const applySession = (
       uid: string | null,
       meta?: { name?: string; handle?: string; email?: string | null },
@@ -288,6 +295,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setProfileHydrated(true);
         setNotifications([]);
         setReferralMe(null);
+        setReferralReady(false);
       }
     };
 
@@ -296,16 +304,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       email?: string | null;
       user_metadata?: Record<string, unknown> | null;
     }) => {
-      window.setTimeout(() => {
-        void (async () => {
+      if (hydratedUidRef.current === user.id) return;
+      hydratedUidRef.current = user.id;
+      setProfileHydrated(false);
+      void (async () => {
+        try {
           await ensureProfile(user);
           await ensureWelcomeNotification();
           const inbox = await fetchNotifications();
           if (cancelled) return;
           setNotifications(inbox);
-          const { data } = await fetchLearningProfile(user.id);
+          const { data, error } = await fetchLearningProfile(user.id);
           if (cancelled) return;
-          if (data) {
+          if (error) {
+            console.warn("Failed to load learning profile:", error.message);
+          } else if (data) {
             setOnboarded(!!data.onboarded);
             setTiers(tiersFromProfile(data));
             setAge(typeof data.age === "number" ? data.age : null);
@@ -317,32 +330,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } else {
             setOnboarded(false);
           }
-          setProfileHydrated(true);
           const admin = await checkIsAdmin();
           if (!cancelled) setIsAdmin(admin);
           const deviceId = getDeviceId();
-          await referralFetch("/api/referral/event", {
-            method: "POST",
-            body: JSON.stringify({ type: "login" }),
-          });
-          const meRes = await referralFetch("/api/referral");
-          if (!cancelled && !meRes.error && meRes.data && "code" in meRes.data) {
-            setReferralMe(meRes.data as unknown as ReferralMe);
-          }
-          const pending = takePendingReferralCode();
-          const ownCode =
-            meRes.data && "code" in meRes.data ? String((meRes.data as { code?: string }).code ?? "") : "";
-          if (pending && deviceId && pending !== ownCode) {
-            const applied = await referralFetch("/api/referral", {
+          try {
+            await referralFetch("/api/referral/event", {
               method: "POST",
-              body: JSON.stringify({ code: pending, deviceId }),
+              body: JSON.stringify({ type: "login" }),
             });
-            if (!cancelled && !applied.error && applied.data && "code" in applied.data) {
-              setReferralMe(applied.data as unknown as ReferralMe);
+            const meRes = await referralFetch("/api/referral");
+            if (!cancelled && !meRes.error && meRes.data && "code" in meRes.data) {
+              setReferralMe(meRes.data as unknown as ReferralMe);
             }
+            const pending = takePendingReferralCode();
+            const ownCode =
+              meRes.data && "code" in meRes.data
+                ? String((meRes.data as { code?: string }).code ?? "")
+                : "";
+            if (pending && deviceId && pending !== ownCode && !hasReferralAppliedOnDevice()) {
+              const applied = await referralFetch("/api/referral", {
+                method: "POST",
+                body: JSON.stringify({ code: pending, deviceId }),
+              });
+              if (!cancelled && !applied.error && applied.data && "code" in applied.data) {
+                setReferralMe(applied.data as unknown as ReferralMe);
+                markReferralAppliedOnDevice();
+              }
+            }
+          } catch (err) {
+            console.warn("Referral hydrate failed:", err);
+          } finally {
+            if (!cancelled) setReferralReady(true);
           }
-        })();
-      }, 0);
+        } catch (err) {
+          console.warn("Profile hydrate failed:", err);
+        } finally {
+          if (!cancelled) setProfileHydrated(true);
+        }
+      })();
     };
 
     const afterSignIn = (user: {
@@ -350,7 +375,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       email?: string | null;
       user_metadata?: Record<string, unknown> | null;
     }) => {
-      setProfileHydrated(false);
       hydrateLearning(user);
     };
 
@@ -380,18 +404,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         console.warn("Auth bootstrap failed:", err);
-        if (!cancelled) setAuthenticated(false);
+        if (!cancelled) {
+          setAuthenticated(false);
+          setProfileHydrated(true);
+        }
       } finally {
         if (!cancelled) setReady(true);
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       try {
+        if (event === "TOKEN_REFRESHED") return;
         const user = session?.user;
         if (user) {
           applySession(user.id, sessionUserFields(user));
+          if (event === "SIGNED_OUT") return;
           afterSignIn(user);
+          if (event === "INITIAL_SESSION") return;
           void fetchProblems().then((remote) => {
             setRemotePosts(remote.posts);
             setRemoteUsers((prev) => ({ ...prev, ...remote.profiles }));
@@ -400,7 +430,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
           });
         } else {
+          if (event === "INITIAL_SESSION") return;
+          hydratedUidRef.current = null;
           applySession(null);
+          setReferralReady(true);
           setConfusedMine({});
         }
       } catch (err) {
@@ -430,7 +463,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !profileHydrated) return;
     localStorage.setItem(STORAGE_KEYS.onboarded, JSON.stringify(onboarded));
     localStorage.setItem(STORAGE_KEYS.auth, JSON.stringify(authenticated));
     localStorage.setItem(STORAGE_KEYS.tiers, JSON.stringify(tiers));
@@ -448,6 +481,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.reactions, JSON.stringify(reactions));
   }, [
     ready,
+    profileHydrated,
     onboarded,
     tiers,
     follows,
@@ -646,6 +680,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (handle && isReservedHandle(handle)) {
           return { error: RESERVED_HANDLE_ERROR };
         }
+        if (handle) {
+          const { data: taken } = await supabase
+            .from("profiles")
+            .select("id")
+            .ilike("handle", handle)
+            .maybeSingle();
+          if (taken) return { error: SIGNUP_HANDLE_TAKEN };
+        }
         const { data, error } = await supabase.auth.signUp({
           email: input.email.trim(),
           password: input.password,
@@ -657,7 +699,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             },
           },
         });
-        if (error) return { error: formatAuthError(error.message) };
+        if (error) return { error: formatAuthError(error.message, error.code) };
         if (!data.session) {
           return { needsConfirm: true };
         }
@@ -1087,12 +1129,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const applyReferralCode = useCallback(async (code: string, deviceId: string) => {
+    if (hasReferralAppliedOnDevice()) {
+      return { error: "この端末では既に紹介コードが適用されています" };
+    }
     const res = await referralFetch("/api/referral", {
       method: "POST",
       body: JSON.stringify({ code, deviceId }),
     });
     if (!res.error && res.data && "code" in res.data) {
       setReferralMe(res.data as unknown as ReferralMe);
+      markReferralAppliedOnDevice();
     }
     return { error: res.error };
   }, []);
@@ -1268,6 +1314,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isDeveloper,
     hasPremium,
     referralMe,
+    referralReady,
     refreshReferral,
     applyReferralCode,
     recordCampaignTap,

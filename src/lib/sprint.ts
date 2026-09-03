@@ -84,10 +84,7 @@ export function makeOfficialPost(dayId: string): Post {
 /** 21:00 PULSE: always pick from Aha! posts. Ignores user Lv1–Lv5. */
 export function pickAhaPulsePost(posts: Post[], dayId: string, fallback: Post): Post {
   const aha = posts.filter(
-    (p) =>
-      p.problemMode === "aha" &&
-      (p.kind === "problem" || p.kind === "sprint") &&
-      p.kind !== "reply",
+    (p) => p.problemMode === "aha" && (p.kind === "problem" || p.kind === "sprint"),
   );
   const forDay = aha.filter(
     (p) => p.isSprint || p.kind === "sprint" || p.sprintDay === dayId,

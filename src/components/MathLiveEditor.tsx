@@ -3,6 +3,7 @@
 import {
   attachMultilineMathfield,
   attachPlainTextMenu,
+  enableMathfieldWrapping,
   insertPlainTextIntoMathfield,
 } from "@/lib/mathlive";
 import type { MathfieldElement } from "mathlive";
@@ -49,6 +50,7 @@ export function MathLiveEditor({
     if (!mf || !host) return;
 
     mf.mathVirtualKeyboardPolicy = "manual";
+    enableMathfieldWrapping(mf);
     attachPlainTextMenu(mf);
     const detachMultiline = attachMultilineMathfield(mf);
     const kb = window.mathVirtualKeyboard;

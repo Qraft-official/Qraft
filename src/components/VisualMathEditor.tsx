@@ -5,6 +5,7 @@ import {
   attachJapaneseTextMode,
   attachMultilineMathfield,
   attachPlainTextMenu,
+  enableMathfieldWrapping,
   insertMathNewline,
   insertPlainTextIntoMathfield,
   setMathfieldInputMode,
@@ -65,6 +66,7 @@ export function VisualMathEditor({
 
     mf.mathVirtualKeyboardPolicy = "manual";
     window.mathVirtualKeyboard?.hide();
+    enableMathfieldWrapping(mf);
     attachPlainTextMenu(mf);
     const detachMultiline = attachMultilineMathfield(mf);
     const detachJp = attachJapaneseTextMode(mf, (mode) => {
@@ -76,6 +78,7 @@ export function VisualMathEditor({
     const keepVkHidden = () => window.mathVirtualKeyboard?.hide();
     const onFocusIn = () => {
       keepVkHidden();
+      enableMathfieldWrapping(mf);
       applyMathfieldModePolicy(mf, inputModeRef.current);
       if (inputModeRef.current === "text" && mf.mode !== "text") {
         setMathfieldInputMode(mf, "text", { focus: false });

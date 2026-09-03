@@ -194,6 +194,16 @@ export const MultiPageCanvas = forwardRef<
     window.addEventListener("pointercancel", up);
   };
 
+  /** Some mobile IMEs deliver Enter without inserting the break themselves. */
+  const insertTextareaNewline = (el: HTMLTextAreaElement) => {
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? start;
+    const next = `${el.value.slice(0, start)}\n${el.value.slice(end)}`;
+    el.value = next;
+    el.setSelectionRange(start + 1, start + 1);
+    setEditValue(next);
+  };
+
   const flushEdit = () => {
     const id = editingIdRef.current;
     if (!id) return;
@@ -543,10 +553,33 @@ export const MultiPageCanvas = forwardRef<
                   ref={textareaRef}
                   autoFocus
                   value={editValue}
+                  inputMode="text"
+                  enterKeyHint="enter"
+                  autoCapitalize="sentences"
+                  autoCorrect="on"
                   onChange={(e) => setEditValue(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Escape") finishEdit();
+                    if (e.key === "Escape") {
+                      finishEdit();
+                      return;
+                    }
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      insertTextareaNewline(e.currentTarget);
+                    }
                     e.stopPropagation();
+                  }}
+                  onBeforeInput={(e) => {
+                    const ie = e.nativeEvent as InputEvent;
+                    if (ie.isComposing) return;
+                    if (
+                      ie.inputType === "insertLineBreak" ||
+                      ie.inputType === "insertParagraph" ||
+                      (ie.inputType === "insertText" && ie.data === "\n")
+                    ) {
+                      e.preventDefault();
+                      insertTextareaNewline(e.currentTarget);
+                    }
                   }}
                   className="h-full w-full max-w-full resize-none rounded-md border-2 border-aha bg-black/85 px-1.5 py-0.5 font-semibold leading-[1.35] break-words whitespace-pre-wrap text-white outline-none [overflow-wrap:anywhere] [word-break:break-word]"
                   style={{

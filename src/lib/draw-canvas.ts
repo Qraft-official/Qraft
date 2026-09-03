@@ -47,19 +47,29 @@ export function layoutTextLines(
   return out;
 }
 
+const WIDE_CHAR_RE = /[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]/;
+
+/** Bounds are needed outside a canvas context, where `measureText` is absent. */
+function approxLineWidth(line: string, fontSize: number) {
+  let width = 0;
+  for (const ch of line) width += WIDE_CHAR_RE.test(ch) ? fontSize : fontSize * 0.58;
+  return width;
+}
+
 export function textBounds(t: CanvasText, canvasWidth?: number) {
   const maxW = wrapWidthForText(t, canvasWidth);
-  const charW = t.fontSize * 0.95;
-  const cols = maxW >= 8 ? Math.max(1, Math.floor(maxW / charW)) : Number.POSITIVE_INFINITY;
   let lineCount = 0;
   for (const para of (t.text || " ").split("\n")) {
-    const len = Math.max(1, [...para].length);
-    lineCount += Number.isFinite(cols) ? Math.max(1, Math.ceil(len / (cols as number))) : 1;
+    const width = approxLineWidth(para, t.fontSize);
+    lineCount += maxW >= 8 ? Math.max(1, Math.ceil(width / maxW)) : 1;
   }
   const w =
     t.width ??
     (maxW >= 8 ? maxW : Math.max(80, (t.text.length || 1) * t.fontSize * 0.62));
-  const h = t.height ?? Math.max(t.fontSize * LINE_HEIGHT, lineCount * t.fontSize * LINE_HEIGHT);
+  // Wrapped lines must be inside the bounds, otherwise the rasterized note
+  // clips them and hit testing misses the lower lines.
+  const contentH = Math.max(1, lineCount) * t.fontSize * LINE_HEIGHT;
+  const h = Math.max(t.height ?? 0, contentH);
   return { w, h };
 }
 

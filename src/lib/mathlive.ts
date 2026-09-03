@@ -40,20 +40,102 @@ function insertOpts(format: "latex" | "plain-text") {
   };
 }
 
+/**
+ * MathLive only turns Enter into a line break inside a multiline environment.
+ * `addRowAfter` promotes the root to a `lines` environment, so it is the only
+ * command that reliably breaks the line in both math and text mode.
+ */
 export function insertMathNewline(mf: MathfieldElement) {
   mf.focus();
-  if (mf.mode === "text") {
-    if (mf.insert("\n", insertOpts("plain-text"))) {
-      emitMathfieldInput(mf);
-      return;
-    }
-    if (mf.insert("\n", insertOpts("latex"))) {
-      emitMathfieldInput(mf);
-      return;
-    }
+  const before = mf.getValue("latex");
+  mf.executeCommand("addRowAfter");
+  if (mf.getValue("latex") !== before) {
+    emitMathfieldInput(mf);
+    return;
   }
   mf.insert("\\\\", insertOpts("latex"));
   emitMathfieldInput(mf);
+}
+
+const WRAP_STYLE_ID = "qraft-mathfield-wrap";
+
+/** Rows of the line environment that sits directly at the root of the field. */
+const ROOT_ROWS =
+  ".ML__latex > .ML__mtable > .col-align-l > .ML__vlist-t > .ML__vlist-r > .ML__vlist";
+
+/**
+ * MathLive lays the formula out with `white-space: nowrap` and `width:
+ * min-content` inside its shadow root, so long lines run past the field. The
+ * rules can only be reached by injecting a stylesheet into that shadow root.
+ */
+export function enableMathfieldWrapping(mf: MathfieldElement) {
+  const root = mf.shadowRoot;
+  if (!root || root.getElementById(WRAP_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = WRAP_STYLE_ID;
+  style.textContent = `
+    .ML__container { max-width: 100%; }
+    .ML__content {
+      display: block !important;
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      overflow-x: hidden !important;
+      max-width: 100% !important;
+    }
+    .ML__latex {
+      white-space: normal !important;
+      width: auto !important;
+      max-width: 100% !important;
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+      /* Wrapped rows would otherwise collide: MathLive sizes its boxes for a
+         single line and relies on struts for vertical spacing. */
+      line-height: 1.8 !important;
+    }
+    .ML__base {
+      width: auto !important;
+      max-width: 100% !important;
+      white-space: normal !important;
+    }
+    .ML__text {
+      white-space: pre-wrap !important;
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+    }
+    /* Rows of the root line environment are absolutely positioned at a fixed
+       height, so a wrapped row would overlap the next one. Put just those rows
+       (never nested fractions or scripts) back into normal flow. */
+    ${ROOT_ROWS} {
+      display: block !important;
+      height: auto !important;
+    }
+    ${ROOT_ROWS} > span {
+      position: static !important;
+      top: auto !important;
+      display: block !important;
+      height: auto !important;
+    }
+    ${ROOT_ROWS} > span > .ML__pstrut {
+      display: none !important;
+    }
+    ${ROOT_ROWS} > span > span {
+      display: block !important;
+      height: auto !important;
+    }
+    .ML__latex > .ML__mtable > .col-align-l > .ML__vlist-t,
+    .ML__latex > .ML__mtable > .col-align-l > .ML__vlist-t > .ML__vlist-r {
+      display: block !important;
+    }
+    .ML__latex > .ML__mtable > .col-align-l > .ML__vlist-t > .ML__vlist-s {
+      display: none !important;
+    }
+    /* Struts reserve room for the (now removed) absolute row offsets. */
+    .ML__latex:has(> .ML__mtable) > .ML__strut,
+    .ML__latex:has(> .ML__mtable) > .ML__strut--bottom {
+      display: none !important;
+    }
+  `;
+  root.append(style);
 }
 
 function isDeleteInputType(type: string) {

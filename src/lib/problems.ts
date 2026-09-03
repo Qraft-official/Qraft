@@ -159,15 +159,14 @@ export async function fetchProblems(): Promise<{
   profiles: Record<string, User>;
   error: string | null;
 }> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const viewerId = session?.user?.id ?? null;
-
-  const { data, error } = await supabase
+  const viewerTask = supabase.auth.getSession();
+  const problemsTask = supabase
     .from("problems")
     .select(PROBLEM_COLUMNS)
     .order("created_at", { ascending: false });
+
+  const [{ data: sessionWrap }, { data, error }] = await Promise.all([viewerTask, problemsTask]);
+  const viewerId = sessionWrap.session?.user?.id ?? null;
 
   if (error) {
     return { posts: [], profiles: {}, error: error.message };

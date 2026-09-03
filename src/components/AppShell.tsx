@@ -2,18 +2,39 @@
 
 import { AuthScreen } from "@/components/AuthScreen";
 import { BottomNav } from "@/components/BottomNav";
-import { CreateSheet } from "@/components/CreateSheet";
 import { Fab } from "@/components/Fab";
-import { FocusBgm } from "@/components/FocusBgm";
 import { InviteCapture } from "@/components/InviteCapture";
 import { Onboarding } from "@/components/Onboarding";
-import { FeedbackModal } from "@/components/FeedbackModal";
-import { PaywallModal, PremiumModal } from "@/components/PremiumModal";
-import { ReplySheet } from "@/components/ReplySheet";
 import { useApp } from "@/lib/store";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+
+const CreateSheet = dynamic(
+  () => import("@/components/CreateSheet").then((m) => m.CreateSheet),
+  { ssr: false },
+);
+const ReplySheet = dynamic(
+  () => import("@/components/ReplySheet").then((m) => m.ReplySheet),
+  { ssr: false },
+);
+const PremiumModal = dynamic(
+  () => import("@/components/PremiumModal").then((m) => m.PremiumModal),
+  { ssr: false },
+);
+const PaywallModal = dynamic(
+  () => import("@/components/PremiumModal").then((m) => m.PaywallModal),
+  { ssr: false },
+);
+const FeedbackModal = dynamic(
+  () => import("@/components/FeedbackModal").then((m) => m.FeedbackModal),
+  { ssr: false },
+);
+const FocusBgm = dynamic(
+  () => import("@/components/FocusBgm").then((m) => m.FocusBgm),
+  { ssr: false },
+);
 
 function SsrFallbackChrome({ children }: { children: React.ReactNode }) {
   return (
@@ -52,10 +73,17 @@ export function AppShell({
     accentColor,
     feedbackOpen,
     closeFeedback,
+    premiumOpen,
+    paywallOpen,
   } = useApp();
   const path = usePathname();
   const [mounted, setMounted] = useState(false);
   const [inAdFrame, setInAdFrame] = useState(false);
+  const [loadCreate, setLoadCreate] = useState(false);
+  const [loadReply, setLoadReply] = useState(false);
+  const [loadPremium, setLoadPremium] = useState(false);
+  const [loadPaywall, setLoadPaywall] = useState(false);
+  const [loadFeedback, setLoadFeedback] = useState(false);
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
   const isLegal = path === "/terms" || path === "/privacy";
@@ -74,6 +102,22 @@ export function AppShell({
   useEffect(() => {
     rememberPremiumReturnPath(path);
   }, [path]);
+
+  useEffect(() => {
+    if (!composer.open) return;
+    if (composer.mode === "problem" || composer.mode === "solution") setLoadCreate(true);
+    if (composer.mode === "reply") setLoadReply(true);
+  }, [composer]);
+
+  useEffect(() => {
+    if (premiumOpen) setLoadPremium(true);
+  }, [premiumOpen]);
+  useEffect(() => {
+    if (paywallOpen) setLoadPaywall(true);
+  }, [paywallOpen]);
+  useEffect(() => {
+    if (feedbackOpen) setLoadFeedback(true);
+  }, [feedbackOpen]);
 
   const capture = (
     <Suspense fallback={null}>
@@ -148,11 +192,11 @@ export function AppShell({
           </>
         )}
       </div>
-      <CreateSheet />
-      <ReplySheet />
-      <PremiumModal />
-      <PaywallModal />
-      <FeedbackModal open={feedbackOpen} onClose={closeFeedback} />
+      {loadCreate ? <CreateSheet /> : null}
+      {loadReply ? <ReplySheet /> : null}
+      {loadPremium ? <PremiumModal /> : null}
+      {loadPaywall ? <PaywallModal /> : null}
+      {loadFeedback ? <FeedbackModal open={feedbackOpen} onClose={closeFeedback} /> : null}
     </div>
   );
 }

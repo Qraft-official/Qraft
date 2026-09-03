@@ -103,6 +103,27 @@ html.qraft-scroll-lock body {
   }
 }
 
+@media (min-width: 768px) {
+  .composer-overlay {
+    padding: 0.75rem;
+  }
+  .composer-dialog {
+    width: min(1000px, 94vw);
+    max-width: min(1000px, 94vw);
+    max-height: min(92vh, var(--composer-vvh, 92vh));
+    overflow: hidden;
+  }
+  .composer-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    gap: 0.2rem;
+  }
+  .composer-footer {
+    padding-bottom: 0.5rem;
+  }
+}
+
 .composer-dialog.composer-dialog-expanded {
   height: min(90vh, var(--composer-vvh, 90vh));
   max-height: min(90vh, var(--composer-vvh, 90vh));
@@ -221,16 +242,16 @@ html.qraft-scroll-lock body {
 
 @media (min-width: 768px) {
   .notebook-stage {
-    min-height: 14rem;
-    max-height: 24rem;
-    height: 22rem;
+    min-height: 8.75rem;
+    max-height: 11.5rem;
+    height: 11.5rem;
   }
   .qraft-math-kb {
-    max-height: none;
+    max-height: 8.25rem;
   }
   .aha-mathfield-visual {
-    min-height: 12rem;
-    max-height: 32rem;
+    min-height: 5.25rem;
+    max-height: 8.25rem;
   }
 }
 
@@ -258,4 +279,10 @@ html.qraft-scroll-lock body {
   max-width: 100% !important;
   box-shadow: none !important;
   z-index: 1 !important;
+}
+
+@media (min-width: 768px) {
+  .aha-ml-kb {
+    min-height: 7.25rem;
+  }
 }

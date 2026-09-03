@@ -10,11 +10,22 @@ import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, HelpCircle, Keyboard, Maximize2, Menu, PenLine, Sparkles, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { ImageUploadSection } from "./ImageUploadSection";
-import { MultiPageCanvas, type MultiPageCanvasHandle } from "./MultiPageCanvas";
+import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { QuoteEmbed } from "./QuoteEmbed";
-import { TypedNotebook, type TypedPage } from "./TypedNotebook";
+import type { TypedPage } from "./TypedNotebook";
+
+const MultiPageCanvas = dynamic(
+  () => import("./MultiPageCanvas").then((m) => m.MultiPageCanvas),
+  { ssr: false, loading: () => <div className="h-full min-h-[8rem] rounded-xl bg-panel/80" /> },
+);
+
+const TypedNotebook = dynamic(
+  () => import("./TypedNotebook").then((m) => m.TypedNotebook),
+  { ssr: false, loading: () => <div className="h-40 rounded-xl bg-panel/80" /> },
+);
 
 const MODE_HELP: Record<
   ProblemMode,
@@ -382,7 +393,7 @@ export function CreateSheet() {
       {open && (
         <motion.div
           ref={overlayRef}
-        className="composer-overlay fixed inset-0 z-[60] flex items-center justify-center overflow-hidden overscroll-none bg-black/70 p-3 sm:p-6"
+        className="composer-overlay fixed inset-0 z-[60] flex items-center justify-center overflow-hidden overscroll-none bg-black/70 p-3 md:p-3"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -395,7 +406,7 @@ export function CreateSheet() {
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
             onClick={(e) => e.stopPropagation()}
-            className={`composer-dialog relative mx-auto h-fit w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-800 bg-black sm:max-w-2xl md:max-w-3xl ${
+            className={`composer-dialog relative mx-auto h-fit w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-800 bg-black md:max-w-[1000px] md:overflow-hidden ${
               editorExpanded ? "composer-dialog-expanded overflow-hidden" : ""
             }`}
           >
@@ -409,7 +420,7 @@ export function CreateSheet() {
                     onClick={() => setModeHelp(null)}
                   />
                 )}
-                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-4 py-2">
+                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 md:px-4 md:py-1">
                   <p className="text-sm font-bold">
                     {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
                   </p>
@@ -424,7 +435,7 @@ export function CreateSheet() {
                 <select
                   value={subject}
                   onChange={(e) => setSubject(e.target.value as Subject)}
-                  className="w-full border-0 border-b border-gray-800 bg-transparent px-4 py-2.5 text-sm outline-none"
+                  className="w-full border-0 border-b border-gray-800 bg-transparent px-3 py-1.5 text-sm outline-none md:px-4"
                 >
                   {SUBJECTS.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -436,9 +447,9 @@ export function CreateSheet() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="タイトル（任意）"
-                  className="w-full border-0 border-b border-gray-800 bg-transparent px-4 py-2.5 text-lg font-semibold outline-none placeholder:text-muted"
+                  className="w-full border-0 border-b border-gray-800 bg-transparent px-3 py-1.5 text-base font-semibold outline-none placeholder:text-muted md:px-4 md:text-lg"
                 />
-                <div className="border-b border-gray-800 px-4 py-2">
+                <div className="border-b border-gray-800 px-3 py-1 md:px-4">
                   <p className="mb-0.5 text-[10px] font-bold text-muted">難易度</p>
                   <div className="aha-scroll flex flex-nowrap gap-1 overflow-x-auto pb-0.5">
                     {DIFFICULTY_LEVELS.map((d) => (
@@ -464,7 +475,7 @@ export function CreateSheet() {
                   </p>
                 )}
                 {!isSprintProblem && (
-                  <div className="relative grid grid-cols-3 gap-2 border-b border-gray-800 px-4 py-2">
+                  <div className="relative grid grid-cols-3 gap-1.5 border-b border-gray-800 px-3 py-1 md:gap-2 md:px-4">
                     {MODE_ORDER.map((id) => {
                       const meta = MODE_HELP[id];
                       const on = postMode === id;
@@ -572,7 +583,7 @@ export function CreateSheet() {
                   )
                 )}
                 </div>
-                <div className="composer-footer flex items-center justify-end gap-3 border-t border-gray-800 px-4 py-2">
+                <div className="composer-footer flex items-center justify-end gap-3 border-t border-gray-800 px-3 py-1.5 md:px-4">
                   {postError && <p className="mr-auto text-xs text-red-400">{postError}</p>}
                   <button
                     disabled={posting}

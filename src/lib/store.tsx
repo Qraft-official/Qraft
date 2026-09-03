@@ -217,12 +217,15 @@ function freshSprint(dayId: string): SprintRecord {
 const emptyComposer: Composer = { open: false };
 
 async function loadRemoteFeed() {
-  const remote = await fetchProblems();
+  const [remote, comments] = await Promise.all([fetchProblems(), fetchComments()]);
   const subjects: Record<string, Subject> = {};
   for (const p of remote.posts) subjects[p.id] = p.subject;
-  const comments = await fetchComments(subjects);
+  const commentPosts = comments.posts.map((p) => {
+    const parentSubject = p.replyToId ? subjects[p.replyToId] : undefined;
+    return parentSubject && parentSubject !== p.subject ? { ...p, subject: parentSubject } : p;
+  });
   return {
-    posts: [...remote.posts, ...comments.posts],
+    posts: [...remote.posts, ...commentPosts],
     profiles: { ...remote.profiles, ...comments.profiles },
     error: remote.error || comments.error,
   };
@@ -331,11 +334,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           await ensureProfile(user);
           await ensureWelcomeNotification();
-          const inbox = await fetchNotifications();
+          const [inbox, profileResult, admin] = await Promise.all([
+            fetchNotifications(),
+            fetchLearningProfile(user.id),
+            checkIsAdmin(),
+          ]);
           if (cancelled) return;
           setNotifications(inbox);
-          const { data, error } = await fetchLearningProfile(user.id);
-          if (cancelled) return;
+          const { data, error } = profileResult;
           if (error) {
             console.warn("Failed to load learning profile:", error.message);
           } else if (data) {
@@ -350,51 +356,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } else {
             setOnboarded(false);
           }
-          const admin = await checkIsAdmin();
           if (!cancelled) setIsAdmin(admin);
-          const identity = getDeviceIdentity();
-          try {
-            await referralFetch("/api/referral/event", {
-              method: "POST",
-              body: JSON.stringify({ type: "login" }),
-            });
-            const meRes = await referralFetch("/api/referral");
-            if (!cancelled && !meRes.error && meRes.data && "code" in meRes.data) {
-              setReferralMe(meRes.data as unknown as ReferralMe);
-            }
-            const pending = takePendingReferralCode();
-            const ownCode =
-              meRes.data && "code" in meRes.data
-                ? String((meRes.data as { code?: string }).code ?? "")
-                : "";
-            if (
-              pending &&
-              identity.deviceId &&
-              pending.toUpperCase() !== ownCode.toUpperCase() &&
-              !hasReferralAppliedOnDevice()
-            ) {
-              const applied = await referralFetch("/api/referral", {
-                method: "POST",
-                body: JSON.stringify({
-                  code: pending,
-                  deviceId: identity.deviceId,
-                  deviceFingerprint: identity.deviceFingerprint,
-                }),
-              });
-              if (!cancelled && !applied.error && applied.data && "code" in applied.data) {
-                setReferralMe(applied.data as unknown as ReferralMe);
-                markReferralAppliedOnDevice();
-              }
-            }
-          } catch (err) {
-            console.warn("Referral hydrate failed:", err);
-          } finally {
-            if (!cancelled) setReferralReady(true);
-          }
         } catch (err) {
           console.warn("Profile hydrate failed:", err);
         } finally {
           if (!cancelled) setProfileHydrated(true);
+        }
+
+        const identity = getDeviceIdentity();
+        try {
+          await referralFetch("/api/referral/event", {
+            method: "POST",
+            body: JSON.stringify({ type: "login" }),
+          });
+          const meRes = await referralFetch("/api/referral");
+          if (!cancelled && !meRes.error && meRes.data && "code" in meRes.data) {
+            setReferralMe(meRes.data as unknown as ReferralMe);
+          }
+          const pending = takePendingReferralCode();
+          const ownCode =
+            meRes.data && "code" in meRes.data
+              ? String((meRes.data as { code?: string }).code ?? "")
+              : "";
+          if (
+            pending &&
+            identity.deviceId &&
+            pending.toUpperCase() !== ownCode.toUpperCase() &&
+            !hasReferralAppliedOnDevice()
+          ) {
+            const applied = await referralFetch("/api/referral", {
+              method: "POST",
+              body: JSON.stringify({
+                code: pending,
+                deviceId: identity.deviceId,
+                deviceFingerprint: identity.deviceFingerprint,
+              }),
+            });
+            if (!cancelled && !applied.error && applied.data && "code" in applied.data) {
+              setReferralMe(applied.data as unknown as ReferralMe);
+              markReferralAppliedOnDevice();
+            }
+          }
+        } catch (err) {
+          console.warn("Referral hydrate failed:", err);
+        } finally {
+          if (!cancelled) setReferralReady(true);
         }
       })();
     };
@@ -419,17 +425,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setAuthenticated(false);
           setProfileHydrated(true);
         }
-        const remote = await loadRemoteFeed();
+        const uid = data.session?.user?.id;
+        const [remote, mine] = await Promise.all([
+          loadRemoteFeed(),
+          uid ? fetchMyConfusedProblemIds(uid) : Promise.resolve([] as string[]),
+        ]);
         if (cancelled) return;
         setRemotePosts(remote.posts);
         setRemoteUsers(remote.profiles);
         if (remote.error) console.warn("Failed to load problems:", remote.error);
-        const uid = data.session?.user?.id;
         if (uid) {
-          const mine = await fetchMyConfusedProblemIds(uid);
-          if (!cancelled) {
-            setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
-          }
+          setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
         }
       } catch (err) {
         console.warn("Auth bootstrap failed:", err);

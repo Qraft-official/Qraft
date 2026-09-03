@@ -55,7 +55,8 @@ export async function fetchNotifications(): Promise<AppNotification[]> {
   const { data, error } = await supabase
     .from("notifications")
     .select("id,title,message,is_read,created_at")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
   if (error) {
     console.warn("fetchNotifications failed:", error.message);
     return [];

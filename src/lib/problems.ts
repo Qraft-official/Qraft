@@ -4,6 +4,7 @@ import { ensureProfile } from "./auth";
 import { asProblemMode, type ProblemMode } from "./challenge";
 import { asDifficulty } from "./difficulty";
 import { persistHandwritingPages, firstDrawingUrl } from "./problem-images";
+import { supabase } from "./supabase";
 import { userIsVerified } from "./verified";
 import type { NotePage, Post, Subject, User } from "./types";
 

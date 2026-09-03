@@ -16,16 +16,31 @@ import { MultiPageCanvas, type MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { QuoteEmbed } from "./QuoteEmbed";
 import { TypedNotebook, type TypedPage } from "./TypedNotebook";
 
-const MODE_HELP = {
+const MODE_HELP: Record<
+  ProblemMode,
+  { title: string; body: string; selected: string; helpPos: string }
+> = {
   question: {
     title: "教えてQrafter!",
-    body: "分からない問題や、みんなに解説してほしい問題を投稿します。",
+    body: "解き方やアドバイスを求めたい時に選ぶモードです。",
+    selected: "border-aha bg-aha/10 text-aha",
+    helpPos: "left-0",
   },
   challenge: {
     title: "Challenger",
-    body: "自分で作った問題と正解を投稿します。正解の入力が必須です。単位は書かなくて構いません。",
+    body: "自分で作成した問題にみんなで挑戦してもらうモードです。",
+    selected: "border-orange-400 bg-orange-500/10 text-orange-300",
+    helpPos: "left-1/2 -translate-x-1/2",
   },
-} as const;
+  aha: {
+    title: "Aha!",
+    body: "小学校6年生までの知識で解けるひらめき・パズル要素のある問題モードです。",
+    selected: "border-lime-400 text-lime-400 bg-lime-400/10",
+    helpPos: "right-0",
+  },
+};
+
+const MODE_ORDER: ProblemMode[] = ["question", "challenge", "aha"];
 
 export function CreateSheet() {
   const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall } =
@@ -54,7 +69,7 @@ export function CreateSheet() {
   const [solverAnswer, setSolverAnswer] = useState("");
   const [pulseToast, setPulseToast] = useState("");
   const [editorExpanded, setEditorExpanded] = useState(false);
-  const [modeHelp, setModeHelp] = useState<null | "question" | "challenge">(null);
+  const [modeHelp, setModeHelp] = useState<ProblemMode | null>(null);
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -65,7 +80,10 @@ export function CreateSheet() {
   useBodyScrollLock(open);
 
   useEffect(() => {
-    if (!open) setEditorExpanded(false);
+    if (!open) {
+      setEditorExpanded(false);
+      setModeHelp(null);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -286,7 +304,7 @@ export function CreateSheet() {
           photo,
           isSprint: isSprintProblem,
           format: "typed",
-          mode: isSprintProblem ? "question" : postMode,
+          mode: isSprintProblem ? "aha" : postMode,
           correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
           difficultyLevel,
           pages: typedPages.map((p, i) => ({
@@ -315,7 +333,7 @@ export function CreateSheet() {
           photo,
           isSprint: isSprintProblem,
           format: "handwriting",
-          mode: isSprintProblem ? "question" : postMode,
+          mode: isSprintProblem ? "aha" : postMode,
           correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
           difficultyLevel,
           drawingBlobs: images,
@@ -446,83 +464,46 @@ export function CreateSheet() {
                   </p>
                 )}
                 {!isSprintProblem && (
-                  <div className="relative grid grid-cols-2 gap-2 border-b border-gray-800 px-4 py-2">
-                    <div className="relative z-[21] flex items-stretch">
-                      <button
-                        type="button"
-                        onClick={() => setPostMode("question")}
-                        className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-2 py-1.5 text-left ${
-                          postMode === "question"
-                            ? "border-aha bg-aha/10"
-                            : "border-gray-800 bg-transparent"
-                        }`}
-                      >
-                        <p className="text-[11px] font-bold sm:text-sm">教えてQrafter!</p>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="教えてQrafter!の説明"
-                        aria-expanded={modeHelp === "question"}
-                        onClick={() =>
-                          setModeHelp((v) => (v === "question" ? null : "question"))
-                        }
-                        className={`flex items-center rounded-r-xl border border-l-0 px-1.5 ${
-                          postMode === "question"
-                            ? "border-aha bg-aha/10 text-white/70"
-                            : "border-gray-800 bg-transparent text-muted"
-                        }`}
-                      >
-                        <HelpCircle size={14} strokeWidth={2} />
-                      </button>
-                      {modeHelp === "question" && (
-                        <div
-                          role="dialog"
-                          className="absolute left-0 top-[calc(100%+6px)] z-30 w-[min(18rem,calc(200%+0.25rem))] rounded-xl border border-gray-700 bg-[#1a222c] px-3 py-2.5 text-left shadow-xl"
-                        >
-                          <p className="text-[11px] font-bold text-white">{MODE_HELP.question.title}</p>
-                          <p className="mt-1 text-[11px] leading-snug text-[#b8c0c8]">{MODE_HELP.question.body}</p>
+                  <div className="relative grid grid-cols-3 gap-2 border-b border-gray-800 px-4 py-2">
+                    {MODE_ORDER.map((id) => {
+                      const meta = MODE_HELP[id];
+                      const on = postMode === id;
+                      return (
+                        <div key={id} className="relative z-[21] flex min-w-0 items-stretch">
+                          <button
+                            type="button"
+                            onClick={() => setPostMode(id)}
+                            className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-1.5 py-1.5 text-left sm:px-2 ${
+                              on ? meta.selected : "border-gray-800 bg-transparent text-white"
+                            }`}
+                          >
+                            <p className="truncate text-[10px] font-bold sm:text-[11px]">{meta.title}</p>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`${meta.title}の説明`}
+                            aria-expanded={modeHelp === id}
+                            onClick={() => setModeHelp((v) => (v === id ? null : id))}
+                            className={`flex items-center rounded-r-xl border border-l-0 px-1 ${
+                              on ? `${meta.selected} text-white/70` : "border-gray-800 bg-transparent text-muted"
+                            }`}
+                          >
+                            <HelpCircle size={14} strokeWidth={2} />
+                          </button>
+                          {modeHelp === id && (
+                            <div
+                              role="dialog"
+                              className={`absolute top-[calc(100%+6px)] z-30 w-[min(18rem,calc(100vw-2.5rem))] rounded-xl border border-gray-700 bg-[#1a222c] px-3 py-2.5 text-left shadow-xl ${meta.helpPos}`}
+                            >
+                              <p className="text-[11px] font-bold text-white">{meta.title}</p>
+                              <p className="mt-1 text-[11px] leading-snug text-[#b8c0c8]">{meta.body}</p>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <div className="relative z-[21] flex items-stretch">
-                      <button
-                        type="button"
-                        onClick={() => setPostMode("challenge")}
-                        className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-2 py-1.5 text-left ${
-                          postMode === "challenge"
-                            ? "border-orange-400 bg-orange-500/10"
-                            : "border-gray-800 bg-transparent"
-                        }`}
-                      >
-                        <p className="text-[11px] font-bold sm:text-sm">Challenger</p>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Challengerの説明"
-                        aria-expanded={modeHelp === "challenge"}
-                        onClick={() =>
-                          setModeHelp((v) => (v === "challenge" ? null : "challenge"))
-                        }
-                        className={`flex items-center rounded-r-xl border border-l-0 px-1.5 ${
-                          postMode === "challenge"
-                            ? "border-orange-400 bg-orange-500/10 text-white/70"
-                            : "border-gray-800 bg-transparent text-muted"
-                        }`}
-                      >
-                        <HelpCircle size={14} strokeWidth={2} />
-                      </button>
-                      {modeHelp === "challenge" && (
-                        <div
-                          role="dialog"
-                          className="absolute right-0 top-[calc(100%+6px)] z-30 w-[min(18rem,calc(200%+0.25rem))] rounded-xl border border-gray-700 bg-[#1a222c] px-3 py-2.5 text-left shadow-xl"
-                        >
-                          <p className="text-[11px] font-bold text-white">{MODE_HELP.challenge.title}</p>
-                          <p className="mt-1 text-[11px] leading-snug text-[#b8c0c8]">{MODE_HELP.challenge.body}</p>
-                        </div>
-                      )}
-                    </div>
+                      );
+                    })}
                     {postMode === "challenge" && (
-                      <div className="col-span-2">
+                      <div className="col-span-3">
                         <input
                           value={correctAnswer}
                           onChange={(e) => setCorrectAnswer(e.target.value)}

@@ -1,8 +1,10 @@
-export type ProblemMode = "question" | "challenge";
+export type ProblemMode = "question" | "challenge" | "aha";
 export type ChallengeGrade = "correct" | "incorrect";
 
 export function asProblemMode(value: unknown): ProblemMode {
-  return value === "challenge" ? "challenge" : "question";
+  if (value === "challenge") return "challenge";
+  if (value === "aha") return "aha";
+  return "question";
 }
 
 const FULLWIDTH_DIGIT = /[０-９]/g;

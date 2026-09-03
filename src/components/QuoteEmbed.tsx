@@ -28,7 +28,11 @@ export function QuoteEmbed({ postId, compact }: { postId: string; compact?: bool
         <span className="truncate text-xs text-muted">@{author.handle}</span>
         {post.kind === "problem" && (
           <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] text-muted">
-            {post.problemMode === "challenge" ? "Challenger" : "問題"}
+            {post.problemMode === "challenge"
+              ? "Challenger"
+              : post.problemMode === "aha"
+                ? "Aha!"
+                : "問題"}
           </span>
         )}
       </div>

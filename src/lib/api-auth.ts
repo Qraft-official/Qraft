@@ -27,15 +27,29 @@ export function clip(value: unknown, max: number) {
   return value.slice(0, max);
 }
 
-export function clientIpFromRequest(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for") || "";
-  const first = forwarded.split(",")[0]?.trim();
-  if (first) return first.slice(0, 64);
-  const real = request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || "";
-  return real.trim().slice(0, 64) || "unknown";
+function cookieValue(request: Request, name: string) {
+  const cookie = request.headers.get("cookie") || "";
+  const prefix = `${name}=`;
+  for (const part of cookie.split(";")) {
+    const row = part.trim();
+    if (row.startsWith(prefix)) {
+      try {
+        return decodeURIComponent(row.slice(prefix.length));
+      } catch {
+        return row.slice(prefix.length);
+      }
+    }
+  }
+  return "";
+}
+
+export function deviceIdFromRequest(request: Request, bodyDeviceId?: string) {
+  const fromBody = clip(bodyDeviceId, 128).trim();
+  if (fromBody.length >= 8) return fromBody;
+  const fromCookie = clip(cookieValue(request, "qraft_did"), 128).trim();
+  return fromCookie;
 }
 
 export function cookieHasReferralApplied(request: Request) {
-  const cookie = request.headers.get("cookie") || "";
-  return /(?:^|;\s*)qraft_referral_applied=1(?:;|$)/.test(cookie);
+  return cookieValue(request, "qraft_referral_applied") === "1";
 }

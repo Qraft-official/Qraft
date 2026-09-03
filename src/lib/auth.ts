@@ -1,6 +1,14 @@
 import type { Tier, Tiers } from "./types";
 import type { User } from "@supabase/supabase-js";
-import { isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "./handle";
+import { displayNameError } from "./display-name";
+import {
+  HANDLE_HINT,
+  handleValidationError,
+  isReservedHandle,
+  isValidHandle,
+  RESERVED_HANDLE_ERROR,
+  sanitizeHandleInput,
+} from "./handle";
 import { supabase } from "./supabase";
 
 function asText(value: unknown): string {
@@ -67,13 +75,13 @@ export function handleFromUser(user: {
   const handle = asText(meta.handle);
   if (handle.trim()) {
     const cleaned = sanitizeHandleInput(handle.trim());
-    if (!cleaned || isReservedHandle(cleaned)) return undefined;
+    if (!cleaned || !isValidHandle(cleaned) || isReservedHandle(cleaned)) return undefined;
     return cleaned;
   }
   const email = asText(user.email);
-  const fromEmail = email.split("@")[0]?.replace(/[^a-zA-Z0-9_.-]/g, "") ?? "";
-  if (fromEmail && isReservedHandle(fromEmail)) return undefined;
-  return fromEmail || undefined;
+  const fromEmail = email.split("@")[0]?.replace(/[^a-zA-Z0-9_]/g, "") ?? "";
+  if (fromEmail && isValidHandle(fromEmail) && !isReservedHandle(fromEmail)) return fromEmail;
+  return undefined;
 }
 
 export async function checkIsAdmin() {
@@ -90,11 +98,21 @@ export async function checkIsAdmin() {
   }
 }
 
+export function isEmailConfirmed(user: {
+  email_confirmed_at?: string | null;
+  confirmed_at?: string | null;
+} | null | undefined) {
+  return Boolean(user?.email_confirmed_at || user?.confirmed_at);
+}
+
 export async function ensureProfile(user: {
   id: string;
   email?: string | null;
+  email_confirmed_at?: string | null;
+  confirmed_at?: string | null;
   user_metadata?: Record<string, unknown> | null;
 }) {
+  if (!isEmailConfirmed(user)) return;
   try {
     const incoming = {
       name: displayNameFromUser(user),
@@ -217,13 +235,8 @@ export async function savePublicProfile(
   userId: string,
   input: { name: string; handle: string },
 ): Promise<{ error?: string; handleLocked?: boolean; nextAt?: string | null }> {
-  const nextHandle = sanitizeHandleInput(input.handle.trim());
-  if (!nextHandle || !isValidHandle(nextHandle)) {
-    return { error: "アカウントIDは半角英数字と - _ . のみ使えます" };
-  }
-  if (isReservedHandle(nextHandle)) {
-    return { error: RESERVED_HANDLE_ERROR };
-  }
+  const nameErr = displayNameError(input.name);
+  if (nameErr) return { error: nameErr };
 
   const { data: current, error: readError } = await supabase
     .from("profiles")
@@ -233,6 +246,16 @@ export async function savePublicProfile(
   if (readError) return { error: readError.message };
 
   const prevHandle = typeof current?.handle === "string" ? current.handle : "";
+  const rawHandle = input.handle.trim().replace(/^@+/, "");
+  const handleUnchanged = Boolean(prevHandle) && rawHandle === prevHandle;
+  const nextHandle = handleUnchanged ? prevHandle : sanitizeHandleInput(rawHandle);
+  if (!handleUnchanged) {
+    const handleErr = handleValidationError(nextHandle);
+    if (handleErr) return { error: handleErr };
+  } else if (!nextHandle) {
+    return { error: HANDLE_HINT };
+  }
+
   const handleChanged = prevHandle !== nextHandle;
 
   if (handleChanged) {

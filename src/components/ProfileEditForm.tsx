@@ -9,7 +9,8 @@ import {
   TITLE_CATALOG,
 } from "@/lib/constants";
 import type { Tiers } from "@/lib/types";
-import { HANDLE_HINT, isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "@/lib/handle";
+import { DISPLAY_NAME_MAX, displayNameError } from "@/lib/display-name";
+import { HANDLE_HINT, HANDLE_MAX, handleValidationError, sanitizeHandleInput } from "@/lib/handle";
 import { fetchHandleChangeStatus, formatHandleNextDate, type HandleChangeStatus } from "@/lib/auth";
 import { ageForSave, needsGuardianConsent } from "@/lib/guardian-consent";
 import { isImageSrc, useApp } from "@/lib/store";
@@ -164,13 +165,20 @@ export function ProfileEditForm({
         />
       </div>
 
-      <Field label="表示名" value={name} onChange={setName} />
+      <Field
+        label="表示名"
+        value={name}
+        onChange={setName}
+        maxLength={DISPLAY_NAME_MAX}
+        hint={`2〜${DISPLAY_NAME_MAX}文字`}
+      />
       <Field
         label="アカウントID"
         value={handle}
-        onChange={(v) => setHandle(sanitizeHandleInput(v))}
+        onChange={(v) => setHandle(v === me.handle ? v : sanitizeHandleInput(v))}
         prefix="@"
         hint={HANDLE_HINT}
+        maxLength={HANDLE_MAX}
         disabled={Boolean(handleStatus && handleStatus.remaining <= 0)}
       />
       {handleStatus && handleStatus.remaining <= 0 && handleStatus.nextAt && (
@@ -255,14 +263,19 @@ export function ProfileEditForm({
               setSaveError("15歳未満の方は、保護者の同意確認にチェックしてください");
               return;
             }
-            const nextHandle = sanitizeHandleInput(handle.trim()) || me.handle;
-            if (nextHandle && isReservedHandle(nextHandle)) {
-              setSaveError(RESERVED_HANDLE_ERROR);
+            const nameErr = displayNameError(name);
+            if (nameErr) {
+              setSaveError(nameErr);
               return;
             }
-            if (nextHandle && !isValidHandle(nextHandle)) {
-              setSaveError(HANDLE_HINT);
-              return;
+            const rawHandle = handle.trim().replace(/^@+/, "");
+            const nextHandle = rawHandle === me.handle ? me.handle : sanitizeHandleInput(rawHandle) || me.handle;
+            if (rawHandle !== me.handle) {
+              const handleErr = handleValidationError(nextHandle);
+              if (handleErr) {
+                setSaveError(handleErr);
+                return;
+              }
             }
             const nextAge = ageForSave(age);
             setSaveError("");
@@ -314,6 +327,7 @@ function Field({
   placeholder,
   hint,
   disabled,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -322,6 +336,7 @@ function Field({
   placeholder?: string;
   hint?: string;
   disabled?: boolean;
+  maxLength?: number;
 }) {
   return (
     <label className="mb-3 block text-xs text-muted">
@@ -338,6 +353,7 @@ function Field({
           onChange={(e) => onChange(e.target.value)}
           spellCheck={false}
           disabled={disabled}
+          maxLength={maxLength}
           className="w-full bg-transparent py-2 text-sm text-white outline-none disabled:cursor-not-allowed"
         />
       </div>

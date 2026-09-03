@@ -35,7 +35,7 @@ export function EditProblemModal({
     if (!open || !post) return;
     setTitle(post.title ?? "");
     setText(bodyFromPost(post));
-    setMode(post.problemMode === "challenge" ? "challenge" : "question");
+    setMode(post.problemMode ?? "question");
     setCorrectAnswer(post.correctAnswer ?? "");
     setError("");
     setSaving(false);
@@ -101,7 +101,7 @@ export function EditProblemModal({
               >
                 <p className="text-sm font-bold">教えてQrafter!</p>
                 <p className="text-[11px] text-muted">
-                  分からない問題や、みんなに解説してほしい問題を投稿します。
+                  解き方やアドバイスを求めたい時に選ぶモードです。
                 </p>
               </button>
               <button
@@ -113,7 +113,21 @@ export function EditProblemModal({
               >
                 <p className="text-sm font-bold">Challenger</p>
                 <p className="text-[11px] text-muted">
-                  自分で作った問題と正解を投稿します。（※正解の入力が必須です）
+                  自分で作成した問題にみんなで挑戦してもらうモードです。
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("aha")}
+                className={`rounded-2xl border px-3 py-2 text-left ${
+                  mode === "aha"
+                    ? "border-lime-400 bg-lime-400/10 text-lime-400"
+                    : "border-gray-800 bg-panel"
+                }`}
+              >
+                <p className="text-sm font-bold">Aha!</p>
+                <p className="text-[11px] text-muted">
+                  小学校6年生までの知識で解けるひらめき・パズル要素のある問題モードです。
                 </p>
               </button>
             </div>

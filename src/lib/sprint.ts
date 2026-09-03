@@ -77,5 +77,26 @@ export function makeOfficialPost(dayId: string): Post {
     eleganceSum: 0,
     eleganceCount: 0,
     sprintDay: dayId,
+    problemMode: "aha",
   };
+}
+
+/** 21:00 PULSE: always pick from Aha! posts. Ignores user Lv1–Lv5. */
+export function pickAhaPulsePost(posts: Post[], dayId: string, fallback: Post): Post {
+  const aha = posts.filter(
+    (p) =>
+      p.problemMode === "aha" &&
+      (p.kind === "problem" || p.kind === "sprint") &&
+      p.kind !== "reply",
+  );
+  const forDay = aha.filter(
+    (p) => p.isSprint || p.kind === "sprint" || p.sprintDay === dayId,
+  );
+  const pool = forDay.length ? forDay : aha;
+  if (!pool.length) {
+    return { ...fallback, problemMode: "aha" };
+  }
+  const n = dayId.split("-").reduce((acc, part) => acc + Number(part), 0);
+  const picked = pool[Math.abs(n) % pool.length];
+  return { ...picked, kind: picked.kind === "sprint" ? "sprint" : picked.kind, problemMode: "aha" };
 }

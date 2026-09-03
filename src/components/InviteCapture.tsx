@@ -1,6 +1,6 @@
 "use client";
 
-import { getDeviceId, savePendingReferralCode } from "@/lib/device-id";
+import { getDeviceIdentity, savePendingReferralCode } from "@/lib/device-id";
 import { parseInviteCodeFromLocation } from "@/lib/referral";
 import { referralFetch } from "@/lib/referral-client";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -34,16 +34,16 @@ export function InviteCapture() {
       /* ignore */
     }
     once.current = code;
-    const deviceId = getDeviceId();
-    if (deviceId.length < 8) return;
+    const identity = getDeviceIdentity();
+    if (identity.deviceId.length < 8) return;
     void (async () => {
       await referralFetch("/api/referral/campaign", {
         method: "POST",
-        body: JSON.stringify({ type: "invite_open", code, deviceId }),
+        body: JSON.stringify({ type: "invite_open", code, ...identity }),
       });
       await referralFetch("/api/referral", {
         method: "POST",
-        body: JSON.stringify({ code, deviceId }),
+        body: JSON.stringify({ code, ...identity }),
       });
     })();
   }, [path, search]);

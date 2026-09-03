@@ -1,10 +1,11 @@
 import {
   bearerTokenFromRequest,
-  clientIpFromRequest,
+  clip,
   cookieHasReferralApplied,
+  deviceIdFromRequest,
   userFromRequest,
 } from "@/lib/api-auth";
-import { REFERRAL_APPLIED_COOKIE } from "@/lib/device-id";
+import { DEVICE_ID_COOKIE, REFERRAL_APPLIED_COOKIE } from "@/lib/device-id";
 import { applyReferralCode, getReferralMe, getReferralMeWithToken } from "@/lib/referral-server";
 import { NextResponse } from "next/server";
 
@@ -30,24 +31,31 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await userFromRequest(request);
   if (!user) return NextResponse.json({ error: "ログインしてください。" }, { status: 401 });
-  const body = (await request.json().catch(() => ({}))) as { code?: string; deviceId?: string };
-  const clientIp = clientIpFromRequest(request);
-  console.info("[referral-apply]", { userId: user.id, ip: clientIp });
+  const body = (await request.json().catch(() => ({}))) as {
+    code?: string;
+    deviceId?: string;
+    deviceFingerprint?: string;
+  };
+  const deviceId = deviceIdFromRequest(request, body.deviceId);
   const result = await applyReferralCode({
     refereeId: user.id,
     code: body.code ?? "",
-    deviceId: body.deviceId ?? "",
-    clientIp,
+    deviceId,
+    deviceFingerprint: clip(body.deviceFingerprint, 128),
     cookieApplied: cookieHasReferralApplied(request),
   });
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
   const res = NextResponse.json(result.me);
-  res.cookies.set(REFERRAL_APPLIED_COOKIE, "1", {
+  const cookieBase = {
     path: "/",
     maxAge: 60 * 60 * 24 * 365 * 5,
-    sameSite: "lax",
-  });
+    sameSite: "lax" as const,
+  };
+  res.cookies.set(REFERRAL_APPLIED_COOKIE, "1", cookieBase);
+  if (deviceId) {
+    res.cookies.set(DEVICE_ID_COOKIE, deviceId, cookieBase);
+  }
   return res;
 }

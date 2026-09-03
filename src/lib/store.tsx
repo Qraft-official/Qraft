@@ -24,9 +24,10 @@ import {
   sessionUserFields,
   tiersFromProfile,
 } from "./auth";
-import { isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "./handle";
+import { displayNameError } from "./display-name";
+import { handleValidationError, sanitizeHandleInput } from "./handle";
 import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
-import { getDeviceId, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
+import { getDeviceIdentity, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
 import { referralFetch } from "./referral-client";
 import { isVerifiedCreator, isComplimentaryPremiumAccount, LOUNGE_POSTS } from "./premium";
@@ -62,7 +63,7 @@ import {
   fetchComments,
   insertComment as persistInsertComment,
 } from "./comments";
-import { getSprintDayId, makeOfficialPost, remainingMs } from "./sprint";
+import { getSprintDayId, makeOfficialPost, pickAhaPulsePost, remainingMs } from "./sprint";
 import { supabase } from "./supabase";
 import type {
   ActivityItem,
@@ -163,7 +164,7 @@ type Store = {
   referralMe: ReferralMe | null;
   referralReady: boolean;
   refreshReferral: () => Promise<void>;
-  applyReferralCode: (code: string, deviceId: string) => Promise<{ error?: string }>;
+  applyReferralCode: (code: string, deviceId?: string) => Promise<{ error?: string }>;
   recordCampaignTap: (type: "x_follow" | "x_post") => Promise<{ error?: string }>;
   subscribed: boolean;
   subscribe: () => void;
@@ -351,7 +352,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
           const admin = await checkIsAdmin();
           if (!cancelled) setIsAdmin(admin);
-          const deviceId = getDeviceId();
+          const identity = getDeviceIdentity();
           try {
             await referralFetch("/api/referral/event", {
               method: "POST",
@@ -366,10 +367,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               meRes.data && "code" in meRes.data
                 ? String((meRes.data as { code?: string }).code ?? "")
                 : "";
-            if (pending && deviceId && pending !== ownCode && !hasReferralAppliedOnDevice()) {
+            if (
+              pending &&
+              identity.deviceId &&
+              pending.toUpperCase() !== ownCode.toUpperCase() &&
+              !hasReferralAppliedOnDevice()
+            ) {
               const applied = await referralFetch("/api/referral", {
                 method: "POST",
-                body: JSON.stringify({ code: pending, deviceId }),
+                body: JSON.stringify({
+                  code: pending,
+                  deviceId: identity.deviceId,
+                  deviceFingerprint: identity.deviceFingerprint,
+                }),
               });
               if (!cancelled && !applied.error && applied.data && "code" in applied.data) {
                 setReferralMe(applied.data as unknown as ReferralMe);
@@ -595,11 +605,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const mockOfficial = useMemo(() => makeOfficialPost(sprint.dayId), [sprint.dayId]);
   const community = useMemo(() => communityForDay(sprint.dayId), [sprint.dayId]);
-  const sprintFromDb = useMemo(
-    () => remotePosts.filter((p) => p.isSprint || p.kind === "sprint"),
-    [remotePosts],
+  const officialPost = useMemo(
+    () => pickAhaPulsePost(remotePosts, sprint.dayId, mockOfficial),
+    [remotePosts, sprint.dayId, mockOfficial],
   );
-  const officialPost = sprintFromDb[0] ?? mockOfficial;
 
   const catalog = useMemo(() => {
     const hidden = new Set(hiddenReplyIds);
@@ -696,21 +705,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       handle?: string;
     }) => {
       try {
-        const handle = input.handle ? sanitizeHandleInput(input.handle) : "";
-        if (handle && !isValidHandle(handle)) {
-          return { error: "アカウントIDは半角英数字と - _ . のみ使えます" };
-        }
-        if (handle && isReservedHandle(handle)) {
-          return { error: RESERVED_HANDLE_ERROR };
-        }
-        if (handle) {
-          const { data: taken } = await supabase
-            .from("profiles")
-            .select("id")
-            .ilike("handle", handle)
-            .maybeSingle();
-          if (taken) return { error: SIGNUP_HANDLE_TAKEN };
-        }
+        const nameErr = displayNameError(input.name ?? "");
+        if (nameErr) return { error: nameErr };
+        const handle = sanitizeHandleInput(input.handle ?? "");
+        const handleErr = handleValidationError(handle);
+        if (handleErr) return { error: handleErr };
+        const { data: taken } = await supabase
+          .from("profiles")
+          .select("id")
+          .ilike("handle", handle)
+          .maybeSingle();
+        if (taken) return { error: SIGNUP_HANDLE_TAKEN };
         const { data, error } = await supabase.auth.signUp({
           email: input.email.trim(),
           password: input.password,
@@ -722,8 +727,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             },
           },
         });
-        if (error) return { error: formatAuthError(error.message, error.code) };
-        if (!data.session) {
+        if (error) {
+          console.error("[signUp]", {
+            message: error.message,
+            status: error.status,
+            code: error.code,
+          });
+          return { error: formatAuthError(error.message, error.code) };
+        }
+        if (!data.session || !data.user || !data.user.email_confirmed_at) {
           return { needsConfirm: true };
         }
         if (data.user) {
@@ -744,6 +756,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return {};
       } catch (err) {
+        const thrown = err as { message?: unknown; status?: unknown; code?: unknown };
+        console.error("[signUp]", {
+          message: thrown.message,
+          status: thrown.status,
+          code: thrown.code,
+        });
         return { error: formatAuthError(err instanceof Error ? err.message : "登録に失敗しました") };
       }
     },
@@ -1191,13 +1209,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const applyReferralCode = useCallback(async (code: string, deviceId: string) => {
+  const applyReferralCode = useCallback(async (code: string, deviceId?: string) => {
     if (hasReferralAppliedOnDevice()) {
       return { error: "この端末では既に紹介コードが適用されています" };
     }
+    const identity = getDeviceIdentity();
     const res = await referralFetch("/api/referral", {
       method: "POST",
-      body: JSON.stringify({ code, deviceId }),
+      body: JSON.stringify({
+        code,
+        deviceId: deviceId || identity.deviceId,
+        deviceFingerprint: identity.deviceFingerprint,
+      }),
     });
     if (!res.error && res.data && "code" in res.data) {
       setReferralMe(res.data as unknown as ReferralMe);
@@ -1209,7 +1232,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const recordCampaignTap = useCallback(async (type: "x_follow" | "x_post") => {
     const res = await referralFetch("/api/referral/campaign", {
       method: "POST",
-      body: JSON.stringify({ type, deviceId: getDeviceId() }),
+      body: JSON.stringify({ type, ...getDeviceIdentity() }),
     });
     if (!res.error && res.data && "code" in res.data) {
       setReferralMe(res.data as unknown as ReferralMe);

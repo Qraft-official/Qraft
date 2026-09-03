@@ -89,7 +89,12 @@ export default function SprintPage() {
         </div>
         <PostCard post={officialPost} />
         {posts
-          .filter((p) => (p.isSprint || p.kind === "sprint") && p.id !== officialPost.id)
+          .filter(
+            (p) =>
+              p.problemMode === "aha" &&
+              p.kind !== "reply" &&
+              p.id !== officialPost.id,
+          )
           .map((p) => (
             <PostCard key={p.id} post={p} />
           ))}

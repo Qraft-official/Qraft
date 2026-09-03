@@ -66,13 +66,14 @@ export default function HomePage() {
       return [...boosted, ...followed];
     }
     if (tab === "sprint") {
-      const fromDb = posts.filter((p) => p.isSprint || p.kind === "sprint");
-      if (fromDb.length) {
-        const rest = sprintUnlocked ? community.filter((c) => !fromDb.some((d) => d.id === c.id)) : [];
-        return [...fromDb, ...rest];
-      }
-      const extra = sprintUnlocked ? community : [];
-      return [officialPost, ...extra];
+      const ahaFeed = posts.filter(
+        (p) =>
+          p.problemMode === "aha" &&
+          p.kind !== "reply" &&
+          p.id !== officialPost.id,
+      );
+      const extra = sprintUnlocked ? community.filter((c) => !ahaFeed.some((d) => d.id === c.id)) : [];
+      return [officialPost, ...ahaFeed, ...extra];
     }
     if (tab === "lounge") return loungePosts;
     const pool = others.filter((p) => p.kind !== "sprint" && p.kind !== "reply");

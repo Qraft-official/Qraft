@@ -192,8 +192,7 @@ export async function fetchProblems(): Promise<{
 }
 
 function challengePayload(input: NewProblem) {
-  const isSprint = !!input.isSprint;
-  const mode: ProblemMode = isSprint ? "question" : asProblemMode(input.mode);
+  const mode = asProblemMode(input.mode);
   const correctAnswer =
     mode === "challenge" ? (input.correctAnswer ?? "").trim() || null : null;
   return { mode, correct_answer: correctAnswer };
@@ -274,8 +273,8 @@ export async function updateProblem(
   const updates: Record<string, unknown> = {};
   if (patch.title !== undefined) updates.title = patch.title.trim();
   if (patch.text !== undefined) updates.problem_text = patch.text;
-  if (patch.mode === "question") {
-    updates.mode = "question";
+  if (patch.mode === "question" || patch.mode === "aha") {
+    updates.mode = patch.mode;
     updates.correct_answer = null;
   } else {
     if (patch.mode === "challenge") updates.mode = "challenge";

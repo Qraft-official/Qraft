@@ -124,18 +124,32 @@ export async function getReferralMeWithToken(userId: string, accessToken: string
   };
 }
 
+function normalizeDeviceToken(raw: string) {
+  return raw.trim().slice(0, 128);
+}
+
+function duplicateApplyError(message: string) {
+  if (/referral_claims_pkey|referee_id/i.test(message)) {
+    return "紹介コードはすでに適用済みです。";
+  }
+  if (/device_id|device_fingerprint|duplicate|unique/i.test(message)) {
+    return "この端末では既に紹介コードが適用されています";
+  }
+  return "";
+}
+
 export async function applyReferralCode(input: {
   refereeId: string;
   code: string;
   deviceId: string;
-  clientIp?: string;
+  deviceFingerprint?: string;
   cookieApplied?: boolean;
 }): Promise<{ error?: string; me?: ReferralMe }> {
   const admin = adminSupabase();
   if (!admin) return { error: "紹介プログラムの設定がありません。" };
   const code = input.code.trim().toUpperCase();
-  const deviceId = input.deviceId.trim();
-  const clientIp = (input.clientIp || "unknown").slice(0, 64);
+  const deviceId = normalizeDeviceToken(input.deviceId);
+  const deviceFingerprint = normalizeDeviceToken(input.deviceFingerprint ?? "");
   if (!code) return { error: "紹介コードを入力してください。" };
   if (deviceId.length < 8) return { error: "端末情報を確認できませんでした。別のブラウザでお試しください。" };
   if (input.cookieApplied) {
@@ -158,37 +172,25 @@ export async function applyReferralCode(input: {
     return { error: "この端末では既に紹介コードが適用されています" };
   }
 
-  const { data: ipHit } = await admin
-    .from("referral_apply_log")
-    .select("id")
-    .eq("ip", clientIp)
-    .eq("success", true)
-    .limit(1)
-    .maybeSingle();
-  if (ipHit && clientIp !== "unknown") {
-    await admin.from("referral_apply_log").insert({
-      ip: clientIp,
-      device_id: deviceId,
-      user_id: input.refereeId,
-      success: false,
-    });
-    return { error: "この端末では既に紹介コードが適用されています" };
-  }
-
-  const { count: recentCount } = await admin
-    .from("referral_apply_log")
-    .select("id", { count: "exact", head: true })
-    .eq("ip", clientIp)
-    .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
-  if ((recentCount ?? 0) >= 20 && clientIp !== "unknown") {
-    return { error: "この端末では既に紹介コードが適用されています" };
+  if (deviceFingerprint.length >= 16) {
+    const { data: fpHit } = await admin
+      .from("referral_claims")
+      .select("referee_id")
+      .eq("device_fingerprint", deviceFingerprint)
+      .maybeSingle();
+    if (fpHit) {
+      return { error: "この端末では既に紹介コードが適用されています" };
+    }
   }
 
   const { data: self } = await admin
     .from("profiles")
-    .select("created_at")
+    .select("created_at, referral_code")
     .eq("id", input.refereeId)
     .maybeSingle();
+  if (self?.referral_code && String(self.referral_code).trim().toUpperCase() === code) {
+    return { error: "自分の紹介コードは使えません。" };
+  }
   let createdRaw = self?.created_at ? String(self.created_at) : "";
   if (!createdRaw) {
     const { data: authUser } = await admin.auth.admin.getUserById(input.refereeId);
@@ -215,6 +217,7 @@ export async function applyReferralCode(input: {
     referee_id: input.refereeId,
     referrer_id: referrer.id,
     device_id: deviceId,
+    device_fingerprint: deviceFingerprint.length >= 16 ? deviceFingerprint : null,
     applied_at: now.toISOString(),
     mission_deadline: missionDeadline,
     trial_until: trialUntil,
@@ -222,24 +225,13 @@ export async function applyReferralCode(input: {
     login_streak: 1,
   });
   if (error) {
-    await admin.from("referral_apply_log").insert({
-      ip: clientIp,
-      device_id: deviceId,
-      user_id: input.refereeId,
-      success: false,
-    });
-    if (/duplicate|unique/i.test(error.message)) {
-      return { error: "この端末では既に紹介コードが適用されています" };
+    const dup = duplicateApplyError(error.message);
+    if (dup) return { error: dup };
+    if (/referral_claims_no_self|no_self/i.test(error.message)) {
+      return { error: "自分の紹介コードは使えません。" };
     }
     return { error: error.message };
   }
-
-  await admin.from("referral_apply_log").insert({
-    ip: clientIp,
-    device_id: deviceId,
-    user_id: input.refereeId,
-    success: true,
-  });
 
   await admin.from("profiles").update({ premium_trial_until: trialUntil }).eq("id", input.refereeId);
   await admin.from("notifications").insert({

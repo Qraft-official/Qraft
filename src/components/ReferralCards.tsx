@@ -1,6 +1,6 @@
 "use client";
 
-import { getDeviceId, hasReferralAppliedOnDevice, savePendingReferralCode } from "@/lib/device-id";
+import { hasReferralAppliedOnDevice, savePendingReferralCode } from "@/lib/device-id";
 import {
   CAMPAIGN_INVITE_TARGET,
   canShowReferralApplyForm,
@@ -159,7 +159,7 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
                 return;
               }
               savePendingReferralCode(code);
-              void applyReferralCode(code.trim(), getDeviceId()).then((res) => {
+              void applyReferralCode(code.trim()).then((res) => {
                 setBusy(false);
                 if (res.error) setError(res.error);
                 else setCode("");

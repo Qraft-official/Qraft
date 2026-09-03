@@ -29,7 +29,7 @@ create table if not exists public.problems (
   problem_format text,
   created_at timestamptz not null default now(),
   mode text not null default 'question'
-    check (mode in ('question', 'challenge')),
+    check (mode in ('question', 'challenge', 'aha')),
   correct_answer text
 );
 
@@ -81,11 +81,29 @@ create policy "profiles are readable"
   to anon, authenticated
   using (true);
 
+create or replace function public.is_email_confirmed()
+returns boolean
+language sql
+stable
+security definer
+set search_path = auth
+as $$
+  select exists (
+    select 1
+    from auth.users
+    where id = auth.uid()
+      and email_confirmed_at is not null
+  );
+$$;
+
+revoke all on function public.is_email_confirmed() from public, anon;
+grant execute on function public.is_email_confirmed() to authenticated;
+
 drop policy if exists "users can insert own profile" on public.profiles;
 create policy "users can insert own profile"
   on public.profiles for insert
   to authenticated
-  with check (id = (select auth.uid()));
+  with check (id = (select auth.uid()) and public.is_email_confirmed());
 
 drop policy if exists "users can update own profile" on public.profiles;
 create policy "users can update own profile"
@@ -205,17 +223,42 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  claimed_handle text;
 begin
-  insert into public.profiles (id, name, handle)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data ->> 'name', ''),
-    case
-      when lower(coalesce(new.raw_user_meta_data ->> 'handle', '')) = 'advertisement' then null
-      else nullif(new.raw_user_meta_data ->> 'handle', '')
-    end
-  )
-  on conflict (id) do nothing;
+  -- Do not insert public.profiles (or claim a unique handle) until email is confirmed.
+  -- Unconfirmed signups stay in auth.users only, so abandoned IDs are not locked.
+  if new.email_confirmed_at is null then
+    return new;
+  end if;
+
+  claimed_handle := nullif(btrim(new.raw_user_meta_data ->> 'handle'), '');
+  if claimed_handle is not null and lower(claimed_handle) = 'advertisement' then
+    claimed_handle := null;
+  end if;
+  if claimed_handle is not null and claimed_handle !~ '^[A-Za-z0-9_]{3,20}$' then
+    claimed_handle := null;
+  end if;
+
+  begin
+    insert into public.profiles (id, name, handle)
+    values (
+      new.id,
+      coalesce(new.raw_user_meta_data ->> 'name', ''),
+      claimed_handle
+    )
+    on conflict (id) do update
+      set name = case
+        when public.profiles.name = '' then excluded.name
+        else public.profiles.name
+      end,
+      handle = coalesce(public.profiles.handle, excluded.handle);
+  exception
+    when unique_violation then
+      insert into public.profiles (id, name, handle)
+      values (new.id, coalesce(new.raw_user_meta_data ->> 'name', ''), null)
+      on conflict (id) do nothing;
+  end;
 
   insert into public.notifications (user_id, title, message)
   select
@@ -235,10 +278,94 @@ $$;
 
 revoke all on function public.handle_new_user() from public, anon, authenticated;
 
+-- Abandoned (unconfirmed) signups must not occupy email or handle.
+create or replace function public.recycle_unconfirmed_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  claimed_handle text;
+begin
+  claimed_handle := nullif(btrim(coalesce(new.raw_user_meta_data ->> 'handle', '')), '');
+
+  delete from auth.users u
+  where u.email_confirmed_at is null
+    and u.id is distinct from new.id
+    and (
+      (new.email is not null and lower(u.email) = lower(new.email))
+      or (
+        claimed_handle is not null
+        and lower(coalesce(u.raw_user_meta_data ->> 'handle', '')) = lower(claimed_handle)
+      )
+    );
+
+  return new;
+end;
+$$;
+
+revoke all on function public.recycle_unconfirmed_auth_user() from public, anon, authenticated;
+
+drop trigger if exists trg_recycle_unconfirmed_auth_user on auth.users;
+create trigger trg_recycle_unconfirmed_auth_user
+  before insert on auth.users
+  for each row execute function public.recycle_unconfirmed_auth_user();
+
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+drop trigger if exists on_auth_user_email_confirmed on auth.users;
+create trigger on_auth_user_email_confirmed
+  after update of email_confirmed_at on auth.users
+  for each row
+  when (old.email_confirmed_at is null and new.email_confirmed_at is not null)
+  execute function public.handle_new_user();
+
+-- Release profiles / handles already claimed by accounts that never confirmed email.
+delete from public.profiles p
+using auth.users u
+where p.id = u.id
+  and u.email_confirmed_at is null;
+
+create or replace function public.purge_unconfirmed_auth_users(max_age interval default interval '24 hours')
+returns integer
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  n integer := 0;
+begin
+  delete from auth.users
+  where email_confirmed_at is null
+    and created_at < now() - max_age;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+revoke all on function public.purge_unconfirmed_auth_users(interval) from public, anon, authenticated;
+
+do $$
+begin
+  perform cron.unschedule('purge-unconfirmed-auth-users');
+exception
+  when others then null;
+end $$;
+
+do $$
+begin
+  perform cron.schedule(
+    'purge-unconfirmed-auth-users',
+    '15 * * * *',
+    $cron$select public.purge_unconfirmed_auth_users(interval '24 hours')$cron$
+  );
+exception
+  when others then null;
+end $$;
 
 alter table public.problems replica identity full;
 
@@ -256,6 +383,48 @@ alter table public.profiles
   add column if not exists stripe_referral_coupon_id text,
   add column if not exists premium_trial_until timestamptz;
 
+create table if not exists public.referral_claims (
+  referee_id uuid primary key references public.profiles (id) on delete cascade,
+  referrer_id uuid not null references public.profiles (id) on delete cascade,
+  device_id text not null check (char_length(device_id) >= 8 and char_length(device_id) <= 128),
+  device_fingerprint text check (
+    device_fingerprint is null
+    or (char_length(device_fingerprint) >= 16 and char_length(device_fingerprint) <= 128)
+  ),
+  applied_at timestamptz not null default now(),
+  mission_deadline timestamptz not null,
+  trial_until timestamptz not null,
+  solves integer not null default 0,
+  posts integer not null default 0,
+  login_streak integer not null default 1,
+  last_login_date date,
+  completed_at timestamptz,
+  expired_at timestamptz,
+  discount_awarded_at timestamptz,
+  constraint referral_claims_no_self check (referee_id <> referrer_id)
+);
+
+alter table public.referral_claims
+  add column if not exists device_fingerprint text;
+
+do $$
+begin
+  alter table public.referral_claims
+    add constraint referral_claims_no_self check (referee_id <> referrer_id);
+exception
+  when duplicate_object then null;
+end $$;
+
+create unique index if not exists referral_claims_device_id_uidx
+  on public.referral_claims (device_id);
+
+create unique index if not exists referral_claims_device_fingerprint_uidx
+  on public.referral_claims (device_fingerprint)
+  where device_fingerprint is not null;
+
+alter table public.referral_claims enable row level security;
+revoke all on public.referral_claims from anon, authenticated;
+
 -- Challenge / 教えて！Qraft modes (also applied remotely)
 alter table public.problems
   add column if not exists mode text not null default 'question',
@@ -263,7 +432,7 @@ alter table public.problems
 
 alter table public.problems drop constraint if exists problems_mode_check;
 alter table public.problems
-  add constraint problems_mode_check check (mode in ('question', 'challenge'));
+  add constraint problems_mode_check check (mode in ('question', 'challenge', 'aha'));
 
 -- Half-price invite campaign (also applied remotely)
 alter table public.profiles
@@ -319,6 +488,10 @@ declare
   used int;
 begin
   if new.handle is not distinct from old.handle then
+    return new;
+  end if;
+  -- Releasing an unconfirmed / abandoned handle must not log a change (new_handle is NOT NULL).
+  if new.handle is null then
     return new;
   end if;
   select count(*) into used
@@ -448,24 +621,9 @@ with check (
   and (storage.foldername(name))[2] = (select auth.uid())::text
 );
 
-create table if not exists public.referral_apply_log (
-  id uuid primary key default gen_random_uuid(),
-  ip text not null,
-  device_id text,
-  user_id uuid references public.profiles (id) on delete set null,
-  success boolean not null default false,
-  created_at timestamptz not null default now()
-);
-
-create index if not exists referral_apply_log_ip_created_idx
-  on public.referral_apply_log (ip, created_at desc);
-
-create index if not exists referral_apply_log_ip_success_idx
-  on public.referral_apply_log (ip)
-  where success;
-
-alter table public.referral_apply_log enable row level security;
-revoke all on public.referral_apply_log from anon, authenticated;
+drop index if exists referral_apply_log_ip_created_idx;
+drop index if exists referral_apply_log_ip_success_idx;
+drop table if exists public.referral_apply_log;
 
 create or replace function public.weekly_highlights()
 returns jsonb

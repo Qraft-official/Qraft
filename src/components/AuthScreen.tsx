@@ -3,7 +3,14 @@
 import { formatAuthError } from "@/lib/auth";
 import { savePendingReferralCode } from "@/lib/device-id";
 import { parseInviteCodeFromLocation } from "@/lib/referral";
-import { HANDLE_HINT, isReservedHandle, isValidHandle, RESERVED_HANDLE_ERROR, sanitizeHandleInput } from "@/lib/handle";
+import { DISPLAY_NAME_HINT, DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, displayNameError } from "@/lib/display-name";
+import {
+  HANDLE_HINT,
+  HANDLE_MAX,
+  HANDLE_MIN,
+  handleValidationError,
+  sanitizeHandleInput,
+} from "@/lib/handle";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
@@ -58,13 +65,17 @@ export function AuthScreen() {
       setError("パスワードは6文字以上にしてください");
       return;
     }
-    if (mode === "signup" && handle.trim() && isReservedHandle(handle.trim())) {
-      setError(RESERVED_HANDLE_ERROR);
-      return;
-    }
-    if (mode === "signup" && handle.trim() && !isValidHandle(handle.trim())) {
-      setError(HANDLE_HINT);
-      return;
+    if (mode === "signup") {
+      const nameErr = displayNameError(name);
+      if (nameErr) {
+        setError(nameErr);
+        return;
+      }
+      const handleErr = handleValidationError(handle);
+      if (handleErr) {
+        setError(handleErr);
+        return;
+      }
     }
     setBusy(true);
     if (mode === "signup" && referralCode.trim()) savePendingReferralCode(referralCode);
@@ -74,8 +85,8 @@ export function AuthScreen() {
           (await signUpWithEmail({
             email,
             password,
-            name: name.trim() || undefined,
-            handle: handle.trim() ? sanitizeHandleInput(handle) : undefined,
+            name: name.trim(),
+            handle: sanitizeHandleInput(handle),
           })) ?? {};
         if (res.error) {
           setError(formatAuthError(res.error));
@@ -127,17 +138,22 @@ export function AuthScreen() {
           {mode === "signup" && (
             <>
               <label className="block text-xs text-muted">
-                表示名
+                ユーザーネーム
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-gray-800 bg-panel px-3 py-3 text-sm text-white outline-none"
                   placeholder="クラフト太郎"
-                  autoComplete="name"
+                  autoComplete="nickname"
+                  minLength={DISPLAY_NAME_MIN}
+                  maxLength={DISPLAY_NAME_MAX}
+                  title={DISPLAY_NAME_HINT}
+                  required
                 />
+                <span className="mt-1 block text-[10px] text-muted">{DISPLAY_NAME_HINT}</span>
               </label>
               <label className="block text-xs text-muted">
-                アカウントID
+                ユーザーID
                 <div className="mt-1 flex items-center rounded-xl border border-gray-800 bg-panel px-3">
                   <span className="text-muted">@</span>
                   <input
@@ -146,10 +162,13 @@ export function AuthScreen() {
                     className="w-full bg-transparent py-3 text-sm text-white outline-none"
                     placeholder="qraft_taro"
                     autoComplete="username"
-                    inputMode="email"
+                    inputMode="text"
                     spellCheck={false}
-                    pattern="[a-zA-Z0-9_.-]+"
+                    minLength={HANDLE_MIN}
+                    maxLength={HANDLE_MAX}
+                    pattern={`[a-zA-Z0-9_]{${HANDLE_MIN},${HANDLE_MAX}}`}
                     title={HANDLE_HINT}
+                    required
                   />
                 </div>
                 <span className="mt-1 block text-[10px] text-muted">{HANDLE_HINT}</span>

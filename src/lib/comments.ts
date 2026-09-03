@@ -57,7 +57,11 @@ export async function fetchComments(parentSubjectById: Record<string, Subject> =
       .in("id", authorIds);
     for (const p of profileRows ?? []) {
       const row = p as { id: string; name?: string | null; handle?: string | null };
-      profiles[row.id] = fallbackUser(row.id, row);
+      profiles[row.id] = fallbackUser(row.id, {
+        id: row.id,
+        name: row.name ?? "",
+        handle: row.handle ?? null,
+      });
     }
   }
   return { posts, profiles, error: null };

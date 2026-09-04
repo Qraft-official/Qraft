@@ -406,12 +406,12 @@ export function CreateSheet() {
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
             onClick={(e) => e.stopPropagation()}
-            className={`composer-dialog relative mx-auto h-fit w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-800 bg-black md:max-w-[640px] md:overflow-hidden ${
+            className={`composer-dialog relative mx-auto flex h-fit w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-gray-800 bg-black md:h-auto md:max-w-none ${
               editorExpanded ? "composer-dialog-expanded overflow-hidden" : ""
             }`}
           >
             {openProblem && (
-              <div className="relative flex h-fit min-w-0 w-full max-w-full flex-col">
+              <div className="relative flex min-h-0 w-full max-w-full flex-1 flex-col">
                 {modeHelp && (
                   <button
                     type="button"
@@ -429,7 +429,7 @@ export function CreateSheet() {
                   </button>
                 </div>
                 <div
-                  className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
+                  className="composer-scroll flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col gap-1 overflow-x-hidden sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
                 <select
@@ -597,7 +597,7 @@ export function CreateSheet() {
             )}
 
             {openSolution && (
-              <div className="relative flex h-fit min-w-0 w-full max-w-full flex-col">
+              <div className="relative flex min-h-0 w-full max-w-full flex-1 flex-col">
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-800 px-4 py-2">
                   <div className="flex min-w-0 items-center gap-2">
                     {inputMode === "hand" ? (
@@ -625,7 +625,7 @@ export function CreateSheet() {
                   </div>
                 </div>
                 <div
-                  className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
+                  className="composer-scroll flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col gap-1 overflow-x-hidden sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
                 {modeTabs}

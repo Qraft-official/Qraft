@@ -258,7 +258,7 @@ export function VisualMathEditor({
             />
           </div>
         )}
-        {!expanded && footer && <div className="mt-2 min-w-0 shrink-0 pb-20 sm:pb-2">{footer}</div>}
+        {!expanded && footer && <div className="mt-2 min-w-0 shrink-0 pb-2">{footer}</div>}
       </div>
       {showKeyboard && (
         <MathKeyboard

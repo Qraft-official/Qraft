@@ -129,12 +129,12 @@ export function MathKeyboard({
   const keys = tab === "abc" ? abcKeys(shift) : KEYS[tab];
 
   return (
-    <div className="qraft-math-kb w-full min-w-0 shrink-0 border-t border-gray-800 bg-[#151c24] px-1 pt-0.5 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:px-2">
-      <div className="mb-0.5 grid grid-cols-2 gap-0.5">
+    <div className="qraft-math-kb w-full min-w-0 shrink-0 overflow-hidden border-t border-gray-800 bg-[#151c24] px-1 pt-0.5 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:px-1.5">
+      <div className="mb-0.5 grid grid-cols-2 gap-[3px]">
         <button
           type="button"
           onClick={() => onInputModeChange("text")}
-          className={`flex items-center justify-center gap-1 rounded-md py-0.5 leading-none ${
+          className={`flex h-6 items-center justify-center gap-1 rounded-md leading-none ${
             inputMode === "text" ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
         >
@@ -144,7 +144,7 @@ export function MathKeyboard({
         <button
           type="button"
           onClick={() => onInputModeChange("math")}
-          className={`flex items-center justify-center gap-1 rounded-md py-0.5 leading-none ${
+          className={`flex h-6 items-center justify-center gap-1 rounded-md leading-none ${
             inputMode === "math" ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
         >
@@ -154,7 +154,7 @@ export function MathKeyboard({
       </div>
       {inputMode === "math" && (
         <>
-          <div className="mb-0.5 grid grid-cols-4 gap-0.5">
+          <div className="mb-0.5 grid grid-cols-4 gap-[3px]">
             {TABS.map((tabItem) => {
               const on = tab === tabItem.id;
               return (
@@ -166,7 +166,7 @@ export function MathKeyboard({
                     onInputModeChange("math");
                     setTab(tabItem.id);
                   }}
-                  className={`touch-manipulation rounded-md px-0.5 py-0.5 leading-none ${
+                  className={`touch-manipulation h-6 rounded-md px-0.5 leading-none ${
                     on ? "bg-neon text-white" : "bg-white/10 text-muted"
                   }`}
                 >
@@ -179,7 +179,7 @@ export function MathKeyboard({
             })}
           </div>
           <div
-            className="grid gap-0.5"
+            className="grid gap-[3px] overflow-hidden"
             style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
             onPointerDown={(e) => e.preventDefault()}
           >
@@ -197,7 +197,7 @@ export function MathKeyboard({
                   }
                   onAction(k.action);
                 }}
-                className={`touch-manipulation h-[22px] rounded-md px-0.5 text-[11px] font-bold leading-none ${
+                className={`touch-manipulation h-6 rounded-md px-0.5 text-[10px] font-bold leading-none sm:h-7 sm:text-[11px] ${
                   k.tone === "warn"
                     ? "bg-[#4a2e24] text-orange-100"
                     : k.tone === "accent"

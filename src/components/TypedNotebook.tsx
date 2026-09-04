@@ -98,7 +98,7 @@ export function TypedNotebook({
               </div>
             ))}
           </div>
-          {footer && <div className="mt-2 min-w-0 shrink-0 pb-8 sm:pb-2">{footer}</div>}
+          {footer && <div className="mt-2 min-w-0 shrink-0 pb-2">{footer}</div>}
         </div>
       )}
     </div>

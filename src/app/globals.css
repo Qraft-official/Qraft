@@ -110,17 +110,21 @@ html.qraft-scroll-lock body {
     padding: 0.75rem;
   }
   .composer-dialog {
-    width: min(640px, 94vw);
-    max-width: min(640px, 94vw);
+    /* Portrait phone frame 19.5:9 (height:width) */
+    width: min(430px, 94vw, calc(min(92dvh, var(--composer-vvh, 92dvh)) * 9 / 19.5));
+    max-width: min(430px, 94vw, calc(min(92dvh, var(--composer-vvh, 92dvh)) * 9 / 19.5));
+    height: auto;
+    aspect-ratio: 9 / 19.5;
+    max-height: min(92dvh, var(--composer-vvh, 92dvh));
     margin-left: auto;
     margin-right: auto;
-    max-height: min(92vh, var(--composer-vvh, 92vh));
     overflow: hidden;
   }
   .composer-scroll {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     gap: 0.2rem;
   }
   .composer-footer {
@@ -131,6 +135,7 @@ html.qraft-scroll-lock body {
 .composer-dialog.composer-dialog-expanded {
   height: min(90vh, var(--composer-vvh, 90vh));
   max-height: min(90vh, var(--composer-vvh, 90vh));
+  aspect-ratio: auto;
   overflow: hidden;
 }
 
@@ -247,23 +252,30 @@ html.qraft-scroll-lock body {
 .qraft-math-kb {
   width: 100%;
   max-width: 100%;
-  max-height: 12.25rem;
-  overflow-x: hidden;
-  overflow-y: auto;
+  flex-shrink: 0;
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+.qraft-math-kb::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 @media (min-width: 768px) {
   .notebook-stage {
-    min-height: 8.75rem;
-    max-height: 11.5rem;
-    height: 11.5rem;
+    min-height: 9rem;
+    max-height: 12rem;
+    height: 11rem;
   }
   .qraft-math-kb {
-    max-height: 8.25rem;
+    max-height: none;
+    overflow: hidden;
   }
   .aha-mathfield-visual {
-    min-height: 5.25rem;
-    max-height: 8.25rem;
+    min-height: 5.5rem;
+    max-height: 10rem;
   }
 }
 

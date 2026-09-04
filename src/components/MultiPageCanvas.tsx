@@ -139,9 +139,12 @@ export const MultiPageCanvas = forwardRef<
       const wrapH = wrap?.getBoundingClientRect().height || 0;
       const cssW = Math.max(1, rectW);
       const bgH = backgroundHeightForWidth(page, cssW);
-      const cssH = flushRef.current ? Math.max(inkH, wrapH, bgH) : Math.max(inkH, bgH);
+      const cssH = flushRef.current
+        ? Math.max(inkH, wrapH, bgH)
+        : wrapH > 1
+          ? wrapH
+          : Math.max(inkH, bgH);
       usedH = Math.max(usedH, cssH);
-      if (wrap && !flushRef.current) wrap.style.height = `${cssH}px`;
       canvas.width = Math.max(1, Math.floor(cssW * dpr));
       canvas.height = Math.max(1, Math.floor(cssH * dpr));
       canvas.style.width = `${cssW}px`;
@@ -517,7 +520,7 @@ export const MultiPageCanvas = forwardRef<
           wrapEls.current[pageIndex] = el;
         }}
         className={`relative w-full ${fill ? "h-full min-h-0" : ""}`}
-        style={fill ? { minHeight: contentH } : { height: contentH }}
+        style={fill ? { height: "100%", minHeight: 0 } : { height: contentH }}
       >
         <canvas
           ref={(el) => {
@@ -696,24 +699,11 @@ export const MultiPageCanvas = forwardRef<
       </div>
 
       <div
-        className={`relative min-h-0 flex-1 ${flush ? "overflow-hidden px-0" : "overflow-y-auto px-2"}`}
+        className={`relative min-h-0 flex-1 ${flush ? "overflow-y-auto px-0" : "overflow-hidden px-2"}`}
       >
-        {flush ? (
-          <div className="relative h-full min-h-0 overflow-y-auto">
-            {pages[index] ? renderPageSurface(index, true) : null}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 pb-2">
-            {pages.map((p, i) => (
-              <div
-                key={p.id}
-                className="max-h-[360px] overflow-y-auto overscroll-contain rounded-2xl [-webkit-overflow-scrolling:touch]"
-              >
-                {renderPageSurface(i, false)}
-              </div>
-            ))}
-          </div>
-        )}
+        <div className={`relative h-full min-h-0 ${flush ? "" : "overflow-hidden"}`}>
+          {pages[index] ? renderPageSurface(index, true) : null}
+        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1.5 sm:gap-2 sm:px-3 sm:py-3">

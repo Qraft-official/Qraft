@@ -290,15 +290,19 @@ export async function updateProblem(
     }
   }
 
-  if (patch.pages || patch.drawingBlobs) {
+  if (patch.format === "handwriting" || patch.format === "typed") {
+    updates.problem_format = patch.format;
+  }
+  if (patch.pages !== undefined || patch.drawingBlobs?.some(Boolean)) {
     const hydrated = await persistHandwritingPages(viewerId, patch.pages, patch.drawingBlobs);
     if (hydrated.error) return { post: null, error: hydrated.error };
     const pages = hydrated.pages ?? null;
-    updates.pages = pages;
+    if (pages) updates.pages = pages;
     const drawingUrl = firstDrawingUrl(pages ?? undefined, patch.photo);
     if (drawingUrl) updates.photo = drawingUrl;
     else if (patch.photo !== undefined) updates.photo = patch.photo;
-    if (patch.format) updates.problem_format = patch.format;
+  } else if (patch.photo !== undefined) {
+    updates.photo = patch.photo;
   }
 
   if (!Object.keys(updates).length) {

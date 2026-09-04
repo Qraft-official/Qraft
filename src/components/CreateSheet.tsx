@@ -9,11 +9,13 @@ import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, HelpCircle, Keyboard, Maximize2, Menu, PenLine, Sparkles, X } from "lucide-react";
+import { Keyboard, PenLine, Sparkles, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { ImageUploadSection } from "./ImageUploadSection";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
+import { ComposerExpandOverlay, NotebookExpandButton } from "./NotebookExpandControls";
+import { ProblemModePicker } from "./ProblemModePicker";
 import { QuoteEmbed } from "./QuoteEmbed";
 import type { TypedPage } from "./TypedNotebook";
 
@@ -26,32 +28,6 @@ const TypedNotebook = dynamic(
   () => import("./TypedNotebook").then((m) => m.TypedNotebook),
   { ssr: false, loading: () => <div className="h-40 rounded-xl bg-panel/80" /> },
 );
-
-const MODE_HELP: Record<
-  ProblemMode,
-  { title: string; body: string; selected: string; helpPos: string }
-> = {
-  question: {
-    title: "教えてQrafter!",
-    body: "解き方やアドバイスを求めたい時に選ぶモードです。",
-    selected: "border-aha bg-aha/10 text-aha",
-    helpPos: "left-0",
-  },
-  challenge: {
-    title: "Challenger",
-    body: "自分で作成した問題にみんなで挑戦してもらうモードです。",
-    selected: "border-orange-400 bg-orange-500/10 text-orange-300",
-    helpPos: "left-1/2 -translate-x-1/2",
-  },
-  aha: {
-    title: "Aha!",
-    body: "小学校6年生までの知識で解けるひらめき・パズル要素のある問題モードです。",
-    selected: "border-lime-400 text-lime-400 bg-lime-400/10",
-    helpPos: "right-0",
-  },
-};
-
-const MODE_ORDER: ProblemMode[] = ["question", "challenge", "aha"];
 
 export function CreateSheet() {
   const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall } =
@@ -80,7 +56,6 @@ export function CreateSheet() {
   const [solverAnswer, setSolverAnswer] = useState("");
   const [pulseToast, setPulseToast] = useState("");
   const [editorExpanded, setEditorExpanded] = useState(false);
-  const [modeHelp, setModeHelp] = useState<ProblemMode | null>(null);
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -93,7 +68,6 @@ export function CreateSheet() {
   useEffect(() => {
     if (!open) {
       setEditorExpanded(false);
-      setModeHelp(null);
     }
   }, [open]);
 
@@ -186,7 +160,6 @@ export function CreateSheet() {
       setTypedPages([{ id: "t-1", latex: "" }]);
       setTypedIndex(0);
       setPostMode("question");
-      setModeHelp(null);
       setCorrectAnswer("");
     }
     if (composer.mode === "solution") {
@@ -400,26 +373,17 @@ export function CreateSheet() {
           onClick={close}
         >
           <motion.div
-            ref={scrollRef}
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
             onClick={(e) => e.stopPropagation()}
-            className={`composer-dialog relative mx-auto h-fit w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-800 bg-black md:max-w-[640px] md:overflow-hidden ${
-              editorExpanded ? "composer-dialog-expanded overflow-hidden" : ""
+            className={`composer-dialog relative mx-auto w-full max-w-lg rounded-2xl border border-gray-800 bg-black md:max-w-[640px] ${
+              editorExpanded ? "composer-dialog-expanded" : ""
             }`}
           >
             {openProblem && (
-              <div className="relative flex h-fit min-w-0 w-full max-w-full flex-col">
-                {modeHelp && (
-                  <button
-                    type="button"
-                    className="absolute inset-0 z-20 cursor-default"
-                    aria-label="説明を閉じる"
-                    onClick={() => setModeHelp(null)}
-                  />
-                )}
+              <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
                 <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 md:px-4 md:py-1">
                   <p className="text-sm font-bold">
                     {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
@@ -429,6 +393,7 @@ export function CreateSheet() {
                   </button>
                 </div>
                 <div
+                  ref={scrollRef}
                   className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
@@ -475,69 +440,18 @@ export function CreateSheet() {
                   </p>
                 )}
                 {!isSprintProblem && (
-                  <div className="relative grid grid-cols-3 gap-1.5 border-b border-gray-800 px-3 py-1 md:gap-2 md:px-4">
-                    {MODE_ORDER.map((id) => {
-                      const meta = MODE_HELP[id];
-                      const on = postMode === id;
-                      return (
-                        <div key={id} className="relative z-[21] flex min-w-0 items-stretch">
-                          <button
-                            type="button"
-                            onClick={() => setPostMode(id)}
-                            className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-1.5 py-1.5 text-left sm:px-2 ${
-                              on ? meta.selected : "border-gray-800 bg-transparent text-white"
-                            }`}
-                          >
-                            <p className="truncate text-[10px] font-bold sm:text-[11px]">{meta.title}</p>
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`${meta.title}の説明`}
-                            aria-expanded={modeHelp === id}
-                            onClick={() => setModeHelp((v) => (v === id ? null : id))}
-                            className={`flex items-center rounded-r-xl border border-l-0 px-1 ${
-                              on ? `${meta.selected} text-white/70` : "border-gray-800 bg-transparent text-muted"
-                            }`}
-                          >
-                            <HelpCircle size={14} strokeWidth={2} />
-                          </button>
-                          {modeHelp === id && (
-                            <div
-                              role="dialog"
-                              className={`absolute top-[calc(100%+6px)] z-30 w-[min(18rem,calc(100vw-2.5rem))] rounded-xl border border-gray-700 bg-[#1a222c] px-3 py-2.5 text-left shadow-xl ${meta.helpPos}`}
-                            >
-                              <p className="text-[11px] font-bold text-white">{meta.title}</p>
-                              <p className="mt-1 text-[11px] leading-snug text-[#b8c0c8]">{meta.body}</p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {postMode === "challenge" && (
-                      <div className="col-span-3">
-                        <input
-                          value={correctAnswer}
-                          onChange={(e) => setCorrectAnswer(e.target.value)}
-                          placeholder="正解"
-                          className="w-full border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
-                        />
-                        <p className="mt-0.5 text-[11px] text-muted">※単位は書かなくていいです</p>
-                      </div>
-                    )}
-                  </div>
+                  <ProblemModePicker
+                    value={postMode}
+                    onChange={setPostMode}
+                    correctAnswer={correctAnswer}
+                    onCorrectAnswer={setCorrectAnswer}
+                  />
                 )}
                 {modeTabs}
                 {inputMode === "hand" ? (
                   <div className="flex min-w-0 w-full max-w-full flex-col">
                     <div className="flex shrink-0 justify-end px-2 py-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setEditorExpanded(true)}
-                        className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
-                        aria-label="拡大"
-                      >
-                        <Maximize2 size={16} />
-                      </button>
+                      <NotebookExpandButton onClick={() => setEditorExpanded(true)} />
                     </div>
                     {!editorExpanded && (
                     <div className="notebook-stage mx-4 min-h-0">
@@ -597,7 +511,7 @@ export function CreateSheet() {
             )}
 
             {openSolution && (
-              <div className="relative flex h-fit min-w-0 w-full max-w-full flex-col">
+              <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-800 px-4 py-2">
                   <div className="flex min-w-0 items-center gap-2">
                     {inputMode === "hand" ? (
@@ -625,6 +539,7 @@ export function CreateSheet() {
                   </div>
                 </div>
                 <div
+                  ref={scrollRef}
                   className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
@@ -644,14 +559,7 @@ export function CreateSheet() {
                       className="w-full border-b border-gray-800 bg-transparent px-4 py-2 text-sm outline-none"
                     />
                     <div className="flex items-center justify-end px-3 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setEditorExpanded(true)}
-                        className="rounded-md p-1 text-muted hover:bg-white/10"
-                        aria-label="拡大"
-                      >
-                        <Maximize2 size={16} />
-                      </button>
+                      <NotebookExpandButton onClick={() => setEditorExpanded(true)} />
                     </div>
                     {!editorExpanded && (
                     <div className="notebook-stage mx-4 min-h-0">
@@ -783,64 +691,42 @@ export function CreateSheet() {
                 </div>
               </div>
             )}
-            {editorExpanded && (
-              <div className="absolute inset-0 z-30 flex min-h-0 flex-col bg-[#0b1220]">
-                <div className="flex shrink-0 items-center gap-2 px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditorExpanded(false)}
-                    className="rounded-md p-1.5 text-muted hover:bg-white/10 hover:text-white"
-                    aria-label="メニュー"
-                  >
-                    <Menu size={20} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditorExpanded(false)}
-                    className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15"
-                  >
-                    <ArrowLeft size={14} />
-                    完了
-                  </button>
+            <ComposerExpandOverlay open={editorExpanded} onClose={() => setEditorExpanded(false)}>
+              {inputMode === "hand" ? (
+                <div className="notebook-stage notebook-stage-expanded flex min-h-0 flex-1 flex-col">
+                  <MultiPageCanvas
+                    ref={canvasRef}
+                    pages={pages}
+                    onChange={setPages}
+                    premium={hasPremium}
+                    flush
+                  />
                 </div>
-                <div className="flex min-h-0 flex-1 flex-col">
-                  {inputMode === "hand" ? (
-                    <div className="notebook-stage notebook-stage-expanded flex min-h-0 flex-1 flex-col">
-                      <MultiPageCanvas
-                        ref={canvasRef}
-                        pages={pages}
-                        onChange={setPages}
-                        premium={hasPremium}
-                        flush
-                      />
-                    </div>
-                  ) : (
-                    <TypedNotebook
-                      pages={typedPages}
-                      index={typedIndex}
-                      onIndex={setTypedIndex}
-                      onChangeLatex={(latex, i = typedIndex) =>
-                        setTypedPages((prev) =>
-                          prev.map((p, j) => (j === i ? { ...p, latex } : p)),
-                        )
-                      }
-                      onAddPage={() => {
-                        const id = `t-${Date.now()}`;
-                        setTypedPages((prev) => [...prev, { id, latex: "" }]);
-                        setTypedIndex(typedPages.length);
-                      }}
-                      onDeletePage={() => {
-                        if (typedPages.length <= 1) return;
-                        const next = typedPages.filter((_, i) => i !== typedIndex);
-                        setTypedPages(next);
-                        setTypedIndex(Math.min(typedIndex, next.length - 1));
-                      }}
-                      expanded
-                    />
-                  )}
-                </div>
-              </div>
-            )}
+              ) : (
+                <TypedNotebook
+                  pages={typedPages}
+                  index={typedIndex}
+                  onIndex={setTypedIndex}
+                  onChangeLatex={(latex, i = typedIndex) =>
+                    setTypedPages((prev) =>
+                      prev.map((p, j) => (j === i ? { ...p, latex } : p)),
+                    )
+                  }
+                  onAddPage={() => {
+                    const id = `t-${Date.now()}`;
+                    setTypedPages((prev) => [...prev, { id, latex: "" }]);
+                    setTypedIndex(typedPages.length);
+                  }}
+                  onDeletePage={() => {
+                    if (typedPages.length <= 1) return;
+                    const next = typedPages.filter((_, i) => i !== typedIndex);
+                    setTypedPages(next);
+                    setTypedIndex(Math.min(typedIndex, next.length - 1));
+                  }}
+                  expanded
+                />
+              )}
+            </ComposerExpandOverlay>
           </motion.div>
         </motion.div>
       )}

@@ -69,37 +69,16 @@ export function TypedNotebook({
         <span className="ml-auto text-[11px] text-muted">{pages.length} pages</span>
       </div>
       {header}
-      {expanded ? (
-        page && (
-          <VisualMathEditor
-            key={page.id}
-            value={page.latex}
-            onChange={(latex) => onChangeLatex(latex, index)}
-            expanded
-            showKeyboard
-          />
-        )
-      ) : (
-        <div className="flex w-full min-w-0 flex-col gap-3 px-3 pb-2 sm:gap-4 sm:px-4">
-          <div className="flex flex-col gap-4">
-            {pages.map((p, i) => (
-              <div key={p.id} onPointerDown={() => onIndex(i)}>
-                <VisualMathEditor
-                  value={p.latex}
-                  onChange={(latex) => {
-                    onIndex(i);
-                    onChangeLatex(latex, i);
-                  }}
-                  compact
-                  showChrome={i === 0}
-                  showKeyboard={i === index}
-                  onToggleExpand={i === 0 ? onToggleExpand : undefined}
-                />
-              </div>
-            ))}
-          </div>
-          {footer && <div className="mt-2 min-w-0 shrink-0 pb-8 sm:pb-2">{footer}</div>}
-        </div>
+      {page && (
+        <VisualMathEditor
+          key={page.id}
+          value={page.latex}
+          onChange={(latex) => onChangeLatex(latex, index)}
+          expanded={expanded}
+          showKeyboard
+          onToggleExpand={expanded ? undefined : onToggleExpand}
+          footer={expanded ? undefined : footer}
+        />
       )}
     </div>
   );

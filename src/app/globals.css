@@ -86,21 +86,22 @@ html.qraft-scroll-lock body {
 }
 
 .composer-dialog {
+  --notebook-max-h: min(38dvh, calc(var(--composer-vvh, 100dvh) * 0.36));
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  height: fit-content;
+  height: min(90vh, var(--composer-vvh, 90vh));
   max-height: min(90vh, var(--composer-vvh, 90vh));
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   touch-action: pan-y;
 }
 
 @media (min-width: 640px) {
   .composer-dialog {
-    height: fit-content;
+    height: min(90vh, var(--composer-vvh, 90vh));
     max-height: min(90vh, var(--composer-vvh, 90vh));
   }
 }
@@ -115,12 +116,13 @@ html.qraft-scroll-lock body {
     margin-left: auto;
     margin-right: auto;
     max-height: min(92vh, var(--composer-vvh, 92vh));
+    height: min(92vh, var(--composer-vvh, 92vh));
     overflow: hidden;
   }
   .composer-scroll {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
+    overflow-y: auto;
     gap: 0.2rem;
   }
   .composer-footer {
@@ -136,8 +138,9 @@ html.qraft-scroll-lock body {
 
 .composer-scroll {
   min-height: 0;
-  flex: 0 0 auto;
-  overflow: visible;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -150,19 +153,20 @@ html.qraft-scroll-lock body {
 
 .notebook-stage {
   flex: 0 0 auto;
-  min-height: 10rem;
-  max-height: 15.5rem;
-  height: 15.5rem;
+  aspect-ratio: 19.5 / 9;
+  width: min(100%, calc(var(--notebook-max-h, 36dvh) * 19.5 / 9));
+  max-width: 100%;
+  height: auto;
+  max-height: var(--notebook-max-h, 36dvh);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin-inline: auto;
   touch-action: pan-y;
 }
 
-@media (min-width: 640px) {
-  .notebook-stage {
-    min-height: 12rem;
-    max-height: 20rem;
-    height: 20rem;
-  }
+.composer-dialog:has(.qraft-math-kb) {
+  --notebook-max-h: min(24dvh, calc(var(--composer-vvh, 100dvh) * 0.24));
 }
 
 .notebook-stage.notebook-stage-expanded {
@@ -171,7 +175,9 @@ html.qraft-scroll-lock body {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
+  width: 100%;
   height: auto;
+  aspect-ratio: auto;
   overflow: hidden;
   touch-action: none;
 }
@@ -179,8 +185,9 @@ html.qraft-scroll-lock body {
 .aha-mathfield-visual {
   font-size: 1.45rem;
   line-height: 1.65;
-  min-height: 8rem;
-  max-height: 360px;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -215,22 +222,6 @@ html.qraft-scroll-lock body {
   --contains-highlight-background-color: rgba(168, 85, 247, 0.25);
 }
 
-.aha-mathfield-visual {
-  font-size: 1.45rem;
-  line-height: 1.65;
-  min-height: 8rem;
-  max-height: 360px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (min-width: 640px) {
-  .aha-mathfield-visual {
-    min-height: 10rem;
-    max-height: 28rem;
-  }
-}
-
 .aha-mathfield::part(content),
 .aha-mathfield::part(menu-toggle) {
   display: block;
@@ -245,25 +236,18 @@ html.qraft-scroll-lock body {
 }
 
 .qraft-math-kb {
+  position: sticky;
+  bottom: 0;
+  z-index: 25;
   width: 100%;
   max-width: 100%;
-  max-height: 12.25rem;
-  overflow-x: hidden;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 @media (min-width: 768px) {
-  .notebook-stage {
-    min-height: 8.75rem;
-    max-height: 11.5rem;
-    height: 11.5rem;
-  }
   .qraft-math-kb {
-    max-height: 8.25rem;
-  }
-  .aha-mathfield-visual {
-    min-height: 5.25rem;
-    max-height: 8.25rem;
+    max-height: none;
   }
 }
 

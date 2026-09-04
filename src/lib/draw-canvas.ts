@@ -115,15 +115,25 @@ function strokePath(ctx: CanvasRenderingContext2D, s: CanvasPage["strokes"][numb
 }
 
 /** Ink only: erasers punch ink via destination-out, never the ruled background. */
-function drawInkStrokes(ctx: CanvasRenderingContext2D, page: CanvasPage, w: number, h: number) {
+function drawInkStrokes(
+  ctx: CanvasRenderingContext2D,
+  page: CanvasPage,
+  w: number,
+  h: number,
+  extraBg?: CanvasImageSource | null,
+) {
   const ink = document.createElement("canvas");
   ink.width = Math.max(1, Math.ceil(w));
   ink.height = Math.max(1, Math.ceil(h));
   const ictx = ink.getContext("2d");
   if (!ictx) return;
-  const bg = cachedBackground(page);
+  const bg = cachedBackground(page) ?? extraBg ?? undefined;
   if (bg) {
-    ictx.drawImage(bg, 0, 0, w, h);
+    try {
+      ictx.drawImage(bg, 0, 0, w, h);
+    } catch {
+      /* tainted or incomplete image */
+    }
   }
   for (const s of page.strokes) {
     if (s.points.length < 2) continue;
@@ -156,6 +166,7 @@ export function drawPage(
   w: number,
   h: number,
   skipTextId?: string | null,
+  background?: CanvasImageSource | null,
 ) {
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
@@ -170,7 +181,7 @@ export function drawPage(
     ctx.lineTo(w, y);
     ctx.stroke();
   }
-  drawInkStrokes(ctx, page, w, h);
+  drawInkStrokes(ctx, page, w, h, background);
   ctx.globalCompositeOperation = "source-over";
   ctx.textBaseline = "top";
   ctx.textAlign = "left";
@@ -219,7 +230,12 @@ export function hitTestText(texts: CanvasText[] | undefined, x: number, y: numbe
   return undefined;
 }
 
-function rasterizePageCanvas(page: CanvasPage, cssW: number, cssH: number) {
+function rasterizePageCanvas(
+  page: CanvasPage,
+  cssW: number,
+  cssH: number,
+  background?: CanvasImageSource | null,
+) {
   const canvas = document.createElement("canvas");
   const dpr = 2;
   const w = Math.max(1, Math.round(cssW));
@@ -229,16 +245,26 @@ function rasterizePageCanvas(page: CanvasPage, cssW: number, cssH: number) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
   ctx.scale(dpr, dpr);
-  drawPage(ctx, page, w, h);
+  drawPage(ctx, page, w, h, null, background);
   return canvas;
 }
 
-export function rasterizePage(page: CanvasPage, cssW: number, cssH: number) {
-  return rasterizePageCanvas(page, cssW, cssH)?.toDataURL("image/png") ?? "";
+export function rasterizePage(
+  page: CanvasPage,
+  cssW: number,
+  cssH: number,
+  background?: CanvasImageSource | null,
+) {
+  return rasterizePageCanvas(page, cssW, cssH, background)?.toDataURL("image/png") ?? "";
 }
 
-export function rasterizePageBlob(page: CanvasPage, cssW: number, cssH: number) {
-  const canvas = rasterizePageCanvas(page, cssW, cssH);
+export function rasterizePageBlob(
+  page: CanvasPage,
+  cssW: number,
+  cssH: number,
+  background?: CanvasImageSource | null,
+) {
+  const canvas = rasterizePageCanvas(page, cssW, cssH, background);
   if (!canvas) return Promise.resolve(null);
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");

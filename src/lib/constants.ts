@@ -7,6 +7,8 @@ export const DEV_HANDLES = ["aha_taro"] as const;
 export const COMPLIMENTARY_PREMIUM_IDENTIFIERS = ["qrafter"] as const;
 export const GUARDIAN_CONSENT_AGE = 15;
 export const VERIFIED_CREATOR_IDS = ["u-official", "u-mirai"] as const;
+export const OFFICIAL_USER_ID = "u-official";
+export const OFFICIAL_HANDLE = "qraft";
 export const PREMIUM_PRICE_JPY = 400;
 
 export const PULSE_NAME = "PULSE（パルス）";

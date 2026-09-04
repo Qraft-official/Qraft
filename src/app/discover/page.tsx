@@ -7,7 +7,7 @@ import { SUBJECTS } from "@/lib/constants";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { avgStars, useApp } from "@/lib/store";
 import type { Post, ProblemMode, Subject, Tier, User } from "@/lib/types";
-import { userIsVerified } from "@/lib/verified";
+import { userIsVerified, verifiedBadgeTone } from "@/lib/verified";
 import { postReactionScore } from "@/lib/weekly";
 import { ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
@@ -431,7 +431,7 @@ function UserResultCard({
       <Link href={`/u/${user.handle}`} className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
           <p className="truncate text-sm font-bold">{user.name}</p>
-          <VerifiedBadge show={verified} />
+          <VerifiedBadge show={verified} tone={verifiedBadgeTone(user)} />
         </div>
         <p className="truncate text-xs text-muted">@{user.handle}</p>
       </Link>

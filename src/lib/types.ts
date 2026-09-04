@@ -108,6 +108,10 @@ export type CanvasPage = {
   id: string;
   strokes: Stroke[];
   texts?: CanvasText[];
+  /** Raster from a previous save; drawn under new ink so it can be edited. */
+  backgroundImage?: string;
+  backgroundWidth?: number;
+  backgroundHeight?: number;
 };
 
 export type SprintRecord = {

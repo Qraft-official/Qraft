@@ -6,10 +6,12 @@ import {
   emptyCanvasPage,
   hitResizeHandle,
   hitTestText,
+  loadCanvasBackgrounds,
   pageHasInk,
   rasterizePage,
   rasterizePageBlob,
   sharedNotebookHeight,
+  backgroundHeightForWidth,
   textBounds,
   wrapWidthForText,
   type ResizeCorner,
@@ -120,6 +122,7 @@ export const MultiPageCanvas = forwardRef<
   const contentH = sharedNotebookHeight(pages);
   const flushRef = useRef(flush);
   flushRef.current = flush;
+  const bgKey = pages.map((p) => p.backgroundImage ?? "").join("|");
 
   const redraw = useCallback(() => {
     const list = pagesRef.current;
@@ -135,8 +138,10 @@ export const MultiPageCanvas = forwardRef<
       const rectW = wrap?.getBoundingClientRect().width || w;
       const wrapH = wrap?.getBoundingClientRect().height || 0;
       const cssW = Math.max(1, rectW);
-      const cssH = flushRef.current ? Math.max(inkH, wrapH) : inkH;
+      const bgH = backgroundHeightForWidth(page, cssW);
+      const cssH = flushRef.current ? Math.max(inkH, wrapH, bgH) : Math.max(inkH, bgH);
       usedH = Math.max(usedH, cssH);
+      if (wrap && !flushRef.current) wrap.style.height = `${cssH}px`;
       canvas.width = Math.max(1, Math.floor(cssW * dpr));
       canvas.height = Math.max(1, Math.floor(cssH * dpr));
       canvas.style.width = `${cssW}px`;
@@ -148,6 +153,16 @@ export const MultiPageCanvas = forwardRef<
     });
     sizeRef.current = { w: Math.max(1, w), h: usedH };
   }, [editingId, pages]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadCanvasBackgrounds(pages).then(() => {
+      if (!cancelled) redraw();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bgKey, pages, redraw]);
 
   const commit = (next: CanvasPage[]) => {
     pagesRef.current = next;
@@ -227,15 +242,19 @@ export const MultiPageCanvas = forwardRef<
       flushEdit();
       const { w, h } = sizeRef.current;
       const tall = sharedNotebookHeight(pagesRef.current);
+      const bgH = pagesRef.current.reduce((m, p) => Math.max(m, backgroundHeightForWidth(p, w)), 0);
+      const height = Math.max(h, tall, bgH);
       return pagesRef.current.map((p) =>
-        pageHasInk(p) ? rasterizePage(p, w, Math.max(h, tall)) : "",
+        pageHasInk(p) ? rasterizePage(p, w, height) : "",
       );
     },
     exportPageBlobs: async () => {
       flushEdit();
+      await loadCanvasBackgrounds(pagesRef.current);
       const { w, h } = sizeRef.current;
       const tall = sharedNotebookHeight(pagesRef.current);
-      const height = Math.max(h, tall);
+      const bgH = pagesRef.current.reduce((m, p) => Math.max(m, backgroundHeightForWidth(p, w)), 0);
+      const height = Math.max(h, tall, bgH);
       return Promise.all(
         pagesRef.current.map((p) =>
           pageHasInk(p) ? rasterizePageBlob(p, w, height) : Promise.resolve(null),

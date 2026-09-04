@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { NotePage } from "./types";
+import type { CanvasPage, NotePage } from "./types";
 
 export const PROBLEM_IMAGES_BUCKET = "problem-images";
 
@@ -66,20 +66,20 @@ export async function persistHandwritingPages(
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
     const existing = page.image;
+    const blob = await blobFromImageValue(existing, drawingBlobs?.[i]);
+    if (blob) {
+      const uploaded = await uploadDrawingBlob(userId, blob, i);
+      if (uploaded.error || !uploaded.url) {
+        return { error: uploaded.error || "手書き画像のアップロードに失敗しました" };
+      }
+      next.push({ ...page, image: uploaded.url });
+      continue;
+    }
     if (isHttpUrl(existing)) {
       next.push(page);
       continue;
     }
-    const blob = await blobFromImageValue(existing, drawingBlobs?.[i]);
-    if (!blob) {
-      next.push({ ...page, image: isDisplayImageSrc(existing) ? existing : undefined });
-      continue;
-    }
-    const uploaded = await uploadDrawingBlob(userId, blob, i);
-    if (uploaded.error || !uploaded.url) {
-      return { error: uploaded.error || "手書き画像のアップロードに失敗しました" };
-    }
-    next.push({ ...page, image: uploaded.url });
+    next.push({ ...page, image: isDisplayImageSrc(existing) ? existing : undefined });
   }
   return { pages: next, error: null };
 }
@@ -89,4 +89,28 @@ export function firstDrawingUrl(pages?: NotePage[], fallback?: string) {
   if (fromPages) return fromPages;
   if (fallback && isHttpUrl(fallback)) return fallback;
   return undefined;
+}
+
+export function notePagesToCanvasPages(pages?: NotePage[], photo?: string): CanvasPage[] {
+  if (pages?.length) {
+    return pages.map((p) => ({
+      id: p.id,
+      strokes: [],
+      texts: [],
+      backgroundImage: isDisplayImageSrc(p.image) ? p.image : undefined,
+      backgroundWidth: p.contentWidth,
+      backgroundHeight: p.contentHeight,
+    }));
+  }
+  if (isDisplayImageSrc(photo)) {
+    return [
+      {
+        id: "page-1",
+        strokes: [],
+        texts: [],
+        backgroundImage: photo,
+      },
+    ];
+  }
+  return [{ id: "page-1", strokes: [], texts: [] }];
 }

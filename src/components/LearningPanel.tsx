@@ -22,7 +22,7 @@ export function LearningPanel() {
   const [cat, setCat] = useState<SaveCategory | "all">("all");
 
   useEffect(() => {
-    void fetchMySavedRows().then(setSavedRows);
+    void fetchMySavedRows().then((rows) => setSavedRows(rows ?? []));
     void fetchMyAttempts().then(setAttempts);
   }, [saved]);
 

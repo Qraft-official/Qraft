@@ -67,6 +67,7 @@ import { asDifficulty, MOCK_PROBLEM_META, isProblemUuid } from "./difficulty";
 import {
   fetchLearningBootstrap,
   fetchLearningCardState,
+  fetchMySavedMap,
   promptDueRevenge,
   assignProblemSeries,
   setSavedCategory as persistSaveCategory,
@@ -111,6 +112,19 @@ import {
 } from "./notifications";
 
 type Ratings = Record<string, Partial<Record<RatingKind, number>>>;
+
+function overlayPendingSaved(
+  incoming: Record<string, SaveCategory>,
+  prev: Record<string, SaveCategory>,
+  pending: Set<string>,
+) {
+  const next = { ...incoming };
+  for (const id of pending) {
+    if (prev[id]) next[id] = prev[id];
+    else delete next[id];
+  }
+  return next;
+}
 
 type Store = {
   ready: boolean;
@@ -311,6 +325,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [confusedMine, setConfusedMine] = useState<Record<string, boolean>>({});
   const [confusedCounts, setConfusedCounts] = useState<Record<string, number>>({});
   const [saved, setSaved] = useState<Record<string, SaveCategory>>({});
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+  const pendingSaveIds = useRef(new Set<string>());
+  const saveLocks = useRef(new Set<string>());
   const [feltVotes, setFeltVotes] = useState<Record<string, FeltVote>>({});
   const [lastAttempts, setLastAttempts] = useState<Record<string, AttemptSummary>>({});
   const [attemptStarts, setAttemptStarts] = useState<Record<string, string>>({});
@@ -394,13 +412,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           await ensureProfile(user);
           await ensureWelcomeNotification();
-          const [inbox, profileResult, admin, boot] = await Promise.all([
+          const [inbox, profileResult, admin, boot, savedMap] = await Promise.all([
             fetchNotifications(),
             fetchLearningProfile(user.id),
             checkIsAdmin(),
             fetchLearningBootstrap(),
+            fetchMySavedMap(),
           ]);
           if (cancelled) return;
+          if (savedMap) setSaved(savedMap);
           setNotifications(inbox);
           setNotifyAuthors(boot.notifyAuthors);
           setRevengeDue(boot.revenge);
@@ -1442,27 +1462,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [confusedMine, getPost],
   );
 
-  const toggleSave = useCallback(
-    async (problemId: string, category: SaveCategory = "later") => {
-      const currently = !!saved[problemId];
-      setSaved((prev) => {
-        const next = { ...prev };
-        if (currently) delete next[problemId];
-        else next[problemId] = category;
-        return next;
-      });
+  const toggleSave = useCallback(async (problemId: string, category: SaveCategory = "later") => {
+    if (saveLocks.current.has(problemId)) return;
+    saveLocks.current.add(problemId);
+    const currently = !!savedRef.current[problemId];
+    const prevCat = savedRef.current[problemId];
+    pendingSaveIds.current.add(problemId);
+    setSaved((prev) => {
+      const next = { ...prev };
+      if (currently) delete next[problemId];
+      else next[problemId] = category;
+      return next;
+    });
+    try {
       const res = await toggleSavedProblem(problemId, currently, category);
       if (res.error) {
         setSaved((prev) => {
           const next = { ...prev };
-          if (currently) next[problemId] = saved[problemId];
+          if (currently && prevCat) next[problemId] = prevCat;
+          else if (currently) next[problemId] = "later";
           else delete next[problemId];
           return next;
         });
+        return;
       }
-    },
-    [saved],
-  );
+      const map = await fetchMySavedMap();
+      pendingSaveIds.current.delete(problemId);
+      if (map) {
+        setSaved((prev) => {
+          const next = overlayPendingSaved(map, prev, pendingSaveIds.current);
+          if (currently) delete next[problemId];
+          else next[problemId] = prev[problemId] ?? category;
+          return next;
+        });
+      }
+    } finally {
+      pendingSaveIds.current.delete(problemId);
+      saveLocks.current.delete(problemId);
+    }
+  }, []);
 
   const setSaveCategory = useCallback(async (problemId: string, category: SaveCategory) => {
     setSaved((prev) => ({ ...prev, [problemId]: category }));
@@ -1542,17 +1580,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshLearn = useCallback(async () => {
     if (!supabaseUid) return;
-    const [boot, cards] = await Promise.all([
+    const [boot, cards, savedMap] = await Promise.all([
       fetchLearningBootstrap(),
       fetchLearningCardState(remotePosts.map((p) => p.id)),
+      fetchMySavedMap(),
     ]);
     setNotifyAuthors(boot.notifyAuthors);
     setRevengeDue(boot.revenge);
     setCalendarDays(boot.calendarDays);
     setLearnStreak({ current: boot.currentStreak, longest: boot.longestStreak });
-    setSaved(cards.saved);
-    setFeltVotes(cards.votes);
-    setLastAttempts(cards.attempts);
+    if (cards) {
+      setFeltVotes(cards.votes);
+      setLastAttempts(cards.attempts);
+    }
+    if (savedMap) {
+      setSaved((prev) => overlayPendingSaved(savedMap, prev, pendingSaveIds.current));
+    }
   }, [supabaseUid, remotePosts]);
 
   const assignToSeries = useCallback(
@@ -1582,11 +1625,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
+    if (!supabaseUid) {
+      setSaved({});
+      return;
+    }
+    let cancelled = false;
+    void fetchMySavedMap().then((map) => {
+      if (cancelled || !map) return;
+      setSaved((prev) => overlayPendingSaved(map, prev, pendingSaveIds.current));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseUid]);
+
+  useEffect(() => {
     if (!supabaseUid) return;
     const ids = remotePosts.map((p) => p.id).filter(isProblemUuid);
     const t = window.setTimeout(() => {
       void fetchLearningCardState(ids).then((s) => {
-        setSaved(s.saved);
+        if (!s) return;
         setFeltVotes(s.votes);
         setLastAttempts(s.attempts);
       });

@@ -28,9 +28,7 @@ export function difficultyLabel(level: number) {
 }
 
 export function isProblemUuid(id: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    id,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
 /** Demo metadata for mock feed posts (not in DB). */

@@ -6,9 +6,10 @@ import { Menu } from "lucide-react";
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { TextSizeBar } from "./TextSizeBar";
-import { wrapWithTextSize, type TextSizeId } from "@/lib/text-size";
-import { dismissComposerKeyboard, HIDE_COMPOSER_KEYBOARD } from "@/lib/composer-keyboard";
+import { wrapWithTextSize, textSizeClass, type TextSizeId } from "@/lib/text-size";
+import { COMPOSER_KB_DOCK_ID, dismissComposerKeyboard, HIDE_COMPOSER_KEYBOARD } from "@/lib/composer-keyboard";
 import { type InputMode, type MathKeyAction, MathKeyboard } from "./MathKeyboard";
+import { createPortal } from "react-dom";
 
 const FORMAT = [
   { id: "h2", label: "H2", wrap: false, insert: "## " },
@@ -50,6 +51,12 @@ export function LatexEditor({
   const [menuOpen, setMenuOpen] = useState(false);
   const [kbMode, setKbMode] = useState<InputMode>("math");
   const [kbVisible, setKbVisible] = useState(true);
+  const [textSize, setTextSize] = useState<TextSizeId>("md");
+  const [dockEl, setDockEl] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setDockEl(document.getElementById(COMPOSER_KB_DOCK_ID));
+  }, [kbVisible]);
 
   useEffect(() => {
     const hide = () => setKbVisible(false);
@@ -58,6 +65,7 @@ export function LatexEditor({
   }, []);
 
   const applySize = (size: TextSizeId) => {
+    setTextSize(size);
     const el = textareaRef.current;
     const src = draftRef.current;
     const start = el?.selectionStart ?? src.length;
@@ -218,7 +226,7 @@ export function LatexEditor({
               {f.label}
             </button>
           ))}
-          <TextSizeBar onPick={applySize} />
+          <TextSizeBar onPick={applySize} active={textSize} />
           <div className="relative ml-auto shrink-0">
             <button
               type="button"
@@ -268,7 +276,7 @@ export function LatexEditor({
           onKeyDown={(e) => {
             if (e.key === "Enter") e.stopPropagation();
           }}
-          className={`min-w-0 w-full max-w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 font-mono text-sm leading-relaxed break-words whitespace-pre-wrap outline-none [overflow-wrap:anywhere] [word-break:break-word] focus:border-neon ${
+          className={`min-w-0 w-full max-w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 font-mono leading-relaxed break-words whitespace-pre-wrap outline-none [overflow-wrap:anywhere] [word-break:break-word] focus:border-neon ${textSizeClass(textSize, "editor") || "text-sm"} ${
             docked
               ? "min-h-[8rem] flex-1 resize-none overflow-y-auto"
               : tall
@@ -281,7 +289,7 @@ export function LatexEditor({
             docked ? "max-h-28" : tall ? "max-h-20" : "max-h-28"
           }`}
         >
-          <p className="mb-1 text-[10px] font-bold tracking-wide text-muted">LIVE PREVIEW · KaTeX</p>
+          <p className="mb-1 text-[10px] font-bold tracking-wide text-muted">プレビュー</p>
           {value.trim() ? (
             <LatexText text={value} className="max-w-full break-words text-sm [&_.katex-display]:overflow-x-auto" />
           ) : (
@@ -290,22 +298,25 @@ export function LatexEditor({
         </div>
         {footer && <div className="mt-2 min-w-0 shrink-0 pb-2">{footer}</div>}
       </div>
-      {keyboard && kbVisible && (
-        <MathKeyboard
-          onAction={handleKeyboardClick}
-          inputMode={kbMode}
-          onInputModeChange={(mode) => {
-            setKbMode(mode);
-            if (mode === "text") {
-              requestAnimationFrame(() => textareaRef.current?.focus());
-            }
-          }}
-          onDismiss={() => {
-            setKbVisible(false);
-            dismissComposerKeyboard();
-          }}
-        />
-      )}
+      {keyboard && kbVisible && (() => {
+        const kb = (
+          <MathKeyboard
+            onAction={handleKeyboardClick}
+            inputMode={kbMode}
+            onInputModeChange={(mode) => {
+              setKbMode(mode);
+              if (mode === "text") {
+                requestAnimationFrame(() => textareaRef.current?.focus());
+              }
+            }}
+            onDismiss={() => {
+              setKbVisible(false);
+              dismissComposerKeyboard();
+            }}
+          />
+        );
+        return dockEl ? createPortal(kb, dockEl) : kb;
+      })()}
     </div>
   );
 }

@@ -10,7 +10,7 @@ export function ComposerModeTabs({
   onChange: (next: "hand" | "typed") => void;
 }) {
   return (
-    <div className="flex shrink-0 gap-1 px-4 py-2" role="tablist" aria-label="入力方式">
+    <div className="flex shrink-0 gap-1 px-3 py-1" role="tablist" aria-label="入力方式">
       <button
         type="button"
         role="tab"

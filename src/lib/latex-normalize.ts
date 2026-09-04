@@ -67,6 +67,10 @@ export function latexToPlainText(src: string) {
   return stripSimpleTextCommands(unwrapped);
 }
 
+export function capExcessBlankLines(src: string) {
+  return src.replace(/\n{5,}/g, "\n\n\n\n");
+}
+
 /** Convert unsupported TeX (MathLive `\displaylines`) into KaTeX-friendly macros. */
 export function normalizeLatexForKatex(src: string) {
   let s = src.trim();

@@ -1,8 +1,8 @@
 export const TEXT_SIZES = [
-  { id: "sm", label: "小", className: "text-[12px] leading-snug" },
-  { id: "md", label: "標準", className: "" },
-  { id: "lg", label: "大", className: "text-[18px] leading-snug" },
-  { id: "xl", label: "特大", className: "text-[24px] leading-tight" },
+  { id: "sm", label: "小", editorClass: "text-[12px] leading-snug", feedClass: "text-[12px] leading-snug" },
+  { id: "md", label: "標準", editorClass: "", feedClass: "" },
+  { id: "lg", label: "大", editorClass: "text-[18px] leading-snug", feedClass: "text-[16px] leading-snug" },
+  { id: "xl", label: "特大", editorClass: "text-[22px] leading-tight", feedClass: "text-[18px] leading-snug" },
 ] as const;
 
 export type TextSizeId = (typeof TEXT_SIZES)[number]["id"];
@@ -19,11 +19,11 @@ export function wrapWithTextSize(src: string, size: TextSizeId) {
   return `[[${size}]]${inner}[[/${size}]]`;
 }
 
-export function textSizeClass(id: string) {
-  if (id === "sm" || id === "lg" || id === "xl") {
-    return TEXT_SIZES.find((s) => s.id === id)?.className ?? "";
-  }
-  return "";
+export function textSizeClass(id: string, surface: "editor" | "feed" = "feed") {
+  if (id !== "sm" && id !== "lg" && id !== "xl") return "";
+  const row = TEXT_SIZES.find((s) => s.id === id);
+  if (!row) return "";
+  return surface === "editor" ? row.editorClass : row.feedClass;
 }
 
 export function splitTextSizeParts(value: string): { size: "sm" | "lg" | "xl" | null; value: string }[] {

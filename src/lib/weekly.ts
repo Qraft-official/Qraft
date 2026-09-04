@@ -3,6 +3,13 @@ import type { Post, User } from "./types";
 
 export const WEEKLY_MS = 7 * 24 * 60 * 60 * 1000;
 
+export function weeklyPeriodLabel(now = Date.now()) {
+  const end = new Date(now);
+  const start = new Date(now - WEEKLY_MS);
+  const fmt = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+  return { short: "過去7日間", range: `${fmt(start)}〜${fmt(end)}` };
+}
+
 export function isWithinLast7Days(iso: string, now = Date.now()) {
   const t = new Date(iso).getTime();
   if (!Number.isFinite(t)) return false;

@@ -2,7 +2,7 @@
 
 import { emptyCanvasPage, pageHasInk, sharedTypedHeight } from "@/lib/draw-canvas";
 import { confirmDialog } from "@/lib/app-dialog";
-import { dismissComposerKeyboard } from "@/lib/composer-keyboard";
+import { COMPOSER_KB_DOCK_ID, dismissComposerKeyboard } from "@/lib/composer-keyboard";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
 import { notePagesToCanvasPages } from "@/lib/problem-images";
 import { useApp } from "@/lib/store";
@@ -14,9 +14,10 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
 import { ComposerModeTabs } from "./ComposerModeTabs";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
-import { ComposerExpandOverlay, NotebookExpandButton } from "./NotebookExpandControls";
+import { ComposerExpandOverlay } from "./NotebookExpandControls";
 import { ProblemModePicker } from "./ProblemModePicker";
 import { HintEditor } from "./HintEditor";
+import type { TextSizeId } from "@/lib/text-size";
 import type { TypedPage } from "./TypedNotebook";
 
 const MultiPageCanvas = dynamic(
@@ -72,6 +73,7 @@ export function EditProblemModal({
   const [pages, setPages] = useState<CanvasPage[]>([emptyCanvasPage("page-1")]);
   const [typedPages, setTypedPages] = useState<TypedPage[]>([{ id: "t-1", latex: "" }]);
   const [typedIndex, setTypedIndex] = useState(0);
+  const [notebookTextSize, setNotebookTextSize] = useState<TextSizeId>("md");
   const [editorExpanded, setEditorExpanded] = useState(false);
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -100,7 +102,9 @@ export function EditProblemModal({
     const root = document.documentElement;
     const apply = () => {
       const h = window.visualViewport?.height ?? window.innerHeight;
+      const top = window.visualViewport?.offsetTop ?? 0;
       root.style.setProperty("--composer-vvh", `${Math.round(h)}px`);
+      root.style.setProperty("--composer-vv-top", `${Math.round(top)}px`);
     };
     apply();
     window.visualViewport?.addEventListener("resize", apply);
@@ -111,6 +115,7 @@ export function EditProblemModal({
       window.visualViewport?.removeEventListener("scroll", apply);
       window.removeEventListener("resize", apply);
       root.style.removeProperty("--composer-vvh");
+      root.style.removeProperty("--composer-vv-top");
     };
   }, [open]);
 
@@ -210,6 +215,7 @@ export function EditProblemModal({
   if (!post) return null;
 
   const save = async () => {
+    if (saving) return;
     if (mode === "challenge" && !correctAnswer.trim()) {
       setError("Challenger モードでは正解の入力が必須です");
       return;
@@ -285,7 +291,7 @@ export function EditProblemModal({
       {open && (
         <motion.div
           ref={overlayRef}
-          className="composer-overlay fixed inset-0 z-[70] flex items-center justify-center overflow-hidden overscroll-none bg-black/70 p-3 md:p-3"
+          className="composer-overlay fixed inset-x-0 z-[70] flex items-center justify-center overflow-hidden overscroll-none bg-black/70 px-2 py-1 md:p-3"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -302,13 +308,8 @@ export function EditProblemModal({
             }`}
           >
             <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
-              <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-2 md:px-4">
-                <div>
-                  <p className="text-sm font-bold">問題を編集</p>
-                  <p className="text-xs text-muted">
-                    {inputMode === "hand" ? "手書きモード" : "打ち込み · 数式キーボード"}
-                  </p>
-                </div>
+              <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 md:px-4">
+                <p className="text-sm font-bold">問題を編集</p>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
@@ -349,9 +350,6 @@ export function EditProblemModal({
                 {modeTabs}
                 {inputMode === "hand" ? (
                   <div className="flex min-w-0 w-full max-w-full flex-col">
-                    <div className="flex shrink-0 justify-end px-2 py-0.5">
-                      <NotebookExpandButton onClick={() => setEditorExpanded(true)} />
-                    </div>
                     {!editorExpanded && (
                       <div className="notebook-stage mx-4 min-h-0">
                         <MultiPageCanvas
@@ -359,6 +357,9 @@ export function EditProblemModal({
                           pages={pages}
                           onChange={setPages}
                           premium={hasPremium}
+                          textSize={notebookTextSize}
+                          onTextSizeChange={setNotebookTextSize}
+                          onToggleExpand={() => setEditorExpanded(true)}
                         />
                       </div>
                     )}
@@ -387,10 +388,13 @@ export function EditProblemModal({
                       }}
                       expanded={editorExpanded}
                       onToggleExpand={() => setEditorExpanded((v) => !v)}
+                      textSize={notebookTextSize}
+                      onTextSizeChange={setNotebookTextSize}
                     />
                   )
                 )}
               </div>
+              <div id={COMPOSER_KB_DOCK_ID} className="shrink-0" />
               <div className="composer-footer flex items-center justify-end gap-3 border-t border-gray-800 px-3 py-1.5 md:px-4">
                 {error && <p className="mr-auto text-xs text-red-400">{error}</p>}
                 <button
@@ -412,6 +416,10 @@ export function EditProblemModal({
                     onChange={setPages}
                     premium={hasPremium}
                     flush
+                    expanded
+                    textSize={notebookTextSize}
+                    onTextSizeChange={setNotebookTextSize}
+                    onToggleExpand={() => setEditorExpanded(false)}
                   />
                 </div>
               ) : (
@@ -436,6 +444,9 @@ export function EditProblemModal({
                     setTypedIndex(Math.min(typedIndex, next.length - 1));
                   }}
                   expanded
+                  onToggleExpand={() => setEditorExpanded(false)}
+                  textSize={notebookTextSize}
+                  onTextSizeChange={setNotebookTextSize}
                 />
               )}
             </ComposerExpandOverlay>

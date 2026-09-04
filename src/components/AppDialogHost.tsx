@@ -27,7 +27,8 @@ export function AppDialogHost() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        settleAppDialog(pending.request.kind === "confirm" ? false : null);
+        if (pending.request.kind === "confirm") settleAppDialog(false);
+        else settleAppDialog(null);
       }
     };
     document.addEventListener("keydown", onKey);
@@ -40,12 +41,16 @@ export function AppDialogHost() {
   if (!pending) return null;
   const req = pending.request;
   const destructive = req.kind === "confirm" && req.destructive;
+  const dismiss = () => {
+    if (req.kind === "confirm") settleAppDialog(false);
+    else settleAppDialog(null);
+  };
 
   return (
     <div
       className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 p-4 sm:items-center"
       role="presentation"
-      onClick={() => settleAppDialog(req.kind === "confirm" ? false : null)}
+      onClick={dismiss}
     >
       <div
         role={destructive ? "alertdialog" : "dialog"}
@@ -75,12 +80,32 @@ export function AppDialogHost() {
             }}
           />
         )}
+        {req.kind === "choice" ? (
+          <div className="mt-4 flex flex-col gap-2">
+            {req.actions.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className={`min-h-11 w-full rounded-full px-3 text-sm font-black ${
+                  a.destructive
+                    ? "bg-red-500 text-white"
+                    : a.primary
+                      ? "bg-aha text-black"
+                      : "border border-gray-700 text-white"
+                }`}
+                onClick={() => settleAppDialog(a.id)}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        ) : (
         <div className="mt-4 flex gap-2">
           <button
             ref={cancelRef}
             type="button"
             className="min-h-11 flex-1 rounded-full border border-gray-700 px-3 text-sm font-bold text-white"
-            onClick={() => settleAppDialog(req.kind === "confirm" ? false : null)}
+            onClick={dismiss}
           >
             {req.cancelLabel}
           </button>
@@ -101,6 +126,7 @@ export function AppDialogHost() {
             {req.confirmLabel}
           </button>
         </div>
+        )}
       </div>
     </div>
   );

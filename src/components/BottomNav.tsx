@@ -41,7 +41,7 @@ export function BottomNav() {
       className="fixed bottom-0 left-1/2 z-40 w-full max-w-lg -translate-x-1/2 md:max-w-2xl lg:max-w-4xl"
       aria-label="メインナビゲーション"
     >
-      <div className="grid w-full grid-cols-5 border-t border-gray-800 bg-black/90 pt-1 backdrop-blur-md pb-[max(0.4rem,env(safe-area-inset-bottom))]">
+      <div className="grid w-full grid-cols-5 border-t border-gray-800 bg-black/90 backdrop-blur-md pb-[max(0.35rem,env(safe-area-inset-bottom))]">
         {TABS.map((t) => {
           const active =
             t.href === "/"
@@ -57,7 +57,7 @@ export function BottomNav() {
               href={t.href}
               aria-label={t.label}
               aria-current={active ? "page" : undefined}
-              className="flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5"
+              className="flex min-h-14 min-w-0 w-full flex-col items-center justify-center gap-0.5 px-0.5"
             >
               <span className={`relative flex h-6 w-6 items-center justify-center ${active ? "text-white" : "text-muted"}`}>
                 <Icon size={20} strokeWidth={active ? 2.4 : 1.8} aria-hidden />

@@ -21,6 +21,7 @@ import {
   MoreVertical,
   Pencil,
   PenLine,
+  Quote,
   Repeat2,
   Share2,
   Star,
@@ -135,7 +136,6 @@ export function PostCard({
   const liked = likes.includes(post.id);
   const reposted = reposts.includes(post.id);
   const isMe = author.id === me.id;
-  const aha = ratings[post.id]?.aha ?? avgStars(post.ahaSum, post.ahaCount);
   const elegance =
     ratings[post.id]?.elegance ?? avgStars(post.eleganceSum, post.eleganceCount);
   const tier = author.tiers[post.subject];
@@ -539,25 +539,39 @@ export function PostCard({
             </>
           )}
 
-          <div className="mt-2 flex max-w-md items-center justify-between text-muted">
+          {(post.kind === "problem" || post.kind === "sprint") && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-white/45">
+              <span>解答 {post.gradeN ?? 0}</span>
+              {(post.gradeN ?? 0) > 0 && (
+                <span>
+                  正答 {Math.round(((post.gradeCorrect ?? 0) / (post.gradeN ?? 1)) * 100)}%
+                </span>
+              )}
+              {post.repostCount + (reposted ? 1 : 0) > 0 && (
+                <span>リポスト {post.repostCount + (reposted ? 1 : 0)}</span>
+              )}
+            </div>
+          )}
+
+          <div className="mt-1 flex max-w-md items-center justify-between gap-0.5 text-muted">
             <button
               type="button"
               onClick={openComments}
-              className={`flex min-h-11 items-center gap-1 px-1 text-xs hover:text-sky-400 ${threadOpen ? "text-sky-400" : ""}`}
+              className={`flex min-h-11 min-w-0 flex-1 items-center justify-center gap-0.5 px-0.5 text-[11px] hover:text-sky-400 ${threadOpen ? "text-sky-400" : ""}`}
               aria-label="コメント"
             >
               <MessageCircle size={16} /> {comments.length}
             </button>
 
-            <div className="relative" ref={menuRef}>
+            <div className="relative flex min-w-0 flex-1 justify-center" ref={menuRef}>
               <button
                 type="button"
                 onClick={() => setRepostOpen((v) => !v)}
-                className={`flex min-h-11 items-center gap-1 px-1 text-xs ${reposted ? "text-emerald-400" : "hover:text-emerald-400"}`}
-                aria-label="リポスト"
+                className={`flex min-h-11 min-w-11 items-center justify-center ${reposted ? "text-emerald-400" : "hover:text-emerald-400"}`}
+                aria-label="引用・リポスト"
                 aria-expanded={repostOpen}
               >
-                <Repeat2 size={16} /> {post.repostCount + (reposted ? 1 : 0)}
+                <Quote size={16} />
               </button>
               <AnimatePresence>
                 {repostOpen && (
@@ -565,7 +579,7 @@ export function PostCard({
                     initial={{ opacity: 0, y: 8, scale: 0.96 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                    className="absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 overflow-hidden rounded-2xl border border-gray-700 bg-[#15202b] shadow-[0_8px_40px_rgba(0,0,0,0.6)]"
+                    className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-700 bg-[#15202b] shadow-[0_8px_40px_rgba(0,0,0,0.6)]"
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
                   >
@@ -612,90 +626,93 @@ export function PostCard({
             </div>
 
             {(post.kind === "problem" || post.kind === "sprint") && (
-              <motion.button
+              <button
                 type="button"
-                whileTap={{ scale: 1.15 }}
                 onClick={() => void toggleConfused(post.id)}
-                className={`flex min-h-11 min-w-11 items-center justify-center gap-0.5 rounded-full px-1.5 text-xs font-black ${
-                  confusedMine[post.id]
-                    ? "bg-aha/20 text-aha"
-                    : "text-muted hover:text-white"
+                className={`flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full text-[13px] font-black ${
+                  confusedMine[post.id] ? "bg-aha/20 text-aha" : "hover:text-white"
                 }`}
                 aria-label="わからない"
                 aria-pressed={!!confusedMine[post.id]}
               >
-                ?
-                {(post.confusedCount ?? 0) > 0 && (
-                  <span className="text-[10px] font-bold">{post.confusedCount}</span>
-                )}
-              </motion.button>
-            )}
-
-            {hasPremium ? (
-              <div className="flex items-center gap-0.5">
-                {PREMIUM_REACTIONS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => react(post.id, emoji)}
-                    className={`tap-target text-sm ${reactions[post.id] === emoji ? "scale-125" : "opacity-70"}`}
-                    aria-label={`リアクション ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  openPaywall("特別リアクションは Qraft Premium（月額¥400）限定です。")
-                }
-                className="min-h-11 px-1 text-xs text-muted"
-              >
-                😂+
+                ?{(post.confusedCount ?? 0) > 0 ? (
+                  <span className="ml-0.5 text-[10px] font-bold">{post.confusedCount}</span>
+                ) : null}
               </button>
             )}
 
             <motion.button
               whileTap={{ scale: 1.08 }}
               onClick={() => toggleLike(post.id)}
-              className={`flex min-h-11 items-center gap-1 px-1 text-xs ${liked ? "text-purple-400" : "hover:text-purple-400"}`}
+              className={`flex min-h-11 min-w-0 flex-1 items-center justify-center gap-0.5 px-0.5 text-[11px] ${liked ? "text-purple-400" : "hover:text-purple-400"}`}
               aria-label="Aha"
               aria-pressed={liked}
             >
               <Brain size={16} fill={liked ? "#A855F7" : "none"} />
               {post.likeCount + (liked ? 1 : 0)}
-              <span className="hidden sm:inline">脳汁</span>
             </motion.button>
-            {(post.kind === "problem" || post.kind === "sprint") && (
-              <SaveProblemButton problemId={post.id} />
-            )}
-            <button
-              onClick={() => setRateOpen((v) => !v)}
-              className="flex min-h-11 items-center gap-1 px-1 text-xs hover:text-aha"
-              aria-label="Qraft レベル"
-            >
-              <Star size={16} />
-              {post.kind === "solution" ? elegance || "—" : aha || "—"}
-            </button>
-            {(post.kind === "problem" || post.kind === "sprint") && (
+
+            {hasPremium ? (
+              <span className="flex min-w-0 shrink items-center justify-center gap-0">
+                {PREMIUM_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => react(post.id, emoji)}
+                    className={`flex h-11 w-8 items-center justify-center text-sm ${reactions[post.id] === emoji ? "scale-125" : "opacity-70"}`}
+                    aria-label={`リアクション ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </span>
+            ) : (
               <button
                 type="button"
-                onClick={() => {
-                  void sharePost({ id: post.id, text: post.text }).then((res) => {
-                    if (res.ok && res.method === "copy") {
-                      setShareToast("リンクをコピーしました！");
-                      window.setTimeout(() => setShareToast(""), 2200);
-                    }
-                  });
-                }}
-                className="flex min-h-11 items-center gap-1 px-1 text-xs hover:text-aha"
-                aria-label="共有"
+                onClick={() =>
+                  openPaywall("特別リアクションは Qraft Premium（月額¥400）限定です。")
+                }
+                className="flex min-h-11 min-w-0 flex-1 items-center justify-center px-0.5 text-[11px] text-muted"
               >
-                <Share2 size={16} />
+                😂+
               </button>
             )}
+
+            {post.kind === "solution" && (
+              <button
+                type="button"
+                onClick={() => setRateOpen((v) => !v)}
+                className="flex min-h-11 min-w-0 flex-1 items-center justify-center gap-0.5 px-0.5 text-[11px] hover:text-aha"
+                aria-label="エレガント度"
+              >
+                <Star size={16} />
+                {elegance || "—"}
+              </button>
+            )}
+
+            <div className="flex min-w-0 flex-1 justify-center">
+              <SaveProblemButton
+                problemId={
+                  post.kind === "solution" && post.problemId ? post.problemId : post.id
+                }
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                void sharePost({ id: post.id, text: post.text }).then((res) => {
+                  if (res.ok && res.method === "copy") {
+                    setShareToast("リンクをコピーしました！");
+                    window.setTimeout(() => setShareToast(""), 2200);
+                  }
+                });
+              }}
+              className="flex min-h-11 min-w-0 flex-1 items-center justify-center px-0.5 text-[11px] hover:text-aha"
+              aria-label="共有"
+            >
+              <Share2 size={16} />
+            </button>
           </div>
 
           {shareToast && (
@@ -704,27 +721,18 @@ export function PostCard({
             </p>
           )}
 
-          {rateOpen && (
+          {rateOpen && post.kind === "solution" && (
             <motion.div
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               className="mt-3 rounded-2xl border border-gray-800 bg-panel p-3"
             >
-              {post.kind === "solution" ? (
-                <StarRating
-                  label="エレガント度 (Elegance Level)"
-                  value={ratings[post.id]?.elegance ?? 0}
-                  onChange={(n) => rate(post.id, "elegance", n)}
-                  accent="lime"
-                />
-              ) : (
-                <StarRating
-                  label="Qraft レベル"
-                  value={ratings[post.id]?.aha ?? 0}
-                  onChange={(n) => rate(post.id, "aha", n)}
-                  accent="purple"
-                />
-              )}
+              <StarRating
+                label="エレガント度 (Elegance Level)"
+                value={ratings[post.id]?.elegance ?? 0}
+                onChange={(n) => rate(post.id, "elegance", n)}
+                accent="lime"
+              />
             </motion.div>
           )}
 

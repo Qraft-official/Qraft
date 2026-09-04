@@ -20,14 +20,16 @@ function asGrade(value: unknown): AttemptGrade | null {
   return null;
 }
 
-export async function fetchLearningCardState(ids: string[]): Promise<LearningCardState> {
+export async function fetchLearningCardState(
+  ids: string[],
+): Promise<LearningCardState | null> {
   const uuids = ids.filter(isProblemUuid);
   const empty: LearningCardState = { saved: {}, votes: {}, attempts: {} };
   if (!uuids.length) return empty;
   const { data, error } = await supabase.rpc("learning_card_state", { p_ids: uuids });
   if (error) {
     console.warn("learning_card_state:", error.message);
-    return empty;
+    return null;
   }
   const raw = (data ?? {}) as Record<string, unknown>;
   const savedRaw = (raw.saved ?? {}) as Record<string, unknown>;
@@ -106,11 +108,14 @@ export async function toggleSavedProblem(
       .eq("problem_id", problemId);
     return { error: error?.message };
   }
-  const { error } = await supabase.from("saved_problems").upsert({
-    user_id: uid,
-    problem_id: problemId,
-    category,
-  });
+  const { error } = await supabase.from("saved_problems").upsert(
+    {
+      user_id: uid,
+      problem_id: problemId,
+      category,
+    },
+    { onConflict: "user_id,problem_id" },
+  );
   return { error: error?.message };
 }
 
@@ -121,11 +126,14 @@ export async function setSavedCategory(problemId: string, category: SaveCategory
   } = await supabase.auth.getSession();
   const uid = session?.user?.id;
   if (!uid) return { error: "ログインしてください" };
-  const { error } = await supabase.from("saved_problems").upsert({
-    user_id: uid,
-    problem_id: problemId,
-    category,
-  });
+  const { error } = await supabase.from("saved_problems").upsert(
+    {
+      user_id: uid,
+      problem_id: problemId,
+      category,
+    },
+    { onConflict: "user_id,problem_id" },
+  );
   return { error: error?.message };
 }
 
@@ -136,13 +144,21 @@ export async function fetchMySavedRows() {
     .order("created_at", { ascending: false });
   if (error) {
     console.warn("saved_problems:", error.message);
-    return [] as { problemId: string; category: SaveCategory; createdAt: string }[];
+    return null;
   }
   return (data ?? []).map((r) => ({
     problemId: String((r as { problem_id: string }).problem_id),
     category: asSaveCategory((r as { category: string }).category),
     createdAt: String((r as { created_at: string }).created_at),
   }));
+}
+
+export async function fetchMySavedMap(): Promise<Record<string, SaveCategory> | null> {
+  const rows = await fetchMySavedRows();
+  if (!rows) return null;
+  const map: Record<string, SaveCategory> = {};
+  for (const row of rows) map[row.problemId] = row.category;
+  return map;
 }
 
 export async function startProblemAttempt(problemId: string) {

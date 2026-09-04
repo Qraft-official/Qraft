@@ -1,22 +1,23 @@
 import type { MathfieldElement } from "mathlive";
 import { promptDialog } from "./app-dialog";
-import { latexLooksLikePlainText, latexToPlainText, normalizeLatexForKatex } from "./latex-normalize";
+import { latexLooksLikePlainText, latexToPlainText, normalizeLatexForKatex, capExcessBlankLines } from "./latex-normalize";
 import { unwrapTextSize, wrapWithTextSize, type TextSizeId } from "./text-size";
 
 /** Wrap MathLive LaTeX so the existing KaTeX feed renderer can display it. */
 export function wrapMathliveLatex(latex: string) {
-  if (!latex.replace(/\s/g, "") && !latex.includes("\n")) return "";
-  if (latexLooksLikePlainText(latex)) {
-    if (!/\\/.test(latex)) return latex;
-    const plain = latexToPlainText(latex);
-    return plain.length ? plain : latex;
+  const withCaps = capExcessBlankLines(latex);
+  if (!withCaps.replace(/\s/g, "") && !withCaps.includes("\n")) return "";
+  if (latexLooksLikePlainText(withCaps)) {
+    if (!/\\/.test(withCaps)) return withCaps;
+    const plain = latexToPlainText(withCaps);
+    return capExcessBlankLines(plain.length ? plain : withCaps);
   }
-  const math = latex.trim();
-  if (!math) return latex.includes("\n") ? latex : "";
+  const math = withCaps.trim();
+  if (!math) return withCaps.includes("\n") ? withCaps : "";
   if (math.includes("$$")) {
     return math.replace(/\$\$([\s\S]*?)\$\$/g, (_, inner: string) => `$$${normalizeLatexForKatex(inner)}$$`);
   }
-  if (math.includes("$") && !math.trimStart().startsWith("\\")) return latex;
+  if (math.includes("$") && !math.trimStart().startsWith("\\")) return withCaps;
   return `$$${normalizeLatexForKatex(math)}$$`;
 }
 
@@ -128,10 +129,13 @@ export function enableMathfieldWrapping(mf: MathfieldElement) {
       max-width: 100% !important;
       white-space: normal !important;
     }
-    .ML__text {
-      white-space: pre-wrap !important;
-      overflow-wrap: anywhere !important;
-      word-break: break-word !important;
+    .ML__caret,
+    .ML__text-caret {
+      border-left-color: #ccff00 !important;
+      opacity: 1 !important;
+    }
+    .ML__selection {
+      background: rgba(204, 255, 0, 0.28) !important;
     }
     /* Rows of the root line environment are absolutely positioned at a fixed
        height, so a wrapped row would overlap the next one. Put just those rows

@@ -5,7 +5,9 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
 import { userIsVerified, verifiedBadgeTone } from "@/lib/verified";
-import { postReactionScore, type WeeklyQrafter } from "@/lib/weekly";
+import { LatexText } from "@/lib/latex";
+import { isDisplayImageSrc } from "@/lib/problem-images";
+import { postReactionScore, weeklyPeriodLabel, type WeeklyQrafter } from "@/lib/weekly";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -24,7 +26,10 @@ function HelpButton({
         className="tap-target relative flex h-11 w-11 items-center justify-center"
         aria-label={`${title}の説明`}
         aria-expanded={open}
-        onClick={() => setOpen(true)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
       >
         <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-600 text-[10px] font-black text-muted">
           ?
@@ -82,6 +87,7 @@ export function WeeklyBoards({
   questions: Post[];
 }) {
   const { userOf } = useApp();
+  const period = weeklyPeriodLabel();
   const topQ = qrafters.slice(0, 3);
   const topP = questions.slice(0, 3);
   if (!topQ.length && !topP.length) return null;
@@ -95,9 +101,10 @@ export function WeeklyBoards({
           </h2>
           <HelpButton
             title="WeeklyQrafter"
-            body="今週、Qraftで特に注目されたQrafterのランキングです。その人の投稿へのいいね・Aha・エレガンス・リポスト・コメント・わからないなどのリアクションを合計して表示します。"
+            body="過去7日間で特に注目されたQrafterのランキングです。その人の投稿へのいいね・Aha・エレガンス・リポスト・コメント・わからないなどのリアクションを合計して表示します。"
           />
         </div>
+        <p className="text-[10px] leading-tight text-muted">今週の注目Qrafter · {period.range}</p>
         <ol className="mt-1 space-y-1.5">
           {topQ.length === 0 ? (
             <li className="rounded-xl border border-gray-800 px-2 py-3 text-[11px] text-muted">まだありません</li>
@@ -135,18 +142,23 @@ export function WeeklyBoards({
           </h2>
           <HelpButton
             title="WeeklyQuestion"
-            body="今週、特に注目された問題のランキングです。いいね・Aha・エレガンス・リポスト・コメント・わからないなどのリアクションを合計して表示します。"
+            body="過去7日間で特に注目された問題のランキングです。いいね・Aha・エレガンス・リポスト・コメント・わからないなどのリアクションを合計して表示します。"
           />
         </div>
+        <p className="text-[10px] leading-tight text-muted">今週の注目問題 · {period.range}</p>
         <ol className="mt-1 space-y-1.5">
           {topP.length === 0 ? (
             <li className="rounded-xl border border-gray-800 px-2 py-3 text-[11px] text-muted">まだありません</li>
           ) : (
             topP.map((post, i) => {
               const author = userOf(post.authorId);
-              const title =
-                post.title?.trim() ||
-                post.text.replace(/\s+/g, " ").replace(/^\*\*.+\*\*/, "").trim().slice(0, 36) ||
+              const titled = post.title?.trim() ?? "";
+              const hand =
+                post.solutionFormat === "handwriting" ||
+                post.pages?.some((p) => isDisplayImageSrc(p.image));
+              const preview =
+                titled ||
+                (hand && !(post.text ?? "").replace(/手書きの問題/g, "").trim() ? "手書き問題" : post.text) ||
                 "問題";
               return (
                 <li key={post.id}>
@@ -156,7 +168,10 @@ export function WeeklyBoards({
                   >
                     <RankMark rank={i + 1} />
                     <span className="min-w-0 flex-1">
-                      <span className="line-clamp-2 text-[11px] font-bold leading-snug sm:text-xs">{title}</span>
+                      <LatexText
+                        text={preview}
+                        className="qraft-wq-preview text-[11px] font-bold leading-snug sm:text-xs"
+                      />
                       <span className="mt-0.5 block truncate text-[10px] text-muted">
                         {author.name} · 今週 {Math.round(postReactionScore(post))}
                       </span>

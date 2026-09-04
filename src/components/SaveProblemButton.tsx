@@ -25,9 +25,10 @@ export function SaveProblemButton({ problemId }: { problemId: string }) {
     <div className="relative">
       <button
         type="button"
-        aria-label={on ? `保存済み（${saveCategoryLabel(cat)}）` : "あとで解く"}
+        aria-label={on ? `保存済み（${saveCategoryLabel(cat)}）` : "保存する"}
         aria-pressed={on}
-        className={`flex min-h-11 min-w-11 items-center justify-center ${on ? "text-aha" : "hover:text-aha"}`}
+        title={on ? "保存済み" : "保存"}
+        className={`flex min-h-11 min-w-11 items-center justify-center ${on ? "text-aha" : "text-muted hover:text-aha"}`}
         onClick={() => void toggleSave(problemId)}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -43,7 +44,12 @@ export function SaveProblemButton({ problemId }: { problemId: string }) {
           if (hold.current) window.clearTimeout(hold.current);
         }}
       >
-        <Bookmark size={16} fill={on ? "#ccff00" : "none"} />
+        <Bookmark
+          size={18}
+          strokeWidth={on ? 2.4 : 2}
+          fill={on ? "currentColor" : "none"}
+          className={on ? "drop-shadow-[0_0_6px_rgba(204,255,0,0.45)]" : undefined}
+        />
       </button>
       {sheet && (
         <div

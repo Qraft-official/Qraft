@@ -12,36 +12,48 @@ import {
   setMathfieldInputMode,
   setMathfieldOsKeyboard,
 } from "@/lib/mathlive";
-import { HIDE_COMPOSER_KEYBOARD } from "@/lib/composer-keyboard";
+import { COMPOSER_KB_DOCK_ID, HIDE_COMPOSER_KEYBOARD } from "@/lib/composer-keyboard";
 import type { TextSizeId } from "@/lib/text-size";
 import type { MathfieldElement } from "mathlive";
 import { Menu } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { type InputMode, type MathKeyAction, MathKeyboard } from "./MathKeyboard";
-import { NotebookExpandButton } from "./NotebookExpandControls";
-import { TextSizeBar } from "./TextSizeBar";
 
-export function VisualMathEditor({
-  value,
-  onChange,
-  header,
-  footer,
-  expanded,
-  onToggleExpand,
-  compact: _compact = false,
-  showChrome,
-  showKeyboard = true,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  header?: ReactNode;
-  footer?: ReactNode;
-  expanded?: boolean;
-  onToggleExpand?: () => void;
-  compact?: boolean;
-  showChrome?: boolean;
-  showKeyboard?: boolean;
-}) {
+export type VisualMathEditorHandle = {
+  applySize: (size: TextSizeId) => void;
+};
+
+export const VisualMathEditor = forwardRef<
+  VisualMathEditorHandle,
+  {
+    value: string;
+    onChange: (v: string) => void;
+    header?: ReactNode;
+    footer?: ReactNode;
+    expanded?: boolean;
+    onToggleExpand?: () => void;
+    compact?: boolean;
+    showChrome?: boolean;
+    showKeyboard?: boolean;
+    textSize?: TextSizeId;
+    onTextSizeChange?: (size: TextSizeId) => void;
+  }
+>(function VisualMathEditor(
+  {
+    value,
+    onChange,
+    header,
+    footer,
+    expanded,
+    compact: _compact = false,
+    showChrome,
+    showKeyboard = true,
+    textSize: textSizeProp,
+    onTextSizeChange,
+  },
+  ref,
+) {
   const fieldRef = useRef<MathfieldElement | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -134,6 +146,21 @@ export function VisualMathEditor({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [kbVisible, setKbVisible] = useState(true);
+  const [localSize, setLocalSize] = useState<TextSizeId>("md");
+  const textSize = textSizeProp ?? localSize;
+  const setTextSize = (size: TextSizeId) => {
+    onTextSizeChange?.(size);
+    if (textSizeProp == null) setLocalSize(size);
+  };
+  const [dockEl, setDockEl] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (expanded) {
+      setDockEl(null);
+      return;
+    }
+    setDockEl(document.getElementById(COMPOSER_KB_DOCK_ID));
+  }, [kbVisible, expanded]);
 
   useEffect(() => {
     const hide = () => setKbVisible(false);
@@ -142,11 +169,14 @@ export function VisualMathEditor({
   }, []);
 
   const applySize = (size: TextSizeId) => {
+    setTextSize(size);
     const mf = fieldRef.current;
     if (!mf) return;
     applyTextSizeToMathfield(mf, size);
     onChangeRef.current(mf.getValue("latex"));
   };
+
+  useImperativeHandle(ref, () => ({ applySize }));
 
   const applyInputMode = (mode: InputMode) => {
     inputModeRef.current = mode;
@@ -220,10 +250,7 @@ export function VisualMathEditor({
           <p className="text-xs font-bold tracking-wide text-muted">
             視覚数式エディタ · 枠をタップして中に入力
           </p>
-          <div className="flex flex-wrap items-center gap-1">
-            <TextSizeBar onPick={applySize} />
-            {onToggleExpand && <NotebookExpandButton onClick={onToggleExpand} />}
-            <div className="relative">
+          <div className="relative">
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
@@ -252,7 +279,6 @@ export function VisualMathEditor({
               </div>
             )}
           </div>
-          </div>
         </div>
         )}
         {!ready ? (
@@ -266,6 +292,7 @@ export function VisualMathEditor({
                 fieldRef.current = el as MathfieldElement | null;
               }}
               className={`aha-mathfield aha-mathfield-visual w-full min-w-0 ${expanded ? "aha-mathfield-visual-expanded flex-1" : "h-full"}`}
+              data-qraft-size={textSize}
               default-mode="math"
               smart-mode="true"
               onFocus={() => setKbVisible(true)}
@@ -274,19 +301,20 @@ export function VisualMathEditor({
         )}
         {!expanded && footer && <div className="mt-2 min-w-0 shrink-0 px-3 pb-2 sm:px-4">{footer}</div>}
       </div>
-      {showKeyboard && kbVisible && (
-        <MathKeyboard
-          onAction={handleKeyboardClick}
-          inputMode={inputMode}
-          onInputModeChange={applyInputMode}
-          onDismiss={() => {
-            setKbVisible(false);
-            const el = document.activeElement;
-            if (el instanceof HTMLElement) el.blur();
-            window.mathVirtualKeyboard?.hide();
-          }}
-        />
-      )}
+      {showKeyboard && kbVisible && (() => {
+        const kb = (
+          <MathKeyboard
+            onAction={handleKeyboardClick}
+            inputMode={inputMode}
+            onInputModeChange={applyInputMode}
+            onDismiss={() => {
+              setKbVisible(false);
+              window.mathVirtualKeyboard?.hide();
+            }}
+          />
+        );
+        return dockEl ? createPortal(kb, dockEl) : kb;
+      })()}
     </div>
   );
-}
+});

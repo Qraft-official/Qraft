@@ -30,31 +30,31 @@ const insert = (text: string): MathKeyAction => ({ type: "insert", text });
 
 const KEYS: Record<TabId, KeySpec[]> = {
   "123": [
-    { id: "x", label: "x", action: insert("x") },
-    { id: "y", label: "y", action: insert("y") },
-    { id: "pi", label: "π", action: insert("\\pi") },
-    { id: "e", label: "e", action: insert("e") },
-    { id: "bs", label: "⌫", action: { type: "backspace" }, tone: "warn" },
     { id: "7", label: "7", action: insert("7") },
     { id: "8", label: "8", action: insert("8") },
     { id: "9", label: "9", action: insert("9") },
     { id: "div", label: "÷", action: insert("\\div") },
-    { id: "lp", label: "(", action: insert("(") },
+    { id: "bs", label: "⌫", action: { type: "backspace" }, tone: "warn" },
     { id: "4", label: "4", action: insert("4") },
     { id: "5", label: "5", action: insert("5") },
     { id: "6", label: "6", action: insert("6") },
     { id: "mul", label: "×", action: insert("\\times") },
-    { id: "rp", label: ")", action: insert(")") },
+    { id: "lp", label: "(", action: insert("(") },
     { id: "1", label: "1", action: insert("1") },
     { id: "2", label: "2", action: insert("2") },
     { id: "3", label: "3", action: insert("3") },
-    { id: "min", label: "−", action: insert("-") },
-    { id: "sqrt", label: "√", action: insert("\\sqrt{#0}") },
+    { id: "plus", label: "+", action: insert("+") },
+    { id: "rp", label: ")", action: insert(")") },
     { id: "0", label: "0", action: insert("0") },
     { id: "dot", label: ".", action: insert(".") },
-    { id: "frac", label: "a/b", action: insert("\\frac{#0}{#1}") },
-    { id: "plus", label: "+", action: insert("+") },
+    { id: "min", label: "−", action: insert("-") },
+    { id: "sqrt", label: "√", action: insert("\\sqrt{#0}") },
     { id: "ent", label: "↵", action: { type: "enter" }, tone: "accent" },
+    { id: "x", label: "x", action: insert("x") },
+    { id: "y", label: "y", action: insert("y") },
+    { id: "frac", label: "a/b", action: insert("\\frac{#0}{#1}") },
+    { id: "pi", label: "π", action: insert("\\pi") },
+    { id: "e", label: "e", action: insert("e") },
   ],
   fx: [
     { id: "sin", label: "sin", action: insert("\\sin") },
@@ -117,7 +117,7 @@ function abcKeys(shift: boolean): KeySpec[] {
 export type InputMode = "math" | "text";
 
 function keyClass(tone: KeySpec["tone"], shift: boolean) {
-  return `touch-manipulation min-h-10 rounded-md px-0.5 text-xs font-bold leading-none ${
+  return `qraft-kb-key touch-manipulation rounded-md px-0.5 text-[13px] font-bold leading-none ${
     tone === "warn"
       ? "bg-[#4a2e24] text-orange-100"
       : tone === "accent"
@@ -174,47 +174,47 @@ export function MathKeyboard({
   const keys = tab === "abc" ? abcKeys(shift) : KEYS[tab];
 
   return (
-    <div className="qraft-math-kb w-full min-w-0 shrink-0 border-t border-gray-800 bg-[#151c24] px-1 pt-0.5 pb-[max(0.1rem,env(safe-area-inset-bottom))] sm:px-2">
-      {onDismiss ? (
-        <div className="mb-0.5 flex justify-end">
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted hover:text-white"
-            aria-label="キーボードを閉じる"
-          >
-            <ChevronDown size={22} />
-          </button>
-        </div>
-      ) : null}
-      <div className="mb-0.5 grid grid-cols-[1fr_1fr_2.75rem] gap-0.5">
+    <div className="qraft-math-kb w-full min-w-0 shrink-0 border-t border-gray-800 bg-[#151c24] px-1 pt-0.5 pb-[max(0.08rem,env(safe-area-inset-bottom))] sm:px-2">
+      <div className="mb-[var(--qraft-kb-gap)] grid grid-cols-[1fr_1fr_2.5rem] gap-[var(--qraft-kb-gap)]">
         <button
           type="button"
           onClick={() => onInputModeChange("text")}
           aria-pressed={inputMode === "text"}
-          className={`flex min-h-11 items-center justify-center gap-1 rounded-md leading-none ${
+          className={`qraft-kb-mode flex items-center justify-center gap-1 rounded-md leading-none ${
             inputMode === "text" ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
         >
-          <span className="text-xs font-black">[文]</span>
-          <span className="text-xs font-bold">テキスト</span>
+          <span className="text-[11px] font-black">[文]</span>
+          <span className="text-[11px] font-bold">テキスト</span>
         </button>
         <button
           type="button"
           onClick={() => onInputModeChange("math")}
           aria-pressed={inputMode === "math"}
-          className={`flex min-h-11 items-center justify-center gap-1 rounded-md leading-none ${
+          className={`qraft-kb-mode flex items-center justify-center gap-1 rounded-md leading-none ${
             inputMode === "math" ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
         >
-          <span className="text-xs font-black">[√x]</span>
-          <span className="text-xs font-bold">数式</span>
+          <span className="text-[11px] font-black">[√x]</span>
+          <span className="text-[11px] font-bold">数式</span>
         </button>
-        <BackspaceKey onDelete={() => onAction({ type: "backspace" })} />
+        {onDismiss ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="qraft-kb-mode flex items-center justify-center rounded-md text-muted hover:bg-white/10 hover:text-white"
+            aria-label="キーボードを閉じる"
+            title="キーボードを閉じる"
+          >
+            <ChevronDown size={20} />
+          </button>
+        ) : (
+          <span />
+        )}
       </div>
       {inputMode === "math" && (
         <>
-          <div className="mb-0.5 grid grid-cols-4 gap-0.5">
+          <div className="mb-[var(--qraft-kb-gap)] grid grid-cols-4 gap-[var(--qraft-kb-gap)]">
             {TABS.map((tabItem) => {
               const on = tab === tabItem.id;
               return (
@@ -228,18 +228,21 @@ export function MathKeyboard({
                     onInputModeChange("math");
                     setTab(tabItem.id);
                   }}
-                  className={`touch-manipulation min-h-10 rounded-md px-0.5 py-1 leading-none ${
+                  className={`qraft-kb-tab touch-manipulation rounded-md px-0.5 leading-none ${
                     on ? "bg-neon text-white" : "bg-white/10 text-muted"
                   }`}
                 >
-                  <span className="text-xs font-black">{tabItem.label}</span>
+                  <span className="text-[11px] font-black">{tabItem.label}</span>
                 </button>
               );
             })}
           </div>
           <div
-            className="grid gap-[3px]"
-            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+            className="grid"
+            style={{
+              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+              gap: "var(--qraft-kb-gap)",
+            }}
             onPointerDown={(e) => e.preventDefault()}
           >
             {keys.map((k) =>

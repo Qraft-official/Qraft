@@ -2,8 +2,8 @@
 
 import { SUBJECTS } from "@/lib/constants";
 import { emptyCanvasPage, sharedTypedHeight } from "@/lib/draw-canvas";
-import { confirmDialog } from "@/lib/app-dialog";
-import { dismissComposerKeyboard } from "@/lib/composer-keyboard";
+import { confirmDialog, choiceDialog } from "@/lib/app-dialog";
+import { COMPOSER_KB_DOCK_ID, dismissComposerKeyboard } from "@/lib/composer-keyboard";
 import { generateAiProblem } from "@/lib/premium";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
 import {
@@ -26,9 +26,10 @@ import { ComposerModeTabs } from "./ComposerModeTabs";
 import { HintEditor } from "./HintEditor";
 import { ImageUploadSection } from "./ImageUploadSection";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
-import { ComposerExpandOverlay, NotebookExpandButton } from "./NotebookExpandControls";
+import { ComposerExpandOverlay } from "./NotebookExpandControls";
 import { ProblemModePicker } from "./ProblemModePicker";
 import { QuoteEmbed } from "./QuoteEmbed";
+import type { TextSizeId } from "@/lib/text-size";
 import type { TypedPage } from "./TypedNotebook";
 
 const MultiPageCanvas = dynamic(
@@ -62,6 +63,7 @@ export function CreateSheet() {
   const [inputMode, setInputMode] = useState<"hand" | "typed">("hand");
   const [typedPages, setTypedPages] = useState<TypedPage[]>([{ id: "t-1", latex: "" }]);
   const [typedIndex, setTypedIndex] = useState(0);
+  const [notebookTextSize, setNotebookTextSize] = useState<TextSizeId>("md");
   const [postMode, setPostMode] = useState<ProblemMode>("question");
   const [difficultyLevel, setDifficultyLevel] = useState<Tier>(3);
   const [correctAnswer, setCorrectAnswer] = useState("");
@@ -72,6 +74,7 @@ export function CreateSheet() {
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const postingRef = useRef(false);
   const touchYRef = useRef(0);
   const quotePost = quotePostId ? getPost(quotePostId) : undefined;
   const quotingChallenge = openSolution && quotePost?.problemMode === "challenge";
@@ -89,7 +92,9 @@ export function CreateSheet() {
     const root = document.documentElement;
     const apply = () => {
       const h = window.visualViewport?.height ?? window.innerHeight;
+      const top = window.visualViewport?.offsetTop ?? 0;
       root.style.setProperty("--composer-vvh", `${Math.round(h)}px`);
+      root.style.setProperty("--composer-vv-top", `${Math.round(top)}px`);
     };
     apply();
     window.visualViewport?.addEventListener("resize", apply);
@@ -100,6 +105,7 @@ export function CreateSheet() {
       window.visualViewport?.removeEventListener("scroll", apply);
       window.removeEventListener("resize", apply);
       root.style.removeProperty("--composer-vvh");
+      root.style.removeProperty("--composer-vv-top");
     };
   }, [open]);
 
@@ -322,21 +328,54 @@ export function CreateSheet() {
     clearComposerDraft(me.id, openProblem ? "problem" : "solution", quotePostId);
   };
 
+  const persistDraftNow = () => {
+    if (!me.id) return;
+    const kind = openProblem ? "problem" : "solution";
+    const draft: ComposerDraft = {
+      v: 1,
+      userId: me.id,
+      kind,
+      quotePostId,
+      isSprint: isSprintProblem,
+      savedAt: Date.now(),
+      title,
+      subject,
+      postMode,
+      difficultyLevel,
+      correctAnswer,
+      solutionDraft,
+      hints,
+      inputMode,
+      typedPages,
+      pages,
+      photo,
+      text,
+      solverAnswer,
+    };
+    if (!draftIsEmpty(draft)) writeComposerDraft(draft);
+  };
+
   const requestClose = useCallback(() => {
-    if (posting) return;
+    if (postingRef.current) return;
     void (async () => {
       if (!isDirty()) {
         close();
         return;
       }
-      const ok = await confirmDialog({
-        title: "下書きを破棄しますか？",
-        message: "入力中の問題・手書き・数式は保存されません。",
-        confirmLabel: "破棄",
-        cancelLabel: "編集を続ける",
-        destructive: true,
+      persistDraftNow();
+      const pick = await choiceDialog({
+        title: "投稿を閉じますか？",
+        message: "入力内容は下書きに残せます。破棄するとこの下書きは消えます。",
+        actions: [
+          { id: "save", label: "下書き保存して閉じる", primary: true },
+          { id: "discard", label: "破棄する", destructive: true },
+          { id: "back", label: "編集に戻る" },
+        ],
       });
-      if (ok) {
+      if (pick === "save") {
+        persistDraftNow();
+        close();
+      } else if (pick === "discard") {
         clearDraft();
         close();
       }
@@ -357,6 +396,11 @@ export function CreateSheet() {
     me.id,
     openProblem,
     quotePostId,
+    isSprintProblem,
+    subject,
+    postMode,
+    difficultyLevel,
+    inputMode,
   ]);
 
   useEffect(() => {
@@ -422,6 +466,8 @@ export function CreateSheet() {
   );
 
   const submitProblem = () => {
+    if (postingRef.current) return;
+    postingRef.current = true;
     void (async () => {
       setPosting(true);
       setPostError("");
@@ -432,6 +478,7 @@ export function CreateSheet() {
           .filter(Boolean)
           .join("\n\n");
         if (!joined) {
+          postingRef.current = false;
           setPosting(false);
           setPostError("本文を入力してください");
           return;
@@ -462,6 +509,7 @@ export function CreateSheet() {
           images.some(Boolean) ||
           pages.some((p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0);
         if (!hasInk && !title.trim()) {
+          postingRef.current = false;
           setPosting(false);
           setPostError("キャンバスに書くか、タイトルを入力してください");
           return;
@@ -489,26 +537,35 @@ export function CreateSheet() {
         };
       }
       if (!isSprintProblem && postMode === "challenge" && !correctAnswer.trim()) {
+        postingRef.current = false;
         setPosting(false);
         setPostError("Challenger モードでは正解の入力が必須です");
         return;
       }
-      const res = await addProblem(payload);
-      setPosting(false);
-      if (res.error) {
-        setPostError(res.error);
-        return;
-      }
-      clearDraft();
-      if (res.pulseSubmitted) {
-        setPulseToast(
-          "問題の応募が完了しました！運営が選別の上、PULSE問題として配信されます",
-        );
-        window.setTimeout(() => setPulseToast(""), 5000);
+      try {
+        const res = await addProblem(payload);
+        if (res.error) {
+          setPostError(res.error);
+          return;
+        }
+        clearDraft();
+        if (res.pulseSubmitted) {
+          setPulseToast(
+            "問題の応募が完了しました！運営が選別の上、PULSE問題として配信されます",
+          );
+          window.setTimeout(() => setPulseToast(""), 5000);
+          close();
+          return;
+        }
+        setPulseToast("投稿しました");
+        window.setTimeout(() => setPulseToast(""), 1800);
         close();
-        return;
+      } catch {
+        setPostError("投稿に失敗しました。通信を確認して再試行してください");
+      } finally {
+        postingRef.current = false;
+        setPosting(false);
       }
-      close();
     })();
   };
 
@@ -525,7 +582,7 @@ export function CreateSheet() {
       {open && (
         <motion.div
           ref={overlayRef}
-        className="composer-overlay fixed inset-0 z-[60] flex items-center justify-center overflow-hidden overscroll-none bg-black/70 p-3 md:p-3"
+        className="composer-overlay fixed inset-x-0 z-[60] flex items-center justify-center overflow-hidden overscroll-none bg-black/70 px-2 py-1 md:p-3"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -543,15 +600,10 @@ export function CreateSheet() {
           >
             {openProblem && (
               <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
-                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-2 md:px-4">
-                  <div>
-                    <p className="text-sm font-bold">
-                      {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {inputMode === "hand" ? "手書きモード" : "打ち込み · 数式キーボード"}
-                    </p>
-                  </div>
+                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 md:px-4">
+                  <p className="text-sm font-bold">
+                    {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
+                  </p>
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
@@ -633,9 +685,6 @@ export function CreateSheet() {
                 {modeTabs}
                 {inputMode === "hand" ? (
                   <div className="flex min-w-0 w-full max-w-full flex-col">
-                    <div className="flex shrink-0 justify-end px-2 py-0.5">
-                      <NotebookExpandButton onClick={() => setEditorExpanded(true)} />
-                    </div>
                     {!editorExpanded && (
                     <div className="notebook-stage mx-4 min-h-0">
                       <MultiPageCanvas
@@ -643,6 +692,9 @@ export function CreateSheet() {
                         pages={pages}
                         onChange={setPages}
                         premium={hasPremium}
+                        textSize={notebookTextSize}
+                        onTextSizeChange={setNotebookTextSize}
+                        onToggleExpand={() => setEditorExpanded(true)}
                       />
                     </div>
                     )}
@@ -676,10 +728,13 @@ export function CreateSheet() {
                     footer={extras}
                     expanded={editorExpanded}
                     onToggleExpand={() => setEditorExpanded((v) => !v)}
+                    textSize={notebookTextSize}
+                    onTextSizeChange={setNotebookTextSize}
                   />
                   )
                 )}
                 </div>
+                <div id={COMPOSER_KB_DOCK_ID} className="shrink-0" />
                 <div className="composer-footer flex items-center justify-end gap-3 border-t border-gray-800 px-3 py-1.5 md:px-4">
                   {postError && <p className="mr-auto text-xs text-red-400">{postError}</p>}
                   <button
@@ -695,7 +750,7 @@ export function CreateSheet() {
 
             {openSolution && (
               <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-800 px-4 py-2">
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-800 px-3 py-1.5">
                   <div className="flex min-w-0 items-center gap-2">
                     {inputMode === "hand" ? (
                       <PenLine size={16} className="shrink-0 text-aha" />
@@ -754,9 +809,6 @@ export function CreateSheet() {
                       placeholder="一言コメント（任意）"
                       className="w-full border-b border-gray-800 bg-transparent px-4 py-2 text-sm outline-none"
                     />
-                    <div className="flex items-center justify-end px-3 pt-1">
-                      <NotebookExpandButton onClick={() => setEditorExpanded(true)} />
-                    </div>
                     {!editorExpanded && (
                     <div className="notebook-stage mx-4 min-h-0">
                       <MultiPageCanvas
@@ -764,6 +816,9 @@ export function CreateSheet() {
                         pages={pages}
                         onChange={setPages}
                         premium={hasPremium}
+                        textSize={notebookTextSize}
+                        onTextSizeChange={setNotebookTextSize}
+                        onToggleExpand={() => setEditorExpanded(true)}
                       />
                     </div>
                     )}
@@ -802,10 +857,13 @@ export function CreateSheet() {
                     footer={<div className="min-w-0">{photoRow}</div>}
                     expanded={false}
                     onToggleExpand={() => setEditorExpanded(true)}
+                    textSize={notebookTextSize}
+                    onTextSizeChange={setNotebookTextSize}
                   />
                   )
                 )}
                 </div>
+                <div id={COMPOSER_KB_DOCK_ID} className="shrink-0" />
                 <div className="composer-footer flex flex-col items-stretch gap-2 border-t border-gray-800 px-4 py-2">
                   {quotingChallenge && (
                     <div>
@@ -827,7 +885,8 @@ export function CreateSheet() {
                       (quotingChallenge && !solverAnswer.trim())
                     }
                     onClick={() => {
-                      if (!quotePostId) return;
+                      if (!quotePostId || postingRef.current) return;
+                      postingRef.current = true;
                       void (async () => {
                         setPosting(true);
                         setPostError("");
@@ -871,12 +930,15 @@ export function CreateSheet() {
                             solverAnswer: quotingChallenge ? solverAnswer : undefined,
                           });
                         }
+                        postingRef.current = false;
                         setPosting(false);
                         if (res.error) {
                           setPostError(res.error);
                           return;
                         }
                         clearDraft();
+                        setPulseToast("投稿しました");
+                        window.setTimeout(() => setPulseToast(""), 1800);
                         close();
                       })();
                     }}
@@ -897,6 +959,10 @@ export function CreateSheet() {
                     onChange={setPages}
                     premium={hasPremium}
                     flush
+                    expanded
+                    textSize={notebookTextSize}
+                    onTextSizeChange={setNotebookTextSize}
+                    onToggleExpand={() => setEditorExpanded(false)}
                   />
                 </div>
               ) : (
@@ -921,6 +987,9 @@ export function CreateSheet() {
                     setTypedIndex(Math.min(typedIndex, next.length - 1));
                   }}
                   expanded
+                  onToggleExpand={() => setEditorExpanded(false)}
+                  textSize={notebookTextSize}
+                  onTextSizeChange={setNotebookTextSize}
                 />
               )}
             </ComposerExpandOverlay>

@@ -17,7 +17,14 @@ type PromptOpts = {
   placeholder?: string;
 };
 
-export type AppDialogRequest = ConfirmOpts | PromptOpts;
+type ChoiceOpts = {
+  kind: "choice";
+  title: string;
+  message: string;
+  actions: { id: string; label: string; destructive?: boolean; primary?: boolean }[];
+};
+
+export type AppDialogRequest = ConfirmOpts | PromptOpts | ChoiceOpts;
 
 type Pending = {
   request: AppDialogRequest;
@@ -62,6 +69,16 @@ export function promptDialog(opts: Omit<PromptOpts, "kind">) {
         defaultValue: "",
         ...opts,
       },
+      resolve: (v) => resolve(typeof v === "string" ? v : null),
+    };
+    emit();
+  });
+}
+
+export function choiceDialog(opts: Omit<ChoiceOpts, "kind">) {
+  return new Promise<string | null>((resolve) => {
+    pending = {
+      request: { kind: "choice", ...opts },
       resolve: (v) => resolve(typeof v === "string" ? v : null),
     };
     emit();

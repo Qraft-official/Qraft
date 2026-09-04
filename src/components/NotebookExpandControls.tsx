@@ -14,7 +14,7 @@ export function NotebookExpandButton({
     <button
       type="button"
       onClick={onClick}
-      className={`tap-target rounded-md p-2 text-muted hover:bg-white/10 hover:text-white ${className}`}
+      className={`flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white ${className}`}
       aria-label="拡大"
       title="拡大"
     >

@@ -1,4 +1,5 @@
 export const HIDE_COMPOSER_KEYBOARD = "qraft-hide-composer-keyboard";
+export const COMPOSER_KB_DOCK_ID = "qraft-composer-kb-dock";
 
 export function dismissComposerKeyboard() {
   const el = document.activeElement;

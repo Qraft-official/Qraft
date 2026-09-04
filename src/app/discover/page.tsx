@@ -15,10 +15,11 @@ import {
 } from "@/lib/weekly";
 import { DiscoverSkeleton, EmptyState } from "@/components/UiStates";
 import { WeeklyBoards } from "@/components/WeeklyBoards";
-import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type ViewTab = "posts" | "users" | "newest";
 type SortKey = "newest" | "trending" | "hall";
@@ -161,15 +162,17 @@ function DiscoverInner() {
   const level = asLevel(searchParams.get("lv"));
   const qParam = searchParams.get("q") ?? "";
   const [q, setQ] = useState(qParam);
+  const [isComposing, setIsComposing] = useState(false);
+  const composingRef = useRef(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const filterWrapRef = useRef<HTMLDivElement>(null);
   const [boosts, setBoosts] = useState<{
     byProblem: Record<string, number>;
     byAuthor: Record<string, number>;
   }>({ byProblem: {}, byAuthor: {} });
 
   useEffect(() => {
-    setQ(qParam);
+    if (composingRef.current) return;
+    setQ((prev) => (prev === qParam ? prev : qParam));
   }, [qParam]);
 
   useEffect(() => {
@@ -178,18 +181,11 @@ function DiscoverInner() {
 
   useEffect(() => {
     if (!filterOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!filterWrapRef.current?.contains(e.target as Node)) setFilterOpen(false);
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setFilterOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [filterOpen]);
 
   const patchParams = useCallback(
@@ -205,32 +201,41 @@ function DiscoverInner() {
     [pathname, router, searchParams],
   );
 
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      const trimmed = q.trim();
+  const commitQuery = useCallback(
+    (value: string) => {
+      const trimmed = value.trim();
       if (trimmed === qParam) return;
       patchParams({ q: trimmed || null });
-    }, 250);
+    },
+    [patchParams, qParam],
+  );
+
+  useEffect(() => {
+    if (composingRef.current || isComposing) return;
+    const t = window.setTimeout(() => commitQuery(q), 280);
     return () => window.clearTimeout(t);
-  }, [q, qParam, patchParams]);
+  }, [q, isComposing, commitQuery]);
 
   useEffect(() => {
     if (view !== "users") return;
+    if (composingRef.current || isComposing) return;
     const t = window.setTimeout(() => {
       void searchUsers(q);
-    }, 250);
+    }, 280);
     return () => window.clearTimeout(t);
-  }, [q, view, searchUsers]);
+  }, [q, view, searchUsers, isComposing]);
 
   const effectiveSort: SortKey = view === "newest" ? "newest" : sort;
 
+  const filterQuery = (isComposing ? qParam : q).trim();
+
   const filteredPosts = useMemo(
-    () => sortPosts(filterPosts(posts, { subject, mode, level, q: q.trim() }), effectiveSort),
-    [posts, subject, mode, level, q, effectiveSort],
+    () => sortPosts(filterPosts(posts, { subject, mode, level, q: filterQuery }), effectiveSort),
+    [posts, subject, mode, level, filterQuery, effectiveSort],
   );
 
   const matchedUsers = useMemo(() => {
-    const n = q.trim().toLowerCase().replace(/^@/, "");
+    const n = filterQuery.toLowerCase().replace(/^@/, "");
     const seen = new Set<string>();
     const out: User[] = [];
     for (const u of users) {
@@ -245,14 +250,14 @@ function DiscoverInner() {
       }
     }
     return out;
-  }, [users, q]);
+  }, [users, filterQuery]);
 
   const weekly = useMemo(
     () => computeWeeklyRankings(posts, userOf, boosts.byProblem, boosts.byAuthor),
     [posts, userOf, boosts],
   );
 
-  const searching = q.trim().length > 0;
+  const searching = filterQuery.length > 0;
   const filtersActive =
     sort !== "newest" || subject !== "all" || mode !== "all" || level !== "all";
 
@@ -265,112 +270,149 @@ function DiscoverInner() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              onCompositionStart={() => {
+                composingRef.current = true;
+                setIsComposing(true);
+              }}
+              onCompositionUpdate={() => {
+                composingRef.current = true;
+              }}
+              onCompositionEnd={(e) => {
+                composingRef.current = false;
+                setIsComposing(false);
+                const next = e.currentTarget.value;
+                setQ(next);
+                commitQuery(next);
+                if (view === "users") void searchUsers(next);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                if (composingRef.current || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                commitQuery(q);
+              }}
               placeholder={view === "users" ? "ユーザーを検索" : "投稿を検索"}
               aria-label={view === "users" ? "ユーザーを検索" : "投稿を検索"}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               className="w-full bg-transparent text-[15px] outline-none placeholder:text-muted"
             />
           </div>
-          <div ref={filterWrapRef} className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setFilterOpen((v) => !v)}
-              className={`relative flex h-11 w-11 items-center justify-center rounded-full border border-gray-800 bg-[#202327] text-muted ${
-                filterOpen || filtersActive ? "text-aha" : ""
-              }`}
-              aria-label={filtersActive ? "フィルター（適用中）" : "フィルター"}
-              aria-expanded={filterOpen}
-              aria-haspopup="dialog"
-            >
-              <SlidersHorizontal size={18} strokeWidth={2} />
-              {filtersActive && (
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-aha ring-2 ring-[#202327]" />
-              )}
-            </button>
-            {filterOpen && (
+          <button
+            type="button"
+            onClick={() => setFilterOpen((v) => !v)}
+            className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-800 bg-[#202327] text-muted ${
+              filterOpen || filtersActive ? "text-aha" : ""
+            }`}
+            aria-label={filtersActive ? "フィルター（適用中）" : "フィルター"}
+            aria-expanded={filterOpen}
+            aria-haspopup="dialog"
+          >
+            <SlidersHorizontal size={18} strokeWidth={2} />
+            {filtersActive && (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-aha ring-2 ring-[#202327]" />
+            )}
+          </button>
+          {filterOpen &&
+            createPortal(
               <div
-                className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+                className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center"
                 role="presentation"
-                onClick={() => setFilterOpen(false)}
               >
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-black/60"
+                  aria-label="フィルターを閉じる"
+                  onClick={() => setFilterOpen(false)}
+                />
                 <div
                   role="dialog"
                   aria-modal="true"
                   aria-label="検索フィルター"
-                  className="w-full max-w-lg rounded-t-3xl border border-gray-800 bg-[#15202b] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-3xl"
-                  onClick={(e) => e.stopPropagation()}
+                  className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-gray-800 bg-[#15202b] shadow-2xl sm:mx-4 sm:rounded-3xl"
+                  style={{
+                    maxHeight:
+                      "min(90dvh, calc(var(--vvh, 100dvh) - env(safe-area-inset-top, 0px) - 0.75rem))",
+                    marginBottom: "max(0.5rem, env(safe-area-inset-bottom, 0px))",
+                    paddingTop: "max(0.25rem, env(safe-area-inset-top, 0px))",
+                  }}
                 >
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2 pt-3">
                     <p className="text-sm font-black">フィルター</p>
                     <button
                       type="button"
-                      className="tap-target flex items-center justify-center rounded-full text-muted"
+                      className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-3 text-sm font-bold text-muted hover:bg-white/10 hover:text-white"
                       aria-label="閉じる"
                       onClick={() => setFilterOpen(false)}
                     >
+                      <X size={16} />
                       閉じる
                     </button>
                   </div>
-                <FilterSelect
-                  label="並び替え"
-                  value={sort}
-                  onChange={(v) => patchParams({ sort: v === "newest" ? null : v })}
-                  options={SORT_OPTIONS}
-                />
-                <div className="mt-3">
-                  <FilterSelect
-                    label="教科"
-                    value={subject}
-                    onChange={(v) => patchParams({ subject: v === "all" ? null : v })}
-                    options={[
-                      { id: "all", label: "すべて" },
-                      ...SUBJECTS.map((s) => ({ id: s.id, label: s.label })),
-                    ]}
-                  />
-                </div>
-                <div className="mt-3">
-                  <FilterSelect
-                    label="問題モード"
-                    value={mode}
-                    onChange={(v) => patchParams({ mode: v === "all" ? null : v })}
-                    options={MODE_OPTIONS}
-                  />
-                </div>
-                <div className="mt-3">
-                  <p className="mb-1 text-xs font-bold tracking-wide text-muted">難易度</p>
-                  <div className="flex flex-wrap gap-1">
-                    <LevelChip active={level === "all"} onClick={() => patchParams({ lv: null })}>
-                      すべて
-                    </LevelChip>
-                    {DIFFICULTY_LEVELS.map((d) => (
-                      <LevelChip
-                        key={d.id}
-                        active={level === d.id}
-                        onClick={() => patchParams({ lv: String(d.id) })}
-                      >
-                        {d.label}
-                      </LevelChip>
-                    ))}
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
+                    <FilterSelect
+                      label="並び替え"
+                      value={sort}
+                      onChange={(v) => patchParams({ sort: v === "newest" ? null : v })}
+                      options={SORT_OPTIONS}
+                    />
+                    <div className="mt-3">
+                      <FilterSelect
+                        label="教科"
+                        value={subject}
+                        onChange={(v) => patchParams({ subject: v === "all" ? null : v })}
+                        options={[
+                          { id: "all", label: "すべて" },
+                          ...SUBJECTS.map((s) => ({ id: s.id, label: s.label })),
+                        ]}
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <FilterSelect
+                        label="問題モード"
+                        value={mode}
+                        onChange={(v) => patchParams({ mode: v === "all" ? null : v })}
+                        options={MODE_OPTIONS}
+                      />
+                    </div>
+                    <div className="mt-3 pb-2">
+                      <p className="mb-1 text-xs font-bold tracking-wide text-muted">難易度</p>
+                      <div className="flex flex-wrap gap-1">
+                        <LevelChip active={level === "all"} onClick={() => patchParams({ lv: null })}>
+                          すべて
+                        </LevelChip>
+                        {DIFFICULTY_LEVELS.map((d) => (
+                          <LevelChip
+                            key={d.id}
+                            active={level === d.id}
+                            onClick={() => patchParams({ lv: String(d.id) })}
+                          >
+                            {d.label}
+                          </LevelChip>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-800 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+                    <p className="text-xs font-bold text-muted">
+                      {filtersActive ? "フィルター適用中" : "絞り込み"}
+                    </p>
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-full bg-aha/15 px-4 text-sm font-bold text-aha disabled:bg-transparent disabled:text-muted"
+                      disabled={!filtersActive}
+                      onClick={() => {
+                        patchParams({ sort: null, subject: null, mode: null, lv: null });
+                      }}
+                    >
+                      すべてリセット
+                    </button>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-2 border-t border-gray-800 pt-3">
-                  <p className="text-xs font-bold text-muted">
-                    {filtersActive ? "フィルター適用中" : "絞り込み"}
-                  </p>
-                  <button
-                    type="button"
-                    className="min-h-11 rounded-full px-4 text-sm font-bold text-aha disabled:text-muted"
-                    disabled={!filtersActive}
-                    onClick={() => {
-                      patchParams({ sort: null, subject: null, mode: null, lv: null });
-                    }}
-                  >
-                    すべてリセット
-                  </button>
-                </div>
-                </div>
-              </div>
+              </div>,
+              document.body,
             )}
-          </div>
         </div>
         <nav className="mt-1 flex">
           {VIEW_TABS.map((t) => {

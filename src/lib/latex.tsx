@@ -2,7 +2,7 @@
 
 import katex from "katex";
 import { Fragment, useMemo } from "react";
-import { katexHtmlHasError, latexToPlainText, normalizeLatexForKatex } from "./latex-normalize";
+import { katexHtmlHasError, latexToPlainText, normalizeLatexForKatex, capExcessBlankLines } from "./latex-normalize";
 import { splitTextSizeParts, textSizeClass } from "./text-size";
 
 function render(math: string, display: boolean) {
@@ -119,7 +119,7 @@ function formatText(value: string) {
     const inner = formatTextLines(p.value);
     if (!p.size) return <Fragment key={i}>{inner}</Fragment>;
     return (
-      <span key={i} className={textSizeClass(p.size)}>
+      <span key={i} className={textSizeClass(p.size, "feed")}>
         {inner}
       </span>
     );
@@ -127,7 +127,7 @@ function formatText(value: string) {
 }
 
 export function LatexText({ text, className = "" }: { text: string; className?: string }) {
-  const blocks = useMemo(() => splitCode(text), [text]);
+  const blocks = useMemo(() => splitCode(capExcessBlankLines(text)), [text]);
   return (
     <div className={`max-w-full whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere] [word-break:break-word] [&_.katex]:max-w-full [&_.katex-display]:my-2 [&_.katex-display]:block [&_.katex-display]:max-w-full ${className}`}>
       {blocks.map((b, bi) => {

@@ -18,7 +18,10 @@ import {
 } from "@/lib/draw-canvas";
 import type { CanvasPage, CanvasText, Stroke } from "@/lib/types";
 import { motion } from "framer-motion";
-import { Eraser, Plus, Redo2, RotateCcw, Trash2, Type, Undo2 } from "lucide-react";
+import { Eraser, Plus, Redo2, RotateCcw, Trash2, Type, Undo2, Minimize2 } from "lucide-react";
+import type { TextSizeId } from "@/lib/text-size";
+import { NotebookExpandButton } from "./NotebookExpandControls";
+import { TextSizeBar } from "./TextSizeBar";
 import {
   forwardRef,
   useCallback,
@@ -70,6 +73,13 @@ export type MultiPageCanvasHandle = {
   getContentSize: () => { w: number; h: number };
 };
 
+export const CANVAS_TEXT_PX: Record<TextSizeId, number> = {
+  sm: 16,
+  md: 22,
+  lg: 28,
+  xl: 36,
+};
+
 export const MultiPageCanvas = forwardRef<
   MultiPageCanvasHandle,
   {
@@ -78,8 +88,25 @@ export const MultiPageCanvas = forwardRef<
     className?: string;
     premium?: boolean;
     flush?: boolean;
+    textSize?: TextSizeId;
+    onTextSizeChange?: (size: TextSizeId) => void;
+    onToggleExpand?: () => void;
+    expanded?: boolean;
   }
->(function MultiPageCanvas({ pages, onChange, className = "", premium = false, flush = false }, ref) {
+>(function MultiPageCanvas(
+  {
+    pages,
+    onChange,
+    className = "",
+    premium = false,
+    flush = false,
+    textSize = "md",
+    onTextSizeChange,
+    onToggleExpand,
+    expanded = false,
+  },
+  ref,
+) {
   const canvasEls = useRef<(HTMLCanvasElement | null)[]>([]);
   const wrapEls = useRef<(HTMLDivElement | null)[]>([]);
   const drawing = useRef<Stroke | null>(null);
@@ -408,7 +435,7 @@ export const MultiPageCanvas = forwardRef<
         y: pt.y,
         text: "",
         color,
-        fontSize: 22,
+        fontSize: CANVAS_TEXT_PX[textSize],
         width,
         height: 48,
       };
@@ -676,7 +703,7 @@ export const MultiPageCanvas = forwardRef<
 
   return (
     <div className={`flex h-full min-h-0 flex-col ${className}`}>
-      <div className="flex items-center gap-1.5 overflow-x-auto px-2 py-1 sm:gap-2 sm:px-3 sm:py-2">
+      <div className="flex items-center gap-1 overflow-x-auto px-2 py-1 sm:gap-1.5 sm:px-3">
         <div className="flex gap-1">
           {pages.map((p, i) => (
             <button
@@ -693,6 +720,7 @@ export const MultiPageCanvas = forwardRef<
               className={`h-11 min-w-11 rounded-lg text-sm font-bold ${
                 i === index ? "bg-neon text-white glow-purple" : "bg-white/10 text-muted"
               }`}
+              aria-label={`${i + 1}ページ`}
             >
               {i + 1}
             </button>
@@ -701,12 +729,53 @@ export const MultiPageCanvas = forwardRef<
         <motion.button
           whileTap={{ scale: 0.92 }}
           onClick={addPage}
-          className="flex min-h-11 items-center gap-1 rounded-full bg-aha px-3 text-sm font-bold text-black"
-          aria-label="ページを追加"
+          className="flex h-11 items-center gap-1 rounded-full bg-aha px-3 text-xs font-bold text-black"
+          aria-label="ページ追加"
         >
           <Plus size={14} /> ページ追加
         </motion.button>
-        <span className="ml-auto hidden text-[11px] text-muted sm:inline">{pages.length} pages</span>
+        <TextSizeBar
+          compact
+          active={textSize}
+          onPick={(size) => {
+            onTextSizeChange?.(size);
+            if (!selectedId) return;
+            patchPage((p) => ({
+              ...p,
+              texts: pageTexts(p).map((t) =>
+                t.id === selectedId ? { ...t, fontSize: CANVAS_TEXT_PX[size] } : t,
+              ),
+            }));
+          }}
+        />
+        {onToggleExpand &&
+          (expanded ? (
+            <button
+              type="button"
+              onClick={onToggleExpand}
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white"
+              aria-label="縮小"
+              title="縮小"
+            >
+              <Minimize2 size={16} />
+            </button>
+          ) : (
+            <NotebookExpandButton onClick={onToggleExpand} />
+          ))}
+        <button
+          onClick={() => {
+            if (pagesRef.current.length <= 1) return;
+            const next = pagesRef.current.filter((_, i) => i !== index);
+            commit(next);
+            setIndex(Math.min(index, next.length - 1));
+          }}
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 disabled:opacity-30"
+          disabled={pages.length <= 1}
+          aria-label="このページを削除"
+        >
+          <Trash2 size={16} />
+        </button>
+        <span className="ml-auto shrink-0 text-[11px] text-muted">{pages.length}ページ</span>
       </div>
 
       <div
@@ -811,19 +880,6 @@ export const MultiPageCanvas = forwardRef<
           aria-label="ページをクリア"
         >
           <RotateCcw size={16} />
-        </button>
-        <button
-          onClick={() => {
-            if (pagesRef.current.length <= 1) return;
-            const next = pagesRef.current.filter((_, i) => i !== index);
-            commit(next);
-            setIndex(Math.min(index, next.length - 1));
-          }}
-          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted disabled:opacity-30"
-          disabled={pages.length <= 1}
-          aria-label="このページを削除"
-        >
-          <Trash2 size={16} />
         </button>
       </div>
     </div>

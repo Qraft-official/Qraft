@@ -6,104 +6,197 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { SUBJECTS } from "@/lib/constants";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { avgStars, useApp } from "@/lib/store";
-import type { HallMode, Post, Subject, Tier, User } from "@/lib/types";
+import type { Post, ProblemMode, Subject, Tier, User } from "@/lib/types";
 import { userIsVerified } from "@/lib/verified";
-import { computeWeeklyRankings, fetchWeeklyReactionBoosts, type WeeklyQrafter } from "@/lib/weekly";
-import { Search } from "lucide-react";
+import { postReactionScore } from "@/lib/weekly";
+import { ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-type PrimaryTab = "posts" | "users" | "hall" | Subject;
-type RankingType = "question" | "qrafter";
+type ViewTab = "posts" | "users";
+type SortKey = "newest" | "trending" | "hall";
+type SubjectFilter = "all" | Subject;
+type ModeFilter = "all" | ProblemMode;
+type LevelFilter = "all" | Tier;
 
-const PRIMARY_TABS: { id: PrimaryTab; label: string }[] = [
+const VIEW_TABS: { id: ViewTab; label: string }[] = [
   { id: "posts", label: "投稿" },
   { id: "users", label: "ユーザー" },
-  { id: "hall", label: "殿堂入り" },
-  ...SUBJECTS.map((s) => ({ id: s.id as PrimaryTab, label: s.label })),
 ];
 
-export default function DiscoverPage() {
-  const { posts, users, me, follows, toggleFollow, searchUsers, userOf } = useApp();
-  const [q, setQ] = useState("");
-  const [tab, setTab] = useState<PrimaryTab>("posts");
-  const [difficulty, setDifficulty] = useState<Tier | "all">("all");
-  const [mode, setMode] = useState<HallMode>("problems");
-  const [rankingType, setRankingType] = useState<RankingType>("question");
-  const [weeklyBoost, setWeeklyBoost] = useState<{
-    byProblem: Record<string, number>;
-    byAuthor: Record<string, number>;
-  }>({ byProblem: {}, byAuthor: {} });
+const SORT_OPTIONS: { id: SortKey; label: string }[] = [
+  { id: "newest", label: "新着順" },
+  { id: "trending", label: "話題の問題" },
+  { id: "hall", label: "殿堂入り" },
+];
 
-  const subject: Subject | "all" =
-    tab === "math" || tab === "physics" || tab === "chemistry" ? tab : "all";
-  const showUsers = tab === "users";
-  const searching = q.trim().length > 0;
-  const showWeekly = !showUsers && tab !== "hall" && !searching;
-  const showHall = tab === "hall" || (tab !== "users" && searching);
+const MODE_OPTIONS: { id: ModeFilter; label: string }[] = [
+  { id: "all", label: "すべて" },
+  { id: "question", label: "教えてQrafter!" },
+  { id: "challenge", label: "Challenger" },
+  { id: "aha", label: "Aha!" },
+];
+
+const SELECT_CLASS =
+  "w-full appearance-none rounded-full border border-gray-700 bg-[#15202b] py-1.5 pl-3 pr-8 text-[12px] font-bold text-white outline-none focus:border-aha";
+
+function asView(v: string | null): ViewTab {
+  return v === "users" ? "users" : "posts";
+}
+
+function asSort(v: string | null): SortKey {
+  if (v === "trending" || v === "hall") return v;
+  return "newest";
+}
+
+function asSubject(v: string | null): SubjectFilter {
+  if (v === "math" || v === "physics" || v === "chemistry") return v;
+  return "all";
+}
+
+function asMode(v: string | null): ModeFilter {
+  if (v === "question" || v === "challenge" || v === "aha") return v;
+  return "all";
+}
+
+function asLevel(v: string | null): LevelFilter {
+  const n = Number(v);
+  if (n >= 1 && n <= 5) return n as Tier;
+  return "all";
+}
+
+function matchesQuery(post: Post, q: string) {
+  if (!q) return true;
+  const n = q.toLowerCase();
+  return (
+    post.text.toLowerCase().includes(n) ||
+    (post.title ?? "").toLowerCase().includes(n) ||
+    (post.solution ?? "").toLowerCase().includes(n)
+  );
+}
+
+function filterPosts(
+  posts: Post[],
+  {
+    subject,
+    mode,
+    level,
+    q,
+  }: {
+    subject: SubjectFilter;
+    mode: ModeFilter;
+    level: LevelFilter;
+    q: string;
+  },
+) {
+  return posts.filter((p) => {
+    if (p.kind === "sprint" || p.kind === "reply") return false;
+    if (subject !== "all" && p.subject !== subject) return false;
+    if (mode !== "all" && (p.kind !== "problem" || p.problemMode !== mode)) return false;
+    if (level !== "all" && (p.kind !== "problem" || (p.difficultyLevel ?? 3) !== level)) {
+      return false;
+    }
+    return matchesQuery(p, q);
+  });
+}
+
+function sortPosts(list: Post[], sort: SortKey) {
+  const copy = [...list];
+  if (sort === "newest") {
+    return copy.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  }
+  if (sort === "trending") {
+    return copy.sort((a, b) => {
+      const score = postReactionScore(b) - postReactionScore(a);
+      if (score !== 0) return score;
+      return +new Date(b.createdAt) - +new Date(a.createdAt);
+    });
+  }
+  return copy.sort((a, b) => {
+    const aScore =
+      a.kind === "solution"
+        ? avgStars(a.eleganceSum, a.eleganceCount)
+        : avgStars(a.ahaSum, a.ahaCount);
+    const bScore =
+      b.kind === "solution"
+        ? avgStars(b.eleganceSum, b.eleganceCount)
+        : avgStars(b.ahaSum, b.ahaCount);
+    if (bScore !== aScore) return bScore - aScore;
+    return postReactionScore(b) - postReactionScore(a);
+  });
+}
+
+export default function DiscoverPage() {
+  return (
+    <Suspense fallback={<DiscoverFallback />}>
+      <DiscoverInner />
+    </Suspense>
+  );
+}
+
+function DiscoverFallback() {
+  return (
+    <div className="mx-auto w-full max-w-[600px]">
+      <header className="sticky top-0 z-30 border-b border-gray-800 bg-black/80 px-4 py-3 backdrop-blur">
+        <p className="text-sm text-muted">読み込み中…</p>
+      </header>
+    </div>
+  );
+}
+
+function DiscoverInner() {
+  const { posts, users, me, follows, toggleFollow, searchUsers } = useApp();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const view = asView(searchParams.get("view"));
+  const sort = asSort(searchParams.get("sort"));
+  const subject = asSubject(searchParams.get("subject"));
+  const mode = asMode(searchParams.get("mode"));
+  const level = asLevel(searchParams.get("lv"));
+  const qParam = searchParams.get("q") ?? "";
+  const [q, setQ] = useState(qParam);
 
   useEffect(() => {
-    if (!showUsers) return;
+    setQ(qParam);
+  }, [qParam]);
+
+  const patchParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(patch)) {
+        if (!value) next.delete(key);
+        else next.set(key, value);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const trimmed = q.trim();
+      if (trimmed === qParam) return;
+      patchParams({ q: trimmed || null });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [q, qParam, patchParams]);
+
+  useEffect(() => {
+    if (view !== "users") return;
     const t = window.setTimeout(() => {
       void searchUsers(q);
     }, 250);
     return () => window.clearTimeout(t);
-  }, [q, showUsers, searchUsers]);
+  }, [q, view, searchUsers]);
 
-  useEffect(() => {
-    void fetchWeeklyReactionBoosts().then(setWeeklyBoost);
-  }, []);
-
-  const weeklyPool = useMemo(() => {
-    let list = posts.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
-    if (subject !== "all") list = list.filter((p) => p.subject === subject);
-    if (difficulty !== "all") {
-      list = list.filter(
-        (p) => p.kind !== "problem" || (p.difficultyLevel ?? 3) === difficulty,
-      );
-    }
-    return list;
-  }, [posts, subject, difficulty]);
-
-  const weekly = useMemo(
-    () =>
-      computeWeeklyRankings(
-        weeklyPool,
-        userOf,
-        weeklyBoost.byProblem,
-        weeklyBoost.byAuthor,
-      ),
-    [weeklyPool, userOf, weeklyBoost],
+  const filteredPosts = useMemo(
+    () => sortPosts(filterPosts(posts, { subject, mode, level, q: q.trim() }), sort),
+    [posts, subject, mode, level, q, sort],
   );
-
-  const hallList = useMemo(() => {
-    let list = posts.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
-    if (subject !== "all") list = list.filter((p) => p.subject === subject);
-    if (difficulty !== "all") {
-      list = list.filter(
-        (p) => p.kind !== "problem" || (p.difficultyLevel ?? 3) === difficulty,
-      );
-    }
-    if (searching) {
-      const n = q.toLowerCase();
-      list = list.filter((p) => p.text.toLowerCase().includes(n));
-    }
-    if (mode === "problems") {
-      return list
-        .filter((p) => p.kind === "problem")
-        .sort(
-          (a, b) =>
-            avgStars(b.ahaSum, b.ahaCount) - avgStars(a.ahaSum, a.ahaCount),
-        );
-    }
-    return list
-      .filter((p) => p.kind === "solution")
-      .sort(
-        (a, b) =>
-          avgStars(b.eleganceSum, b.eleganceCount) -
-          avgStars(a.eleganceSum, a.eleganceCount),
-      );
-  }, [posts, q, searching, subject, difficulty, mode]);
 
   const matchedUsers = useMemo(() => {
     const n = q.trim().toLowerCase().replace(/^@/, "");
@@ -112,58 +205,103 @@ export default function DiscoverPage() {
     for (const u of users) {
       if (seen.has(u.id)) continue;
       seen.add(u.id);
-      if (!n) continue;
-      if (
-        u.name.toLowerCase().includes(n) ||
-        u.handle.toLowerCase().includes(n)
-      ) {
+      if (!n) {
+        out.push(u);
+        continue;
+      }
+      if (u.name.toLowerCase().includes(n) || u.handle.toLowerCase().includes(n)) {
         out.push(u);
       }
     }
     return out;
-  }, [users, q, me.id]);
+  }, [users, q]);
 
   return (
     <div className="mx-auto w-full max-w-[600px]">
       <header className="sticky top-0 z-30 border-b border-gray-800 bg-black/80 backdrop-blur">
         <div className="px-4 pt-3">
-          <div className="flex items-center gap-2 rounded-full bg-[#202327] px-4 py-2.5">
+          <div className="flex items-center gap-2 rounded-full border border-gray-800 bg-[#202327] px-4 py-2.5">
             <Search size={16} className="shrink-0 text-muted" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder={showUsers ? "ユーザーを検索" : "投稿を検索"}
+              placeholder={view === "users" ? "ユーザーを検索" : "投稿を検索"}
               className="w-full bg-transparent text-[15px] outline-none placeholder:text-muted"
             />
           </div>
         </div>
-        <nav className="mt-1 flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {PRIMARY_TABS.map((t) => {
-            const active = tab === t.id;
+        <nav className="mt-1 flex">
+          {VIEW_TABS.map((t) => {
+            const active = view === t.id;
             return (
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setTab(t.id)}
-                className={`relative shrink-0 px-4 py-3 text-[15px] font-bold ${
+                onClick={() => patchParams({ view: t.id === "posts" ? null : t.id })}
+                className={`relative flex-1 py-3 text-[15px] font-bold ${
                   active ? "text-white" : "text-muted"
                 }`}
               >
                 {t.label}
                 {active && (
-                  <span className="absolute inset-x-3 bottom-0 h-1 rounded-full bg-aha" />
+                  <span className="absolute inset-x-8 bottom-0 h-1 rounded-full bg-aha" />
                 )}
               </button>
             );
           })}
         </nav>
+        {view === "posts" && (
+          <div className="flex flex-wrap items-end gap-2 border-t border-gray-800 px-3 py-2.5">
+            <FilterSelect
+              label="並び替え"
+              value={sort}
+              onChange={(v) => patchParams({ sort: v === "newest" ? null : v })}
+              options={SORT_OPTIONS}
+            />
+            <FilterSelect
+              label="教科"
+              value={subject}
+              onChange={(v) => patchParams({ subject: v === "all" ? null : v })}
+              options={[
+                { id: "all", label: "すべて" },
+                ...SUBJECTS.map((s) => ({ id: s.id, label: s.label })),
+              ]}
+            />
+            <FilterSelect
+              label="問題モード"
+              value={mode}
+              onChange={(v) => patchParams({ mode: v === "all" ? null : v })}
+              options={MODE_OPTIONS}
+            />
+            <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+              <p className="mb-1 text-[10px] font-bold tracking-wide text-muted">難易度</p>
+              <div className="flex flex-wrap gap-1">
+                <LevelChip
+                  active={level === "all"}
+                  onClick={() => patchParams({ lv: null })}
+                >
+                  すべて
+                </LevelChip>
+                {DIFFICULTY_LEVELS.map((d) => (
+                  <LevelChip
+                    key={d.id}
+                    active={level === d.id}
+                    onClick={() => patchParams({ lv: String(d.id) })}
+                  >
+                    {d.label}
+                  </LevelChip>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
-      {showUsers && (
+      {view === "users" ? (
         <div className="divide-y divide-gray-800">
           {matchedUsers.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-muted">
-              {q.trim() ? "一致するユーザーが見つかりません" : "ユーザーを検索してください"}
+              {q.trim() ? "一致するユーザーが見つかりません" : "ユーザーが見つかりません"}
             </p>
           ) : (
             matchedUsers.map((u) => (
@@ -177,180 +315,83 @@ export default function DiscoverPage() {
             ))
           )}
         </div>
-      )}
-
-      {!showUsers && (
-        <>
-          <div className="flex gap-1 overflow-x-auto border-b border-gray-800 px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <TextTab
-              active={difficulty === "all"}
-              onClick={() => setDifficulty("all")}
-            >
-              すべて
-            </TextTab>
-            {DIFFICULTY_LEVELS.map((d) => (
-              <TextTab
-                key={d.id}
-                active={difficulty === d.id}
-                onClick={() => setDifficulty(d.id)}
-              >
-                {d.label}
-              </TextTab>
-            ))}
-          </div>
-
-          {showWeekly && (
-            <WeeklyRankingFeed
-              rankingType={rankingType}
-              onRankingType={setRankingType}
-              questions={weekly.weeklyQuestions}
-              qrafters={weekly.weeklyQrafters}
-              meId={me.id}
-              follows={follows}
-              onFollow={toggleFollow}
-            />
-          )}
-
-          {showHall && (
-            <HallFeed
-              searching={searching}
-              mode={mode}
-              onMode={setMode}
-              posts={hallList}
-            />
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function WeeklyRankingFeed({
-  rankingType,
-  onRankingType,
-  questions,
-  qrafters,
-  meId,
-  follows,
-  onFollow,
-}: {
-  rankingType: RankingType;
-  onRankingType: (v: RankingType) => void;
-  questions: Post[];
-  qrafters: WeeklyQrafter[];
-  meId: string;
-  follows: string[];
-  onFollow: (userId: string) => void;
-}) {
-  return (
-    <div>
-      <div className="my-1 flex border-b border-slate-800">
-        <button
-          type="button"
-          onClick={() => onRankingType("question")}
-          className={`flex-1 py-2.5 text-center text-sm font-bold ${
-            rankingType === "question"
-              ? "border-b-2 border-lime-400 text-lime-400"
-              : "border-b-2 border-transparent text-slate-400"
-          }`}
-        >
-          🔥 Weekly Question
-        </button>
-        <button
-          type="button"
-          onClick={() => onRankingType("qrafter")}
-          className={`flex-1 py-2.5 text-center text-sm font-bold ${
-            rankingType === "qrafter"
-              ? "border-b-2 border-lime-400 text-lime-400"
-              : "border-b-2 border-transparent text-slate-400"
-          }`}
-        >
-          👑 Weekly Qrafter
-        </button>
-      </div>
-      <p className="px-4 py-2 text-[11px] text-slate-400">集計期間: 直近7日間</p>
-
-      {rankingType === "question" ? (
-        questions.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted">今週の名問はまだありません。</p>
-        ) : (
-          questions.map((post, i) => (
-            <div key={post.id} className="relative">
-              <RankBadge rank={i + 1} />
-              <PostCard post={post} />
-            </div>
-          ))
-        )
-      ) : qrafters.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-muted">
-          今週のリアクション集計はまだありません。
-        </p>
       ) : (
-        <div className="divide-y divide-gray-800">
-          {qrafters.map((row, i) => (
-            <QrafterRankRow
-              key={row.user.id}
-              rank={i + 1}
-              user={row.user}
-              weeklyReactions={row.weeklyReactions}
-              isMe={row.user.id === meId}
-              following={follows.includes(row.user.id)}
-              onFollow={() => onFollow(row.user.id)}
-            />
-          ))}
+        <div>
+          <p className="px-4 py-2 text-[11px] text-muted">
+            {SORT_OPTIONS.find((s) => s.id === sort)?.label} · {filteredPosts.length}件
+          </p>
+          {filteredPosts.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-muted">
+              {q.trim() ? "一致する投稿が見つかりません" : "条件に合う投稿はまだありません"}
+            </p>
+          ) : (
+            filteredPosts.map((p, i) => (
+              <div key={p.id} className="relative">
+                {sort === "hall" && <RankBadge rank={i + 1} />}
+                <PostCard post={p} />
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function HallFeed({
-  searching,
-  mode,
-  onMode,
-  posts,
+function FilterSelect<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
 }: {
-  searching: boolean;
-  mode: HallMode;
-  onMode: (v: HallMode) => void;
-  posts: Post[];
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: { id: T; label: string }[];
 }) {
   return (
-    <div>
-      <div className="flex items-center justify-between px-4 py-3">
-        <p className="text-xs font-bold text-lime-400">
-          {searching ? "検索結果" : "歴代の高評価投稿"}
-        </p>
-        <div className="flex rounded-full bg-panel p-0.5 text-xs">
-          <button
-            type="button"
-            onClick={() => onMode("problems")}
-            className={`rounded-full px-3 py-1.5 ${mode === "problems" ? "bg-neon text-white" : "text-muted"}`}
-          >
-            クイズ
-          </button>
-          <button
-            type="button"
-            onClick={() => onMode("solutions")}
-            className={`rounded-full px-3 py-1.5 ${mode === "solutions" ? "bg-neon text-white" : "text-muted"}`}
-          >
-            解法
-          </button>
-        </div>
-      </div>
-      {posts.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-muted">
-          {searching ? "一致する投稿が見つかりません" : "まだ投稿がありません"}
-        </p>
-      ) : (
-        posts.map((p, i) => (
-          <div key={p.id} className="relative">
-            <RankBadge rank={i + 1} />
-            <PostCard post={p} />
-          </div>
-        ))
-      )}
-    </div>
+    <label className="relative min-w-[9.5rem] flex-1">
+      <span className="mb-1 block text-[10px] font-bold tracking-wide text-muted">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className={SELECT_CLASS}
+      >
+        {options.map((opt) => (
+          <option key={opt.id} value={opt.id}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={14}
+        className="pointer-events-none absolute right-2.5 bottom-2 text-muted"
+      />
+    </label>
+  );
+}
+
+function LevelChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+        active
+          ? "border-aha bg-aha/15 text-aha"
+          : "border-gray-700 text-muted hover:border-gray-500 hover:text-white"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -364,84 +405,9 @@ function RankBadge({ rank }: { rank: number }) {
           ? "bg-[#b87333] text-white font-bold"
           : "text-muted font-semibold";
   return (
-    <span
-      className={`absolute left-2 top-3 z-10 rounded-md px-1.5 py-0.5 text-[11px] ${tone}`}
-    >
+    <span className={`absolute left-2 top-3 z-10 rounded-md px-1.5 py-0.5 text-[11px] ${tone}`}>
       #{rank}
     </span>
-  );
-}
-
-function QrafterRankRow({
-  rank,
-  user,
-  weeklyReactions,
-  isMe,
-  following,
-  onFollow,
-}: {
-  rank: number;
-  user: User;
-  weeklyReactions: number;
-  isMe: boolean;
-  following: boolean;
-  onFollow: () => void;
-}) {
-  const verified = userIsVerified(user);
-  return (
-    <div className="relative flex items-center justify-between gap-3 px-4 py-3">
-      <RankBadge rank={rank} />
-      <Link href={`/u/${user.handle}`} className="ml-10 flex min-w-0 flex-1 items-center gap-3">
-        <UserAvatar user={user} className="h-12 w-12 text-xl" />
-        <div className="min-w-0">
-          <div className="flex items-center gap-1">
-            <p className="truncate text-sm font-bold">{user.name}</p>
-            <VerifiedBadge show={verified} />
-          </div>
-          <p className="truncate text-xs text-muted">@{user.handle}</p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            今週のリアクション{" "}
-            <span className="font-bold text-lime-400">{weeklyReactions}</span>
-          </p>
-        </div>
-      </Link>
-      {!isMe && (
-        <button
-          type="button"
-          onClick={onFollow}
-          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${
-            following ? "border border-gray-700" : "bg-white text-black"
-          }`}
-        >
-          {following ? "フォロー中" : "フォロー"}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function TextTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative shrink-0 px-3 py-2.5 text-[13px] font-bold ${
-        active ? "text-white" : "text-muted"
-      }`}
-    >
-      {children}
-      {active && (
-        <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-white" />
-      )}
-    </button>
   );
 }
 
@@ -456,13 +422,17 @@ function UserResultCard({
   following: boolean;
   onFollow: () => void;
 }) {
+  const verified = userIsVerified(user);
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <Link href={`/u/${user.handle}`} className="shrink-0">
         <UserAvatar user={user} className="h-12 w-12 text-xl" />
       </Link>
       <Link href={`/u/${user.handle}`} className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold">{user.name}</p>
+        <div className="flex items-center gap-1">
+          <p className="truncate text-sm font-bold">{user.name}</p>
+          <VerifiedBadge show={verified} />
+        </div>
         <p className="truncate text-xs text-muted">@{user.handle}</p>
       </Link>
       {!isMe && (

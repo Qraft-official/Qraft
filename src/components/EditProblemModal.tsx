@@ -83,7 +83,7 @@ export function EditProblemModal({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg space-y-3 rounded-t-3xl border border-gray-800 bg-black p-4 sm:rounded-3xl"
+            className="mx-auto w-full max-w-lg space-y-3 rounded-t-3xl border border-gray-800 bg-black p-4 sm:max-w-[640px] sm:rounded-3xl"
           >
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold">問題を編集</p>

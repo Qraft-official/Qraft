@@ -12,9 +12,10 @@ import {
   setMathfieldOsKeyboard,
 } from "@/lib/mathlive";
 import type { MathfieldElement } from "mathlive";
-import { Maximize2, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type InputMode, type MathKeyAction, MathKeyboard } from "./MathKeyboard";
+import { NotebookExpandButton } from "./NotebookExpandControls";
 
 export function VisualMathEditor({
   value,
@@ -23,7 +24,7 @@ export function VisualMathEditor({
   footer,
   expanded,
   onToggleExpand,
-  compact = false,
+  compact: _compact = false,
   showChrome,
   showKeyboard = true,
 }: {
@@ -188,28 +189,18 @@ export function VisualMathEditor({
   };
 
   const chrome = showChrome ?? !expanded;
-  const fieldMax = "max-h-[360px] w-full min-w-0 sm:max-h-[28rem]";
 
   return (
     <div className={`flex min-h-0 min-w-0 w-full flex-col ${expanded ? "flex-1" : ""}`}>
-      <div className={expanded ? "flex min-h-0 min-w-0 w-full flex-1 flex-col" : compact ? "w-full min-w-0 pt-1" : "w-full min-w-0 px-3 pt-2 sm:px-4"}>
+      <div className={expanded ? "flex min-h-0 min-w-0 w-full flex-1 flex-col" : "w-full min-w-0"}>
         {header}
         {chrome && (
-        <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="mb-1 flex items-center justify-between gap-2 px-3 sm:px-4">
           <p className="text-[10px] font-bold tracking-wide text-muted">
             視覚数式エディタ · 枠をタップして中に入力
           </p>
           <div className="flex items-center gap-1">
-            {onToggleExpand && (
-              <button
-                type="button"
-                onClick={onToggleExpand}
-                className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
-                aria-label="拡大"
-              >
-                <Maximize2 size={16} />
-              </button>
-            )}
+            {onToggleExpand && <NotebookExpandButton onClick={onToggleExpand} />}
             <div className="relative">
             <button
               type="button"
@@ -243,22 +234,22 @@ export function VisualMathEditor({
         </div>
         )}
         {!ready ? (
-          <div className={`flex items-center justify-center overflow-y-auto rounded-xl border border-gray-800 bg-panel text-sm text-muted ${expanded ? "min-h-0 flex-1" : `h-[8rem] ${fieldMax}`}`}>
+          <div className={`flex items-center justify-center rounded-xl border border-gray-800 bg-panel text-sm text-muted ${expanded ? "min-h-0 flex-1" : "notebook-stage"}`}>
             数式エディタを読み込み中…
           </div>
         ) : (
-          <div className={expanded ? "flex min-h-0 flex-1 flex-col overflow-hidden" : `${fieldMax} overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]`}>
+          <div className={expanded ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "notebook-stage"}>
             <math-field
               ref={(el) => {
                 fieldRef.current = el as MathfieldElement | null;
               }}
-              className={`aha-mathfield aha-mathfield-visual w-full min-w-0 ${expanded ? "aha-mathfield-visual-expanded flex-1" : ""}`}
+              className={`aha-mathfield aha-mathfield-visual w-full min-w-0 ${expanded ? "aha-mathfield-visual-expanded flex-1" : "h-full"}`}
               default-mode="math"
               smart-mode="true"
             />
           </div>
         )}
-        {!expanded && footer && <div className="mt-2 min-w-0 shrink-0 pb-20 sm:pb-2">{footer}</div>}
+        {!expanded && footer && <div className="mt-2 min-w-0 shrink-0 px-3 pb-2 sm:px-4">{footer}</div>}
       </div>
       {showKeyboard && (
         <MathKeyboard

@@ -57,6 +57,9 @@ export type ProblemPatch = {
   text?: string;
   correctAnswer?: string | null;
   mode?: ProblemMode;
+  pages?: NotePage[];
+  drawingBlobs?: (Blob | null)[];
+  format?: "handwriting" | "typed";
 };
 
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
@@ -283,6 +286,19 @@ export async function updateProblem(
         return { post: null, error: "Challenger モードでは正解の入力が必須です" };
       }
       updates.correct_answer = trimmed || null;
+    }
+  }
+
+  if (patch.format === "handwriting" || patch.format === "typed") {
+    updates.problem_format = patch.format;
+  }
+  if (patch.pages !== undefined || patch.drawingBlobs?.some(Boolean)) {
+    const hydrated = await persistHandwritingPages(viewerId, patch.pages, patch.drawingBlobs);
+    if (hydrated.error) return { post: null, error: hydrated.error };
+    if (hydrated.pages) updates.pages = hydrated.pages;
+    if (patch.format === "handwriting") {
+      const drawingUrl = firstDrawingUrl(hydrated.pages, undefined);
+      if (drawingUrl) updates.photo = drawingUrl;
     }
   }
 

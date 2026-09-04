@@ -122,6 +122,7 @@ export function drawPage(
   w: number,
   h: number,
   skipTextId?: string | null,
+  background?: CanvasImageSource | null,
 ) {
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
@@ -135,6 +136,13 @@ export function drawPage(
     ctx.moveTo(0, y);
     ctx.lineTo(w, y);
     ctx.stroke();
+  }
+  if (background) {
+    try {
+      ctx.drawImage(background, 0, 0, w, h);
+    } catch {
+      /* tainted or incomplete image */
+    }
   }
   drawInkStrokes(ctx, page, w, h);
   ctx.globalCompositeOperation = "source-over";
@@ -185,7 +193,12 @@ export function hitTestText(texts: CanvasText[] | undefined, x: number, y: numbe
   return undefined;
 }
 
-function rasterizePageCanvas(page: CanvasPage, cssW: number, cssH: number) {
+function rasterizePageCanvas(
+  page: CanvasPage,
+  cssW: number,
+  cssH: number,
+  background?: CanvasImageSource | null,
+) {
   const canvas = document.createElement("canvas");
   const dpr = 2;
   const w = Math.max(1, Math.round(cssW));
@@ -195,16 +208,26 @@ function rasterizePageCanvas(page: CanvasPage, cssW: number, cssH: number) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
   ctx.scale(dpr, dpr);
-  drawPage(ctx, page, w, h);
+  drawPage(ctx, page, w, h, null, background);
   return canvas;
 }
 
-export function rasterizePage(page: CanvasPage, cssW: number, cssH: number) {
-  return rasterizePageCanvas(page, cssW, cssH)?.toDataURL("image/png") ?? "";
+export function rasterizePage(
+  page: CanvasPage,
+  cssW: number,
+  cssH: number,
+  background?: CanvasImageSource | null,
+) {
+  return rasterizePageCanvas(page, cssW, cssH, background)?.toDataURL("image/png") ?? "";
 }
 
-export function rasterizePageBlob(page: CanvasPage, cssW: number, cssH: number) {
-  const canvas = rasterizePageCanvas(page, cssW, cssH);
+export function rasterizePageBlob(
+  page: CanvasPage,
+  cssW: number,
+  cssH: number,
+  background?: CanvasImageSource | null,
+) {
+  const canvas = rasterizePageCanvas(page, cssW, cssH, background);
   if (!canvas) return Promise.resolve(null);
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");
@@ -212,7 +235,11 @@ export function rasterizePageBlob(page: CanvasPage, cssW: number, cssH: number) 
 }
 
 export function pageHasInk(page: CanvasPage) {
-  return page.strokes.length > 0 || (page.texts?.length ?? 0) > 0;
+  return (
+    page.strokes.length > 0 ||
+    (page.texts?.length ?? 0) > 0 ||
+    !!page.backgroundImage
+  );
 }
 
 const NOTE_MIN_H = 280;

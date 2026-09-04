@@ -120,6 +120,25 @@ export const MultiPageCanvas = forwardRef<
   const contentH = sharedNotebookHeight(pages);
   const flushRef = useRef(flush);
   flushRef.current = flush;
+  const bgCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const [, setBgTick] = useState(0);
+
+  const backgroundFor = useCallback((src?: string) => {
+    if (!src) return null;
+    const cached = bgCache.current.get(src);
+    if (cached) return cached.complete ? cached : null;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => setBgTick((n) => n + 1);
+    img.onerror = () => {
+      img.crossOrigin = "";
+      img.onload = () => setBgTick((n) => n + 1);
+      img.src = src;
+    };
+    img.src = src;
+    bgCache.current.set(src, img);
+    return img.complete ? img : null;
+  }, []);
 
   const redraw = useCallback(() => {
     const list = pagesRef.current;
@@ -135,7 +154,7 @@ export const MultiPageCanvas = forwardRef<
       const rectW = wrap?.getBoundingClientRect().width || w;
       const wrapH = wrap?.getBoundingClientRect().height || 0;
       const cssW = Math.max(1, rectW);
-      const cssH = flushRef.current ? Math.max(inkH, wrapH) : inkH;
+      const cssH = wrapH > 1 ? wrapH : inkH;
       usedH = Math.max(usedH, cssH);
       canvas.width = Math.max(1, Math.floor(cssW * dpr));
       canvas.height = Math.max(1, Math.floor(cssH * dpr));
@@ -144,10 +163,17 @@ export const MultiPageCanvas = forwardRef<
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawPage(ctx, page, cssW, cssH, i === indexRef.current ? editingId : null);
+      drawPage(
+        ctx,
+        page,
+        cssW,
+        cssH,
+        i === indexRef.current ? editingId : null,
+        backgroundFor(page.backgroundImage),
+      );
     });
     sizeRef.current = { w: Math.max(1, w), h: usedH };
-  }, [editingId, pages]);
+  }, [backgroundFor, editingId, pages]);
 
   const commit = (next: CanvasPage[]) => {
     pagesRef.current = next;
@@ -228,7 +254,9 @@ export const MultiPageCanvas = forwardRef<
       const { w, h } = sizeRef.current;
       const tall = sharedNotebookHeight(pagesRef.current);
       return pagesRef.current.map((p) =>
-        pageHasInk(p) ? rasterizePage(p, w, Math.max(h, tall)) : "",
+        pageHasInk(p)
+          ? rasterizePage(p, w, Math.max(h, tall), backgroundFor(p.backgroundImage))
+          : "",
       );
     },
     exportPageBlobs: async () => {
@@ -238,7 +266,9 @@ export const MultiPageCanvas = forwardRef<
       const height = Math.max(h, tall);
       return Promise.all(
         pagesRef.current.map((p) =>
-          pageHasInk(p) ? rasterizePageBlob(p, w, height) : Promise.resolve(null),
+          pageHasInk(p)
+            ? rasterizePageBlob(p, w, height, backgroundFor(p.backgroundImage))
+            : Promise.resolve(null),
         ),
       );
     },
@@ -498,7 +528,7 @@ export const MultiPageCanvas = forwardRef<
           wrapEls.current[pageIndex] = el;
         }}
         className={`relative w-full ${fill ? "h-full min-h-0" : ""}`}
-        style={fill ? { minHeight: contentH } : { height: contentH }}
+        style={fill ? { height: "100%", minHeight: 0 } : { height: contentH }}
       >
         <canvas
           ref={(el) => {
@@ -677,24 +707,11 @@ export const MultiPageCanvas = forwardRef<
       </div>
 
       <div
-        className={`relative min-h-0 flex-1 ${flush ? "overflow-hidden px-0" : "overflow-y-auto px-2"}`}
+        className={`relative min-h-0 flex-1 ${flush ? "overflow-y-auto px-0" : "overflow-hidden px-2"}`}
       >
-        {flush ? (
-          <div className="relative h-full min-h-0 overflow-y-auto">
-            {pages[index] ? renderPageSurface(index, true) : null}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 pb-2">
-            {pages.map((p, i) => (
-              <div
-                key={p.id}
-                className="max-h-[360px] overflow-y-auto overscroll-contain rounded-2xl [-webkit-overflow-scrolling:touch]"
-              >
-                {renderPageSurface(i, false)}
-              </div>
-            ))}
-          </div>
-        )}
+        <div className={`relative h-full min-h-0 ${flush ? "" : "overflow-hidden"}`}>
+          {pages[index] ? renderPageSurface(index, true) : null}
+        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1.5 sm:gap-2 sm:px-3 sm:py-3">

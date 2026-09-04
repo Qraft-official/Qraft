@@ -66,13 +66,12 @@ export async function persistHandwritingPages(
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
     const existing = page.image;
-    if (isHttpUrl(existing)) {
-      next.push(page);
-      continue;
-    }
     const blob = await blobFromImageValue(existing, drawingBlobs?.[i]);
     if (!blob) {
-      next.push({ ...page, image: isDisplayImageSrc(existing) ? existing : undefined });
+      next.push({
+        ...page,
+        image: isDisplayImageSrc(existing) ? existing : undefined,
+      });
       continue;
     }
     const uploaded = await uploadDrawingBlob(userId, blob, i);

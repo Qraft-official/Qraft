@@ -6,12 +6,15 @@ import { PostCard } from "@/components/PostCard";
 import { SprintBanner } from "@/components/SprintBanner";
 import { AdPost } from "@/components/AdPost";
 import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
+import { HomeNextStep } from "@/components/HomeNextStep";
+import { RevengeBanner } from "@/components/RevengeBanner";
+import { EmptyState } from "@/components/UiStates";
 import { useApp } from "@/lib/store";
 import { inferUserLevel } from "@/lib/difficulty";
 import { sortRecommended } from "@/lib/recommend";
 import type { FeedTab } from "@/lib/types";
 import { AD_FEED_INTERVAL, adForSlot, loadHiddenAdIds } from "@/lib/ads";
-import { PULSE_BLURB, PREMIUM_PRICE_JPY } from "@/lib/constants";
+import { PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { Crown } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 
@@ -43,11 +46,11 @@ export default function HomePage() {
     window.setTimeout(() => setAdToast(""), 2400);
   };
 
-  const tabs: { id: FeedTab; label: string }[] = [
+  const tabs: { id: FeedTab; label: string; hint?: string }[] = [
     { id: "foryou", label: "おすすめ" },
     { id: "following", label: "フォロー中" },
-    { id: "sprint", label: "PULSE" },
-    { id: "lounge", label: "🏠 Lounge" },
+    { id: "sprint", label: "PULSE", hint: "毎日21時の共通問題" },
+    { id: "lounge", label: "Lounge" },
   ];
 
   const myId = me.id;
@@ -84,23 +87,25 @@ export default function HomePage() {
   return (
     <div>
       <header className="sticky top-0 z-30 border-b border-gray-800 bg-black/80 backdrop-blur-md">
-        <div className="flex items-center justify-between px-3 py-3">
+        <div className="flex items-center justify-between px-3 py-2">
           <NotificationBell className="text-white" />
           <h1 className="text-lg font-black tracking-tight">
             Qraft<span className="ml-1 text-aha">クラフト</span>
           </h1>
           <button
+            type="button"
             onClick={openPremium}
-            className="flex items-center gap-1 rounded-full border border-amber-400/40 px-2 py-1 text-[10px] font-bold text-amber-300"
+            aria-label={hasPremium ? "Premium" : `Premium 月額¥${PREMIUM_PRICE_JPY}`}
+            className="flex h-11 w-11 items-center justify-center rounded-full text-amber-300"
           >
-            <Crown size={12} />
-            {hasPremium ? "Premium" : `¥${PREMIUM_PRICE_JPY}`}
+            <Crown size={18} />
           </button>
         </div>
         <div className="flex">
           {tabs.map((t) => (
             <button
               key={t.id}
+              type="button"
               onClick={() => {
                 if (t.id === "lounge" && !hasPremium) {
                   openPaywall(`プライベートコミュニティは Qraft Premium（月額¥${PREMIUM_PRICE_JPY}）限定です。`);
@@ -108,46 +113,46 @@ export default function HomePage() {
                 }
                 setTab(t.id);
               }}
-              className={`relative flex-1 py-3 text-[11px] font-semibold sm:text-sm ${
+              aria-current={tab === t.id ? "page" : undefined}
+              className={`relative min-h-11 flex-1 px-1 py-2 text-xs font-semibold sm:text-sm ${
                 tab === t.id ? "text-white" : "text-muted"
               }`}
             >
-              {t.label}
+              <span className="block">{t.label}</span>
+              {t.hint && tab === t.id && (
+                <span className="mt-0.5 block text-[10px] font-medium text-muted">{t.hint}</span>
+              )}
               {tab === t.id && (
-                <span className="absolute inset-x-4 bottom-0 h-1 rounded-full bg-neon sm:inset-x-8" />
+                <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-neon sm:inset-x-6" />
               )}
             </button>
           ))}
         </div>
       </header>
 
-      <div className="border-b border-gray-800 px-4 py-3">
-        <IosNotice />
-      </div>
+      <IosNotice />
 
-      <SprintBanner />
+      {tab === "sprint" ? <SprintBanner /> : null}
 
       {tab === "foryou" && (
-        <div className="px-4 py-3">
-          <ReferralCampaignBanner />
+        <div className="px-4 pb-1">
+          <ReferralCampaignBanner compact />
         </div>
       )}
 
+      {tab === "foryou" && <HomeNextStep />}
+      {tab === "foryou" && <RevengeBanner />}
+
       {hasPremium && tab === "foryou" && (
-        <div className="border-b border-amber-500/20 bg-amber-400/5 px-4 py-3">
-          <p className="text-xs font-bold text-amber-200">🎪 Premium限定イベント</p>
-          <p className="mt-1 text-sm">先行デイリーチャレンジ：対称式の最速エレガント解</p>
-          <p className="mt-1 text-[11px] text-muted">一般公開は明日 21:00。今だけ参加できます。</p>
-        </div>
+        <p className="px-4 py-1.5 text-xs text-amber-200/80">Premium限定イベント · 先行デイリーチャレンジ開催中</p>
       )}
 
       {tab === "sprint" && (
-        <div className="border-b border-gray-800 px-4 py-3">
-          <p className="text-xs leading-relaxed text-muted">{PULSE_BLURB}</p>
+        <div className="border-b border-gray-800 px-4 py-2">
           <button
             type="button"
             onClick={() => openComposer({ open: true, mode: "problem", isSprint: true })}
-            className="mt-3 w-full rounded-full bg-aha py-3 text-sm font-black text-black"
+            className="min-h-11 w-full rounded-full bg-aha text-sm font-black text-black"
           >
             21時問題を投稿
           </button>
@@ -160,28 +165,53 @@ export default function HomePage() {
       )}
 
       {tab === "lounge" && hasPremium && (
-        <p className="border-b border-gray-800 px-4 py-3 text-xs text-muted">
-          Premium 求解者だけのフィードです。
+        <p className="border-b border-gray-800 px-4 py-2 text-xs text-muted">
+          Lounge · Premium 求解者だけのフィード
         </p>
       )}
 
-      {feed.map((p, i) => (
-        <Fragment key={p.id}>
-          <PostCard
-            post={p}
-            showRepostLabel={reposts.includes(p.id) && p.authorId !== me.id}
+      {feed.length === 0 ? (
+        tab === "following" ? (
+          <EmptyState
+            title="フォロー中の投稿はまだありません"
+            body="Discover でユーザーを探してフォローすると、ここに問題が並びます。"
+            actionHref="/discover?view=users"
+            actionLabel="ユーザーを探す"
           />
-          {!hasPremium && tab === "foryou" && (i + 1) % AD_FEED_INTERVAL === 0 && (
-            <FeedAd
-              slot={Math.floor((i + 1) / AD_FEED_INTERVAL) - 1}
-              hiddenAdIds={hiddenAdIds}
-              onHidden={(id) => setHiddenAdIds((prev) => (prev.includes(id) ? prev : [...prev, id]))}
-              onHideToast={() => flashAdToast("広告を非表示にしました")}
-              onReport={() => flashAdToast("報告を受け付けました")}
+        ) : tab === "lounge" && !hasPremium ? (
+          <EmptyState
+            title="Lounge は Premium 限定です"
+            body="求解者コミュニティのフィードを見るには Premium が必要です。"
+            onAction={() => openPaywall(`プライベートコミュニティは Qraft Premium（月額¥${PREMIUM_PRICE_JPY}）限定です。`)}
+            actionLabel="内容を見る"
+          />
+        ) : (
+          <EmptyState
+            title="まだ問題がありません"
+            body="最初の問題を投稿して、Qraft を始めましょう。"
+            onAction={() => openComposer({ open: true, mode: "problem" })}
+            actionLabel="問題を投稿"
+          />
+        )
+      ) : (
+        feed.map((p, i) => (
+          <Fragment key={p.id}>
+            <PostCard
+              post={p}
+              showRepostLabel={reposts.includes(p.id) && p.authorId !== me.id}
             />
-          )}
-        </Fragment>
-      ))}
+            {!hasPremium && tab === "foryou" && (i + 1) % AD_FEED_INTERVAL === 0 && (
+              <FeedAd
+                slot={Math.floor((i + 1) / AD_FEED_INTERVAL) - 1}
+                hiddenAdIds={hiddenAdIds}
+                onHidden={(id) => setHiddenAdIds((prev) => (prev.includes(id) ? prev : [...prev, id]))}
+                onHideToast={() => flashAdToast("広告を非表示にしました")}
+                onReport={() => flashAdToast("報告を受け付けました")}
+              />
+            )}
+          </Fragment>
+        ))
+      )}
       {adToast && (
         <div
           className="pointer-events-none fixed bottom-24 left-1/2 z-50 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 rounded-full bg-white px-4 py-2.5 text-center text-sm font-bold text-black shadow-xl"

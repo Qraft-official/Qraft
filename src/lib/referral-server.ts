@@ -7,9 +7,18 @@ import {
   WELCOME_MISSION_HOURS,
   WELCOME_POSTS_TARGET,
   WELCOME_SOLVES_TARGET,
+  type ReferralClaimStatus,
   type ReferralClaimView,
   type ReferralMe,
 } from "./referral";
+import {
+  calculateReferralRisk,
+  gatherReferralRiskSignals,
+  hashNetworkKey,
+  recordNetworkSighting,
+  recordReferralActivityEvent,
+  referralFraudSecret,
+} from "./referral-fraud";
 import { loadCampaignFields, evaluateCluster } from "./campaign-server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
@@ -18,6 +27,7 @@ export type ReferralClaimRow = {
   referee_id: string;
   referrer_id: string;
   device_id: string;
+  device_fingerprint?: string | null;
   applied_at: string;
   mission_deadline: string;
   trial_until: string;
@@ -28,6 +38,8 @@ export type ReferralClaimRow = {
   completed_at: string | null;
   expired_at: string | null;
   discount_awarded_at: string | null;
+  status?: ReferralClaimStatus | null;
+  network_hash?: string | null;
 };
 
 function tokyoDate() {
@@ -53,6 +65,7 @@ function asClaimView(row: ReferralClaimRow): ReferralClaimView {
     completedAt: row.completed_at,
     expiredAt: row.expired_at,
     discountAwardedAt: row.discount_awarded_at,
+    status: (row.status as ReferralClaimStatus | null) || (row.discount_awarded_at ? "rewarded" : "pending"),
   };
 }
 
@@ -144,6 +157,7 @@ export async function applyReferralCode(input: {
   deviceId: string;
   deviceFingerprint?: string;
   cookieApplied?: boolean;
+  networkHash?: string | null;
 }): Promise<{ error?: string; me?: ReferralMe }> {
   const admin = adminSupabase();
   if (!admin) return { error: "紹介プログラムの設定がありません。" };
@@ -223,6 +237,8 @@ export async function applyReferralCode(input: {
     trial_until: trialUntil,
     last_login_date: tokyoDate(),
     login_streak: 1,
+    status: "pending",
+    network_hash: input.networkHash || null,
   });
   if (error) {
     const dup = duplicateApplyError(error.message);
@@ -239,6 +255,14 @@ export async function applyReferralCode(input: {
     title: "🎁 Welcome Mission が始まりました",
     message: "紹介コードが適用されました。3日間プレミアム体験中です。4日以内に Welcome Mission を達成しましょう！",
   });
+
+  if (input.networkHash) {
+    try {
+      await recordNetworkSighting(input.refereeId, input.networkHash);
+    } catch {
+      /* apply already succeeded; sighting is best-effort */
+    }
+  }
 
   void evaluateCluster(referrer.id);
 
@@ -289,68 +313,176 @@ async function awardReferrerDiscount(referrerId: string, refereeId: string) {
   });
 }
 
+async function holdReferralClaim(
+  refereeId: string,
+  networkHash: string | null,
+  reasons: string[],
+  score = 50,
+) {
+  const admin = adminSupabase();
+  if (!admin) return;
+  await admin.rpc("try_finalize_referral_claim", {
+    p_referee_id: refereeId,
+    p_status: "held",
+    p_risk_score: score,
+    p_risk_reasons: reasons,
+    p_network_hash: networkHash,
+  });
+}
+
+async function finalizeCompletedReferral(row: ReferralClaimRow, networkHash: string | null) {
+  const admin = adminSupabase();
+  if (!admin) {
+    return;
+  }
+  if (row.discount_awarded_at || row.status === "rewarded") return;
+  if (row.status === "held" || row.status === "rejected") return;
+  if (!row.completed_at) return;
+
+  const secret = referralFraudSecret();
+  if (!secret) {
+    await holdReferralClaim(row.referee_id, networkHash, ["fraud_secret_missing"], 50);
+    return;
+  }
+
+  let result;
+  try {
+    const signals = await gatherReferralRiskSignals({ row, networkHash });
+    result = calculateReferralRisk(signals);
+  } catch {
+    await holdReferralClaim(row.referee_id, networkHash, ["fraud_check_error"], 50);
+    return;
+  }
+
+  const status =
+    result.decision === "allow" ? "rewarded" : result.decision === "reject" ? "rejected" : "held";
+
+  const { data: claimed, error } = await admin.rpc("try_finalize_referral_claim", {
+    p_referee_id: row.referee_id,
+    p_status: status,
+    p_risk_score: result.score,
+    p_risk_reasons: result.reasons,
+    p_network_hash: networkHash,
+  });
+
+  if (error) {
+    await holdReferralClaim(row.referee_id, networkHash, ["fraud_finalize_error"], 50);
+    return;
+  }
+  if (status !== "rewarded") return;
+  if (claimed !== true && claimed !== "t") return;
+
+  await awardReferrerDiscount(row.referrer_id, row.referee_id);
+  await admin.from("notifications").insert({
+    user_id: row.referee_id,
+    title: "✅ Welcome Mission 達成",
+    message: "3つのミッションを4日以内に達成しました。紹介者に半額特典が届きます。",
+  });
+}
+
 export async function recordReferralEvent(
   userId: string,
   type: "login" | "solve" | "post",
+  networkHash?: string | null,
 ): Promise<{ me?: ReferralMe; error?: string }> {
   const admin = adminSupabase();
   if (!admin) return {};
   const { data } = await admin.from("referral_claims").select("*").eq("referee_id", userId).maybeSingle();
   if (!data) return { me: (await getReferralMe(userId)) ?? undefined };
-  const row = data as ReferralClaimRow;
-  if (row.completed_at) return { me: (await getReferralMe(userId)) ?? undefined };
+  const existing = data as ReferralClaimRow;
 
-  const now = new Date();
-  const deadline = new Date(row.mission_deadline).getTime();
-  const expired = now.getTime() > deadline;
-  if (expired && !row.expired_at) {
-    await admin
-      .from("referral_claims")
-      .update({ expired_at: now.toISOString() })
-      .eq("referee_id", userId);
+  if (networkHash) {
+    try {
+      await recordNetworkSighting(userId, networkHash);
+    } catch {
+      /* ignore sighting write; fraud will fail closed if needed later */
+    }
+  }
+
+  try {
+    await recordReferralActivityEvent(userId, type);
+  } catch {
+    /* activity log is additive; mission counters are source of truth */
+  }
+
+  if (existing.discount_awarded_at || existing.status === "rewarded") {
     return { me: (await getReferralMe(userId)) ?? undefined };
   }
-  if (expired) return { me: (await getReferralMe(userId)) ?? undefined };
-
-  const patch: Partial<ReferralClaimRow> = {};
-  if (type === "solve") patch.solves = row.solves + 1;
-  if (type === "post") patch.posts = row.posts + 1;
-  if (type === "login") {
-    const today = tokyoDate();
-    if (row.last_login_date !== today) {
-      const yday = yesterdayTokyo();
-      patch.login_streak = row.last_login_date === yday ? row.login_streak + 1 : 1;
-      patch.last_login_date = today;
-    }
+  if (existing.status === "held" || existing.status === "rejected") {
+    return { me: (await getReferralMe(userId)) ?? undefined };
   }
 
-  if (Object.keys(patch).length) {
-    await admin.from("referral_claims").update(patch).eq("referee_id", userId);
+  if (existing.completed_at && existing.status === "pending") {
+    await finalizeCompletedReferral(existing, networkHash ?? existing.network_hash ?? null);
+    return { me: (await getReferralMe(userId)) ?? undefined };
   }
 
-  const solves = patch.solves ?? row.solves;
-  const posts = patch.posts ?? row.posts;
-  const loginStreak = patch.login_streak ?? row.login_streak;
-  if (
-    solves >= WELCOME_SOLVES_TARGET &&
-    posts >= WELCOME_POSTS_TARGET &&
-    loginStreak >= WELCOME_LOGIN_TARGET
-  ) {
-    if (now.getTime() > deadline) {
+  const { data: rpcRow, error: rpcError } = await admin.rpc("apply_referral_mission_event", {
+    p_referee_id: userId,
+    p_event_type: type,
+  });
+
+  let row: ReferralClaimRow | null = null;
+  if (!rpcError && rpcRow) {
+    row = rpcRow as ReferralClaimRow;
+  } else if (rpcError && /could not find|does not exist|schema cache/i.test(rpcError.message)) {
+    const now = new Date();
+    const deadline = new Date(existing.mission_deadline).getTime();
+    const expired = now.getTime() > deadline;
+    if (expired && !existing.expired_at) {
       await admin.from("referral_claims").update({ expired_at: now.toISOString() }).eq("referee_id", userId);
-    } else {
-      await admin
-        .from("referral_claims")
-        .update({ completed_at: now.toISOString(), discount_awarded_at: now.toISOString() })
-        .eq("referee_id", userId);
-      await awardReferrerDiscount(row.referrer_id, userId);
-      await admin.from("notifications").insert({
-        user_id: userId,
-        title: "✅ Welcome Mission 達成",
-        message: "3つのミッションを4日以内に達成しました。紹介者に半額特典が届きます。",
-      });
+      return { me: (await getReferralMe(userId)) ?? undefined };
     }
+    if (expired) return { me: (await getReferralMe(userId)) ?? undefined };
+
+    const patch: Partial<ReferralClaimRow> = {};
+    if (type === "solve") patch.solves = existing.solves + 1;
+    if (type === "post") patch.posts = existing.posts + 1;
+    if (type === "login") {
+      const today = tokyoDate();
+      if (existing.last_login_date !== today) {
+        const yday = yesterdayTokyo();
+        patch.login_streak = existing.last_login_date === yday ? existing.login_streak + 1 : 1;
+        patch.last_login_date = today;
+      }
+    }
+    if (Object.keys(patch).length) {
+      await admin.from("referral_claims").update(patch).eq("referee_id", userId);
+    }
+    row = { ...existing, ...patch };
+  } else {
+    return { me: (await getReferralMe(userId)) ?? undefined };
   }
+
+  if (!row || row.expired_at) {
+    return { me: (await getReferralMe(userId)) ?? undefined };
+  }
+
+  const missionMet =
+    row.solves >= WELCOME_SOLVES_TARGET &&
+    row.posts >= WELCOME_POSTS_TARGET &&
+    row.login_streak >= WELCOME_LOGIN_TARGET;
+
+  if (!missionMet) {
+    return { me: (await getReferralMe(userId)) ?? undefined };
+  }
+
+  const { data: completed, error: completeError } = await admin.rpc("try_complete_referral_mission", {
+    p_referee_id: userId,
+  });
+  if (completeError) {
+    await holdReferralClaim(userId, networkHash ?? row.network_hash ?? null, ["complete_rpc_error"]);
+    return { me: (await getReferralMe(userId)) ?? undefined };
+  }
+  const completedRow = (completed as ReferralClaimRow | null) ?? row;
+  if (!completedRow.completed_at) {
+    return { me: (await getReferralMe(userId)) ?? undefined };
+  }
+
+  await finalizeCompletedReferral(
+    completedRow,
+    networkHash ?? completedRow.network_hash ?? row.network_hash ?? null,
+  );
 
   return { me: (await getReferralMe(userId)) ?? undefined };
 }

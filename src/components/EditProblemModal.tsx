@@ -1,18 +1,21 @@
 "use client";
 
 import { emptyCanvasPage, pageHasInk, sharedTypedHeight } from "@/lib/draw-canvas";
+import { confirmDialog } from "@/lib/app-dialog";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
 import { notePagesToCanvasPages } from "@/lib/problem-images";
 import { useApp } from "@/lib/store";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type { CanvasPage, Post, ProblemMode } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
-import { Keyboard, PenLine, X } from "lucide-react";
+import { X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, type FocusEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
+import { ComposerModeTabs } from "./ComposerModeTabs";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { ComposerExpandOverlay, NotebookExpandButton } from "./NotebookExpandControls";
 import { ProblemModePicker } from "./ProblemModePicker";
+import { HintEditor } from "./HintEditor";
 import type { TypedPage } from "./TypedNotebook";
 
 const MultiPageCanvas = dynamic(
@@ -61,6 +64,7 @@ export function EditProblemModal({
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<ProblemMode>("question");
   const [correctAnswer, setCorrectAnswer] = useState("");
+  const [hints, setHints] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [inputMode, setInputMode] = useState<"hand" | "typed">("typed");
@@ -80,6 +84,7 @@ export function EditProblemModal({
     setTitle(post.title ?? "");
     setMode(post.problemMode ?? "question");
     setCorrectAnswer(post.correctAnswer ?? "");
+    setHints(post.hints ?? []);
     setError("");
     setSaving(false);
     setEditorExpanded(false);
@@ -155,6 +160,52 @@ export function EditProblemModal({
     }, 120);
   };
 
+  const requestClose = useCallback(() => {
+    void (async () => {
+      if (!post) {
+        onClose();
+        return;
+      }
+      const origTyped = typedPagesFromPost(post).map((p) => p.latex);
+      const typedDirty =
+        typedPages.length !== origTyped.length ||
+        typedPages.some((p, i) => p.latex !== (origTyped[i] ?? ""));
+      const titleDirty = title.trim() !== (post.title ?? "").trim();
+      const modeDirty = mode !== (post.problemMode ?? "question");
+      const answerDirty = correctAnswer !== (post.correctAnswer ?? "");
+      const hintsDirty = (hints.join("\n") !== (post.hints ?? []).join("\n"));
+      const inkDirty = pages.some(
+        (p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0,
+      );
+      const formatDirty = (inputMode === "hand") !== isHandwritingPost(post);
+      const dirty = titleDirty || modeDirty || answerDirty || hintsDirty || typedDirty || inkDirty || formatDirty;
+      if (!dirty) {
+        onClose();
+        return;
+      }
+      const ok = await confirmDialog({
+        title: "編集を破棄しますか？",
+        message: "保存していない変更は失われます。",
+        confirmLabel: "破棄",
+        cancelLabel: "編集を続ける",
+        destructive: true,
+      });
+      if (ok) onClose();
+    })();
+  }, [post, title, typedPages, pages, onClose, mode, correctAnswer, inputMode, hints]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        requestClose();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, requestClose]);
+
   if (!post) return null;
 
   const save = async () => {
@@ -177,6 +228,7 @@ export function EditProblemModal({
         mode,
         correctAnswer: mode === "challenge" ? correctAnswer : null,
         format: "typed",
+        hints,
         pages: typedPages.map((p, i) => ({
           id: p.id,
           latex: wrapMathliveLatex(p.latex),
@@ -206,6 +258,7 @@ export function EditProblemModal({
       mode,
       correctAnswer: mode === "challenge" ? correctAnswer : null,
       format: "handwriting",
+      hints,
       drawingBlobs: images,
       pages: pages.map((p, i) => ({
         id: p.id,
@@ -224,28 +277,7 @@ export function EditProblemModal({
     onClose();
   };
 
-  const modeTabs = (
-    <div className="flex shrink-0 gap-1 px-4 py-2">
-      <button
-        type="button"
-        onClick={() => setInputMode("hand")}
-        className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
-          inputMode === "hand" ? "bg-aha text-black" : "border border-gray-800 text-muted"
-        }`}
-      >
-        <PenLine size={14} /> 手書き
-      </button>
-      <button
-        type="button"
-        onClick={() => setInputMode("typed")}
-        className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
-          inputMode === "typed" ? "bg-aha text-black" : "border border-gray-800 text-muted"
-        }`}
-      >
-        <Keyboard size={14} /> 打ち込み
-      </button>
-    </div>
-  );
+  const modeTabs = <ComposerModeTabs value={inputMode} onChange={setInputMode} />;
 
   return (
     <AnimatePresence>
@@ -256,23 +288,33 @@ export function EditProblemModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
+          onClick={requestClose}
         >
           <motion.div
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
-            transition={{ type: "spring", damping: 22, stiffness: 260 }}
+            transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
             className={`composer-dialog relative mx-auto w-full max-w-lg rounded-2xl border border-gray-800 bg-black md:max-w-[640px] ${
               editorExpanded ? "composer-dialog-expanded" : ""
             }`}
           >
             <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
-              <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 md:px-4 md:py-1">
-                <p className="text-sm font-bold">問題を編集</p>
-                <button type="button" onClick={onClose} className="rounded-full p-1 text-muted">
-                  <X size={18} />
+              <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-2 md:px-4">
+                <div>
+                  <p className="text-sm font-bold">問題を編集</p>
+                  <p className="text-xs text-muted">
+                    {inputMode === "hand" ? "手書きモード" : "打ち込み · 数式キーボード"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestClose}
+                  className="tap-target flex items-center justify-center rounded-full text-muted"
+                  aria-label="閉じる"
+                >
+                  <X size={20} />
                 </button>
               </div>
               <div
@@ -292,6 +334,7 @@ export function EditProblemModal({
                   correctAnswer={correctAnswer}
                   onCorrectAnswer={setCorrectAnswer}
                 />
+                <HintEditor hints={hints} onChange={setHints} />
                 {modeTabs}
                 {inputMode === "hand" ? (
                   <div className="flex min-w-0 w-full max-w-full flex-col">
@@ -343,7 +386,7 @@ export function EditProblemModal({
                   type="button"
                   disabled={saving}
                   onClick={() => void save()}
-                  className="inline-block rounded-full bg-neon px-5 py-1.5 text-sm font-bold text-white disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center rounded-full bg-neon px-5 text-sm font-bold text-white disabled:opacity-40"
                 >
                   {saving ? "保存中…" : "保存する"}
                 </button>

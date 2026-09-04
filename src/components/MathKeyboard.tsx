@@ -134,22 +134,24 @@ export function MathKeyboard({
         <button
           type="button"
           onClick={() => onInputModeChange("text")}
-          className={`flex items-center justify-center gap-1 rounded-md py-[0.2rem] leading-none ${
+          aria-pressed={inputMode === "text"}
+          className={`flex min-h-11 items-center justify-center gap-1 rounded-md leading-none ${
             inputMode === "text" ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
         >
-          <span className="text-[10px] font-black">[文]</span>
-          <span className="text-[10px] font-bold">テキスト入力</span>
+          <span className="text-xs font-black">[文]</span>
+          <span className="text-xs font-bold">テキスト</span>
         </button>
         <button
           type="button"
           onClick={() => onInputModeChange("math")}
-          className={`flex items-center justify-center gap-1 rounded-md py-[0.2rem] leading-none ${
+          aria-pressed={inputMode === "math"}
+          className={`flex min-h-11 items-center justify-center gap-1 rounded-md leading-none ${
             inputMode === "math" ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
         >
-          <span className="text-[10px] font-black">[√x]</span>
-          <span className="text-[10px] font-bold">数式入力</span>
+          <span className="text-xs font-black">[√x]</span>
+          <span className="text-xs font-bold">数式</span>
         </button>
       </div>
       {inputMode === "math" && (
@@ -161,19 +163,18 @@ export function MathKeyboard({
                 <button
                   key={tabItem.id}
                   type="button"
+                  aria-label={`${tabItem.label} ${tabItem.hint}`}
+                  aria-pressed={on}
                   onPointerDown={(e) => e.preventDefault()}
                   onClick={() => {
                     onInputModeChange("math");
                     setTab(tabItem.id);
                   }}
-                  className={`touch-manipulation rounded-md px-0.5 py-[0.2rem] leading-none ${
+                  className={`touch-manipulation min-h-10 rounded-md px-0.5 py-1 leading-none ${
                     on ? "bg-neon text-white" : "bg-white/10 text-muted"
                   }`}
                 >
-                  <span className="text-[10px] font-black">{tabItem.label}</span>
-                  <span className={`ml-0.5 hidden text-[7px] font-bold sm:inline ${on ? "text-white/70" : "text-muted"}`}>
-                    {tabItem.hint}
-                  </span>
+                  <span className="text-xs font-black">{tabItem.label}</span>
                 </button>
               );
             })}
@@ -187,6 +188,7 @@ export function MathKeyboard({
               <button
                 key={k.id}
                 type="button"
+                aria-label={k.label}
                 onClick={() => {
                   if (k.tone === "shift") {
                     setShift((s) => !s);
@@ -197,7 +199,7 @@ export function MathKeyboard({
                   }
                   onAction(k.action);
                 }}
-                className={`touch-manipulation h-[clamp(1.7rem,3.6dvh,2.15rem)] rounded-md px-0.5 text-[11px] font-bold leading-none ${
+                className={`touch-manipulation min-h-10 rounded-md px-0.5 text-xs font-bold leading-none ${
                   k.tone === "warn"
                     ? "bg-[#4a2e24] text-orange-100"
                     : k.tone === "accent"

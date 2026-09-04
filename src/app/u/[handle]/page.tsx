@@ -9,14 +9,14 @@ import { PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
 import { INITIAL_FOLLOWS } from "@/lib/mock-data";
 import { useApp } from "@/lib/store";
 import { verifiedBadgeTone } from "@/lib/verified";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Bell } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export default function UserPage() {
   const { handle } = useParams<{ handle: string }>();
   const router = useRouter();
-  const { posts, follows, toggleFollow, me, users, userOf, authorVerified, searchUsers } = useApp();
+  const { posts, follows, toggleFollow, me, users, userOf, authorVerified, searchUsers, notifyAuthors, toggleNotifyAuthor } = useApp();
   const decoded = decodeURIComponent(String(handle ?? "")).replace(/^@/, "");
   const user =
     users.find((u) => u.handle === decoded) ??
@@ -82,14 +82,35 @@ export default function UserPage() {
             <p className="mt-1 text-xs text-aha">{user.school}</p>
           </div>
           {user.id !== me.id && (
-            <button
+            <div className="flex items-center gap-2">
+              {follows.includes(user.id) && (
+                <button
+                  type="button"
+                  onClick={() => void toggleNotifyAuthor(user.id)}
+                  className={`flex h-11 w-11 items-center justify-center rounded-full ${
+                    notifyAuthors.includes(user.id)
+                      ? "bg-aha/20 text-aha"
+                      : "border border-gray-700 text-muted"
+                  }`}
+                  aria-label={
+                    notifyAuthors.includes(user.id)
+                      ? "新着問題の通知をオフ"
+                      : "このユーザーの新着問題を通知"
+                  }
+                  aria-pressed={notifyAuthors.includes(user.id)}
+                >
+                  <Bell size={18} fill={notifyAuthors.includes(user.id) ? "#ccff00" : "none"} />
+                </button>
+              )}
+              <button
               onClick={() => toggleFollow(user.id)}
-              className={`rounded-full px-4 py-1.5 text-sm font-bold ${
+              className={`min-h-11 rounded-full px-4 py-1.5 text-sm font-bold ${
                 follows.includes(user.id) ? "border border-gray-700" : "bg-white text-black"
               }`}
             >
               {follows.includes(user.id) ? "フォロー中" : "フォロー"}
             </button>
+            </div>
           )}
         </div>
         <p className="mt-2 text-sm">{user.bio}</p>

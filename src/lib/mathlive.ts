@@ -1,4 +1,5 @@
 import type { MathfieldElement } from "mathlive";
+import { promptDialog } from "./app-dialog";
 import { latexLooksLikePlainText, latexToPlainText, normalizeLatexForKatex } from "./latex-normalize";
 
 /** Wrap MathLive LaTeX so the existing KaTeX feed renderer can display it. */
@@ -406,8 +407,13 @@ export function attachJapaneseTextMode(
   };
 }
 
-export function insertPlainTextIntoMathfield(mf: MathfieldElement) {
-  const raw = window.prompt("テキストを入力（通常の文章）", "");
+export async function insertPlainTextIntoMathfield(mf: MathfieldElement) {
+  const raw = await promptDialog({
+    title: "テキストを入力",
+    message: "通常の文章を入力します。",
+    placeholder: "例: 次の式を求めよ",
+    confirmLabel: "挿入",
+  });
   if (raw == null || !raw.trim()) return;
   mf.focus();
   const lines = raw.split(/\r?\n/);
@@ -430,7 +436,9 @@ export function attachPlainTextMenu(mf: MathfieldElement) {
       type: "command",
       id: PLAIN_TEXT_MENU_ID,
       label: "テキストを入力（通常の文章入力）",
-      onMenuSelect: () => insertPlainTextIntoMathfield(mf),
+      onMenuSelect: () => {
+        void insertPlainTextIntoMathfield(mf);
+      },
     },
     { type: "divider" },
     ...existing,

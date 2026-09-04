@@ -7,6 +7,8 @@ import { UserAvatar, UserBanner } from "@/components/UserAvatar";
 import { UserListModal } from "@/components/UserListModal";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
+import { EmptyState } from "@/components/UiStates";
+import { LearningPanel } from "@/components/LearningPanel";
 import { PREMIUM_PRICE_JPY, PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import { verifiedBadgeTone } from "@/lib/verified";
@@ -15,7 +17,7 @@ import { useMemo, useState } from "react";
 import { Settings } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
-type Tab = "posts" | "solutions" | "analytics" | "titles";
+type Tab = "posts" | "solutions" | "learn" | "analytics" | "titles";
 
 export default function ProfilePage() {
   const { me, posts, follows, followers, userOf, reposts, getPost, hasPremium, isDeveloper, openPremium, authorVerified, logout } =
@@ -121,8 +123,9 @@ export default function ProfilePage() {
           [
             ["posts", "ポスト"],
             ["solutions", "解法"],
-            ["analytics", "📊 アナリティクス"],
-            ["titles", "🏆 称号"],
+            ["learn", "学習"],
+            ["analytics", "統計"],
+            ["titles", "称号"],
           ] as [Tab, string][]
         ).map(([id, label]) => (
           <button
@@ -146,16 +149,28 @@ export default function ProfilePage() {
           {probs.map((p) => (
             <PostCard key={p.id} post={p} />
           ))}
+          {myReposts.length === 0 && probs.length === 0 && (
+            <EmptyState
+              title="まだ投稿がありません"
+              body="最初の問題を投稿すると、ここに並びます。"
+              actionHref="/"
+              actionLabel="ホームで問題を見る"
+            />
+          )}
         </>
       )}
       {tab === "solutions" &&
         (sols.length ? (
           sols.map((p) => <PostCard key={p.id} post={p} />)
         ) : (
-          <p className="px-4 py-8 text-sm text-muted">
-            まだ解法がありません。🔁 から「引用して解法を投稿」できます。
-          </p>
+          <EmptyState
+            title="まだ解法がありません"
+            body="気になる問題のリポストから「引用して解法を投稿」できます。"
+            actionHref="/"
+            actionLabel="問題を見にいく"
+          />
         ))}
+      {tab === "learn" && <LearningPanel />}
       {tab === "analytics" && (
         <div className="px-2 py-4">
           <ProfileRadar {...me.stats} />

@@ -7,6 +7,7 @@ import { InviteCapture } from "@/components/InviteCapture";
 import { Onboarding } from "@/components/Onboarding";
 import { useApp } from "@/lib/store";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
+import { AppBootSkeleton } from "@/components/UiStates";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -147,8 +148,8 @@ export function AppShell({
     return (
       <>
         {capture}
-        <div className="mx-auto flex min-h-dvh w-full max-w-lg items-center justify-center bg-black px-6 text-sm text-muted">
-          読み込み中…
+        <div className="mx-auto min-h-dvh w-full max-w-lg bg-black">
+          <AppBootSkeleton />
         </div>
       </>
     );
@@ -184,7 +185,7 @@ export function AppShell({
         <FocusBgm />
         {capture}
         {children}
-        {!hideChrome && (
+        {!hideChrome && !composer.open && (
           <>
             <div className="h-24" />
             <Fab onClick={() => openComposer({ open: true, mode: "problem" })} />

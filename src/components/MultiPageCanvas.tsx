@@ -18,7 +18,7 @@ import {
 } from "@/lib/draw-canvas";
 import type { CanvasPage, CanvasText, Stroke } from "@/lib/types";
 import { motion } from "framer-motion";
-import { Eraser, Plus, RotateCcw, Trash2, Type, Undo2 } from "lucide-react";
+import { Eraser, Plus, Redo2, RotateCcw, Trash2, Type, Undo2 } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -97,6 +97,7 @@ export const MultiPageCanvas = forwardRef<
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const redoPageRef = useRef<CanvasPage | null>(null);
   const [editSize, setEditSize] = useState({ w: 180, h: 48 });
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
@@ -453,12 +454,21 @@ export const MultiPageCanvas = forwardRef<
   };
 
   const undo = () => {
+    const page = pagesRef.current[indexRef.current];
+    if (page) redoPageRef.current = page;
     patchPage((p) => {
       if (lastKind.current === "text" && pageTexts(p).length) {
         return { ...p, texts: pageTexts(p).slice(0, -1) };
       }
       return { ...p, strokes: p.strokes.slice(0, -1) };
     });
+  };
+
+  const redo = () => {
+    const snap = redoPageRef.current;
+    if (!snap) return;
+    redoPageRef.current = null;
+    patchPage(() => snap);
   };
 
   const clear = () => {
@@ -680,7 +690,7 @@ export const MultiPageCanvas = forwardRef<
                   wrapEls.current[i]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                 });
               }}
-              className={`h-8 min-w-8 rounded-lg text-xs font-bold ${
+              className={`h-11 min-w-11 rounded-lg text-sm font-bold ${
                 i === index ? "bg-neon text-white glow-purple" : "bg-white/10 text-muted"
               }`}
             >
@@ -691,9 +701,10 @@ export const MultiPageCanvas = forwardRef<
         <motion.button
           whileTap={{ scale: 0.92 }}
           onClick={addPage}
-          className="flex items-center gap-1 rounded-full bg-aha px-2 py-1 text-[11px] font-bold text-black sm:px-3 sm:py-1.5 sm:text-xs"
+          className="flex min-h-11 items-center gap-1 rounded-full bg-aha px-3 text-sm font-bold text-black"
+          aria-label="ページを追加"
         >
-          <Plus size={14} /> Add Page
+          <Plus size={14} /> ページ追加
         </motion.button>
         <span className="ml-auto hidden text-[11px] text-muted sm:inline">{pages.length} pages</span>
       </div>
@@ -713,45 +724,56 @@ export const MultiPageCanvas = forwardRef<
             setTextTool(true);
             setEraser(false);
           }}
-          className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold sm:px-3 sm:py-1.5 sm:text-[11px] ${
+          className={`tap-target flex min-h-11 items-center gap-1 rounded-full px-3 text-xs font-bold ${
             textTool ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
           aria-label="テキスト追加"
+          aria-pressed={textTool}
         >
           <Type size={14} /> テキスト
         </button>
         {pens.map((c) => (
           <button
             key={c.id}
+            type="button"
             onClick={() => {
               setColor(c.value);
               setEraser(false);
               setTextTool(false);
             }}
-            className="h-7 w-7 shrink-0 rounded-full border-2 sm:h-8 sm:w-8"
-            style={{
-              background: c.value,
-              borderColor: !eraser && color === c.value ? "#fff" : "transparent",
-              boxShadow: !eraser && color === c.value ? `0 0 12px ${c.value}` : "none",
-            }}
+            className="tap-target flex shrink-0 items-center justify-center"
             aria-label={c.label}
-          />
+            title={c.label}
+          >
+            <span
+              className="h-7 w-7 rounded-full border-2"
+              style={{
+                background: c.value,
+                borderColor: !eraser && color === c.value ? "#fff" : "transparent",
+                boxShadow: !eraser && color === c.value ? `0 0 12px ${c.value}` : "none",
+              }}
+            />
+          </button>
         ))}
         <button
           onClick={() => {
             setEraser(true);
             setTextTool(false);
           }}
-          className={`rounded-full p-2 ${eraser ? "bg-white text-black" : "bg-white/10 text-muted"}`}
+          className={`tap-target flex items-center justify-center rounded-full ${eraser ? "bg-white text-black" : "bg-white/10 text-muted"}`}
+          aria-label="消しゴム"
+          title="消しゴム"
+          aria-pressed={eraser}
         >
           <Eraser size={16} />
         </button>
         <button
           type="button"
           onClick={() => setTextTool(false)}
-          className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+          className={`min-h-11 rounded-full px-3 text-xs font-bold ${
             !textTool && !eraser ? "bg-white/20 text-white" : "text-muted"
           }`}
+          aria-pressed={!textTool && !eraser}
         >
           ペン
         </button>
@@ -764,10 +786,30 @@ export const MultiPageCanvas = forwardRef<
           onChange={(e) => setWidth(Number(e.target.value))}
           className="w-20 accent-neon"
         />
-        <button onClick={undo} className="rounded-full bg-white/10 p-2 text-muted">
+        <button
+          type="button"
+          onClick={undo}
+          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
+          aria-label="元に戻す"
+          title="元に戻す"
+        >
           <Undo2 size={16} />
         </button>
-        <button onClick={clear} className="rounded-full bg-white/10 p-2 text-muted">
+        <button
+          type="button"
+          onClick={redo}
+          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
+          aria-label="やり直す"
+          title="やり直す"
+        >
+          <Redo2 size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={clear}
+          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
+          aria-label="ページをクリア"
+        >
           <RotateCcw size={16} />
         </button>
         <button
@@ -777,8 +819,9 @@ export const MultiPageCanvas = forwardRef<
             commit(next);
             setIndex(Math.min(index, next.length - 1));
           }}
-          className="rounded-full bg-white/10 p-2 text-muted disabled:opacity-30"
+          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted disabled:opacity-30"
           disabled={pages.length <= 1}
+          aria-label="このページを削除"
         >
           <Trash2 size={16} />
         </button>

@@ -1,10 +1,12 @@
 "use client";
 
+import { confirmDialog, promptDialog } from "@/lib/app-dialog";
 import { PREMIUM_PRICE_JPY, PREMIUM_REACTIONS, SUBJECT_LABEL, TIER_NAMES } from "@/lib/constants";
 import { difficultyLabel } from "@/lib/difficulty";
 import { isActivePromotion } from "@/lib/recommend";
 import { referralFetch } from "@/lib/referral-client";
 import { sharePost } from "@/lib/share";
+import { renderShareCard, shareCardImage } from "@/lib/share-card";
 import { isDisplayImageSrc } from "@/lib/problem-images";
 import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
@@ -34,6 +36,12 @@ import { QuoteEmbed } from "./QuoteEmbed";
 import { StarRating } from "./StarRating";
 import { UserAvatar } from "./UserAvatar";
 import { VerifiedBadge } from "./VerifiedBadge";
+import { SaveProblemButton } from "./SaveProblemButton";
+import { SpoilerReveal } from "./SpoilerReveal";
+import { FeltDifficulty } from "./FeltDifficulty";
+import { AttemptTime } from "./RevengeBanner";
+import { SimilarProblems } from "./SimilarProblems";
+import { SeriesAssignSheet, SeriesNav } from "./SeriesNav";
 
 function isTypedNotebook(post: Post) {
   if (post.solutionFormat === "typed") return true;
@@ -106,6 +114,8 @@ export function PostCard({
     authorVerified,
     deleteProblem,
     promoteProblem,
+    sprintUnlocked,
+    lastAttempts,
   } = useApp();
   const author = userOf(post.authorId);
   const [rateOpen, setRateOpen] = useState(false);
@@ -115,6 +125,8 @@ export function PostCard({
   const [editOpen, setEditOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [promoOpen, setPromoOpen] = useState(false);
+  const [seriesOpen, setSeriesOpen] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [menuBusy, setMenuBusy] = useState(false);
   const [menuMsg, setMenuMsg] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
@@ -133,6 +145,9 @@ export function PostCard({
   const typedPages = typed ? typedNotebookPages(post) : [];
   const meta = cardMeta(post);
   const showCaption = !typed && Boolean(meta.body.trim());
+  const pulseLocked = post.kind === "sprint" && !sprintUnlocked && !isMe;
+  const lastAttempt = lastAttempts[post.id];
+  const canSolve = (post.kind === "problem" || post.kind === "sprint") && !isMe;
 
   useEffect(() => {
     if (!repostOpen) return;
@@ -194,7 +209,7 @@ export function PostCard({
                 <span className="text-muted">· {timeAgo(post.createdAt)}</span>
               </div>
               {author.school && (
-                <p className="truncate text-[11px] text-muted">{author.school}</p>
+              <p className="truncate text-xs text-muted">{author.school}</p>
               )}
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300">
@@ -269,7 +284,7 @@ export function PostCard({
               <motion.button
                 whileTap={{ scale: 0.92 }}
                 onClick={() => toggleFollow(author.id)}
-                className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                className={`min-h-11 shrink-0 rounded-full px-3 text-xs font-bold ${
                   following ? "border border-gray-700 text-white" : "bg-white text-black"
                 }`}
               >
@@ -280,7 +295,7 @@ export function PostCard({
                 <button
                   type="button"
                   onClick={() => setMoreOpen((v) => !v)}
-                  className="rounded-full p-1.5 text-muted hover:bg-white/10 hover:text-white"
+                  className="tap-target flex items-center justify-center rounded-full text-muted hover:bg-white/10 hover:text-white"
                   aria-label="その他"
                   aria-expanded={moreOpen}
                 >
@@ -308,6 +323,18 @@ export function PostCard({
                               <Pencil size={16} /> 編集
                             </button>
                           )}
+                          {post.kind === "problem" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMoreOpen(false);
+                                setSeriesOpen(true);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
+                            >
+                              シリーズに追加
+                            </button>
+                          )}
                           {(post.kind === "problem" || post.kind === "sprint") && (
                             <button
                               type="button"
@@ -331,12 +358,20 @@ export function PostCard({
                             type="button"
                             disabled={menuBusy}
                             onClick={() => {
-                              if (!window.confirm("この投稿を削除しますか？")) return;
                               setMoreOpen(false);
-                              setMenuBusy(true);
-                              void deleteProblem(post.id).then((res) => {
-                                setMenuBusy(false);
-                                if (res.error) setMenuMsg(res.error);
+                              void confirmDialog({
+                                title: "投稿を削除しますか？",
+                                message: "この操作は取り消せません。",
+                                confirmLabel: "削除",
+                                cancelLabel: "キャンセル",
+                                destructive: true,
+                              }).then((ok) => {
+                                if (!ok) return;
+                                setMenuBusy(true);
+                                void deleteProblem(post.id).then((res) => {
+                                  setMenuBusy(false);
+                                  if (res.error) setMenuMsg(res.error);
+                                });
                               });
                             }}
                             className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-400 hover:bg-white/5"
@@ -351,33 +386,60 @@ export function PostCard({
                           disabled={menuBusy}
                           onClick={() => {
                             setMoreOpen(false);
-                            const reason =
-                              window.prompt("報告理由を入力してください（任意）") ?? "";
-                            setMenuBusy(true);
-                            void referralFetch("/api/feedback", {
-                              method: "POST",
-                              body: JSON.stringify({
-                                category: "投稿報告",
-                                subject: `投稿の報告 ${post.id}`,
-                                message: [
-                                  `投稿ID: ${post.id}`,
-                                  `投稿者: ${author.name} @${author.handle}`,
-                                  `理由: ${reason.trim() || "（未記入）"}`,
-                                  "",
-                                  post.text.slice(0, 500),
-                                ].join("\n"),
-                                name: me.name,
-                                handle: me.handle,
-                              }),
-                            }).then((res) => {
-                              setMenuBusy(false);
-                              setMenuMsg(res.error || "報告を受け付けました");
-                              window.setTimeout(() => setMenuMsg(""), 2500);
+                            void promptDialog({
+                              title: "投稿を報告",
+                              message: "報告理由を入力してください（任意）",
+                              placeholder: "例: 不適切な内容",
+                              confirmLabel: "報告する",
+                            }).then((reason) => {
+                              if (reason == null) return;
+                              setMenuBusy(true);
+                              void referralFetch("/api/feedback", {
+                                method: "POST",
+                                body: JSON.stringify({
+                                  category: "投稿報告",
+                                  subject: `投稿の報告 ${post.id}`,
+                                  message: [
+                                    `投稿ID: ${post.id}`,
+                                    `投稿者: ${author.name} @${author.handle}`,
+                                    `理由: ${reason.trim() || "（未記入）"}`,
+                                    "",
+                                    post.text.slice(0, 500),
+                                  ].join("\n"),
+                                  name: me.name,
+                                  handle: me.handle,
+                                }),
+                              }).then((res) => {
+                                setMenuBusy(false);
+                                setMenuMsg(res.error || "報告を受け付けました");
+                                window.setTimeout(() => setMenuMsg(""), 2500);
+                              });
                             });
                           }}
                           className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
                         >
                           <Flag size={16} /> この投稿を報告
+                        </button>
+                      )}
+                      {(post.kind === "problem" || post.kind === "sprint") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            void (async () => {
+                              const blob = await renderShareCard(post, author.handle);
+                              if (!blob) return;
+                              const url = `${window.location.origin}/p/${post.id}`;
+                              const res = await shareCardImage(blob, url);
+                              if (res.ok && res.method === "download") {
+                                setShareToast("画像を保存し、リンクをコピーしました");
+                                window.setTimeout(() => setShareToast(""), 2200);
+                              }
+                            })();
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
+                        >
+                          <Share2 size={16} /> 共有画像
                         </button>
                       )}
                     </motion.div>
@@ -387,21 +449,14 @@ export function PostCard({
             </div>
           </div>
 
-          {(meta.title || meta.memo) && (
+          {(meta.title) && (
             <div className="mt-2 flex max-w-full flex-col gap-1">
-              {meta.title && (
-                <Link
-                  href={`/p/${post.id}`}
-                  className="max-w-full text-lg font-bold leading-snug text-white [overflow-wrap:anywhere] [word-break:break-word]"
-                >
-                  {meta.title}
-                </Link>
-              )}
-              {meta.memo && (
-                <p className="max-w-full whitespace-pre-wrap text-[15px] leading-relaxed text-[#e7e9ea] [overflow-wrap:anywhere] [word-break:break-word]">
-                  {meta.memo}
-                </p>
-              )}
+              <Link
+                href={`/p/${post.id}`}
+                className="max-w-full text-lg font-bold leading-snug text-white [overflow-wrap:anywhere] [word-break:break-word]"
+              >
+                {meta.title}
+              </Link>
             </div>
           )}
 
@@ -466,11 +521,41 @@ export function PostCard({
             </div>
           )}
 
+          {(post.kind === "problem" || post.kind === "sprint") && (
+            <>
+              <SeriesNav post={post} />
+              {canSolve && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    openComposer({ open: true, mode: "solution", quotePostId: post.id });
+                  }}
+                  className="mt-3 min-h-11 w-full rounded-full bg-aha text-sm font-black text-black"
+                >
+                  {lastAttempt?.submittedAt ? "もう一度解く" : "解く"}
+                </button>
+              )}
+              <SpoilerReveal
+                post={post}
+                locked={pulseLocked}
+                isAuthor={isMe}
+                onRevealed={() => setRevealed(true)}
+              />
+              {(revealed || lastAttempt?.submittedAt || isMe) && !pulseLocked ? (
+                <>
+                  <FeltDifficulty post={post} />
+                  <AttemptTime post={post} />
+                  <SimilarProblems post={post} visible={Boolean(revealed || lastAttempt?.submittedAt)} />
+                </>
+              ) : null}
+            </>
+          )}
+
           <div className="mt-3 flex max-w-md items-center justify-between text-muted">
             <button
               type="button"
               onClick={openComments}
-              className={`flex items-center gap-1 text-xs hover:text-sky-400 ${threadOpen ? "text-sky-400" : ""}`}
+              className={`flex min-h-11 items-center gap-1 px-1 text-xs hover:text-sky-400 ${threadOpen ? "text-sky-400" : ""}`}
               aria-label="コメント"
             >
               <MessageCircle size={16} /> {comments.length}
@@ -480,7 +565,7 @@ export function PostCard({
               <button
                 type="button"
                 onClick={() => setRepostOpen((v) => !v)}
-                className={`flex items-center gap-1 text-xs ${reposted ? "text-emerald-400" : "hover:text-emerald-400"}`}
+                className={`flex min-h-11 items-center gap-1 px-1 text-xs ${reposted ? "text-emerald-400" : "hover:text-emerald-400"}`}
                 aria-label="リポスト"
                 aria-expanded={repostOpen}
               >
@@ -543,7 +628,7 @@ export function PostCard({
                 type="button"
                 whileTap={{ scale: 1.15 }}
                 onClick={() => void toggleConfused(post.id)}
-                className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-black ${
+                className={`flex min-h-11 min-w-11 items-center justify-center gap-0.5 rounded-full px-1.5 text-xs font-black ${
                   confusedMine[post.id]
                     ? "bg-aha/20 text-aha"
                     : "text-muted hover:text-white"
@@ -565,7 +650,7 @@ export function PostCard({
                     key={emoji}
                     type="button"
                     onClick={() => react(post.id, emoji)}
-                    className={`text-sm ${reactions[post.id] === emoji ? "scale-125" : "opacity-70"}`}
+                    className={`tap-target text-sm ${reactions[post.id] === emoji ? "scale-125" : "opacity-70"}`}
                     aria-label={`リアクション ${emoji}`}
                   >
                     {emoji}
@@ -578,24 +663,30 @@ export function PostCard({
                 onClick={() =>
                   openPaywall("特別リアクションは Qraft Premium（月額¥400）限定です。")
                 }
-                className="text-[11px] text-muted"
+                className="min-h-11 px-1 text-xs text-muted"
               >
                 😂+
               </button>
             )}
 
             <motion.button
-              whileTap={{ scale: 1.3 }}
+              whileTap={{ scale: 1.08 }}
               onClick={() => toggleLike(post.id)}
-              className={`flex items-center gap-1 text-xs ${liked ? "text-purple-400" : "hover:text-purple-400"}`}
+              className={`flex min-h-11 items-center gap-1 px-1 text-xs ${liked ? "text-purple-400" : "hover:text-purple-400"}`}
+              aria-label="Aha"
+              aria-pressed={liked}
             >
               <Brain size={16} fill={liked ? "#A855F7" : "none"} />
               {post.likeCount + (liked ? 1 : 0)}
               <span className="hidden sm:inline">脳汁</span>
             </motion.button>
+            {(post.kind === "problem" || post.kind === "sprint") && (
+              <SaveProblemButton problemId={post.id} />
+            )}
             <button
               onClick={() => setRateOpen((v) => !v)}
-              className="flex items-center gap-1 text-xs hover:text-aha"
+              className="flex min-h-11 items-center gap-1 px-1 text-xs hover:text-aha"
+              aria-label="Qraft レベル"
             >
               <Star size={16} />
               {post.kind === "solution" ? elegance || "—" : aha || "—"}
@@ -611,7 +702,7 @@ export function PostCard({
                     }
                   });
                 }}
-                className="flex items-center gap-1 text-xs hover:text-aha"
+                className="flex min-h-11 items-center gap-1 px-1 text-xs hover:text-aha"
                 aria-label="共有"
               >
                 <Share2 size={16} />
@@ -658,6 +749,7 @@ export function PostCard({
         </div>
       </div>
       <EditProblemModal post={post} open={editOpen} onClose={() => setEditOpen(false)} />
+      <SeriesAssignSheet post={post} open={seriesOpen} onClose={() => setSeriesOpen(false)} />
       {promoOpen && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
@@ -676,7 +768,7 @@ export function PostCard({
               <button
                 type="button"
                 onClick={() => setPromoOpen(false)}
-                className="flex-1 rounded-full border border-gray-700 py-2 text-xs font-bold"
+                className="flex-1 min-h-11 rounded-full border border-gray-700 text-sm font-bold"
               >
                 キャンセル
               </button>
@@ -695,7 +787,7 @@ export function PostCard({
                     setPromoOpen(false);
                   });
                 }}
-                className="flex-1 rounded-full bg-aha py-2 text-xs font-bold text-black"
+                className="flex-1 min-h-11 rounded-full bg-aha text-sm font-bold text-black"
               >
                 {menuBusy ? "設定中…" : "設定する"}
               </button>

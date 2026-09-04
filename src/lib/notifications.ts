@@ -15,6 +15,7 @@ export type AppNotification = {
   message: string;
   isRead: boolean;
   createdAt: string;
+  link?: string;
 };
 
 type NotificationRow = {
@@ -23,6 +24,7 @@ type NotificationRow = {
   message: string;
   is_read: boolean;
   created_at: string;
+  link?: string | null;
 };
 
 function mapRow(row: NotificationRow): AppNotification {
@@ -32,6 +34,7 @@ function mapRow(row: NotificationRow): AppNotification {
     message: row.message,
     isRead: row.is_read,
     createdAt: row.created_at,
+    link: row.link ?? undefined,
   };
 }
 
@@ -52,16 +55,23 @@ export async function ensureWelcomeNotification() {
 }
 
 export async function fetchNotifications(): Promise<AppNotification[]> {
-  const { data, error } = await supabase
+  let res = await supabase
     .from("notifications")
-    .select("id,title,message,is_read,created_at")
+    .select("id,title,message,is_read,created_at,link")
     .order("created_at", { ascending: false })
     .limit(50);
-  if (error) {
-    console.warn("fetchNotifications failed:", error.message);
+  if (res.error && /link/i.test(res.error.message)) {
+    res = (await supabase
+      .from("notifications")
+      .select("id,title,message,is_read,created_at")
+      .order("created_at", { ascending: false })
+      .limit(50)) as typeof res;
+  }
+  if (res.error) {
+    console.warn("fetchNotifications failed:", res.error.message);
     return [];
   }
-  return (data as NotificationRow[] | null)?.map(mapRow) ?? [];
+  return (res.data as NotificationRow[] | null)?.map(mapRow) ?? [];
 }
 
 export async function markNotificationRead(id: string) {

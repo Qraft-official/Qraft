@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "@/lib/app-dialog";
 import { LatexText } from "@/lib/latex";
 import { useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
@@ -40,10 +41,17 @@ export function CommentThread({
                   <button
                     type="button"
                     aria-label="コメントを削除"
-                    className="shrink-0 rounded-full p-1 text-muted hover:bg-white/10 hover:text-red-400"
+                    className="tap-target flex shrink-0 items-center justify-center rounded-full text-muted hover:bg-white/10 hover:text-red-400"
                     onClick={() => {
-                      if (!window.confirm("削除しますか？")) return;
-                      void deleteComment(r.id);
+                      void confirmDialog({
+                        title: "コメントを削除しますか？",
+                        message: "この操作は取り消せません。",
+                        confirmLabel: "削除",
+                        cancelLabel: "キャンセル",
+                        destructive: true,
+                      }).then((ok) => {
+                        if (ok) void deleteComment(r.id);
+                      });
                     }}
                   >
                     <Trash2 size={14} />

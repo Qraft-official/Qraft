@@ -77,6 +77,17 @@ export type Post = {
   solverAnswer?: string;
   /** 1–5. Author-selected difficulty. */
   difficultyLevel?: number;
+  hints?: string[];
+  feltEasy?: number;
+  feltNormal?: number;
+  feltHard?: number;
+  durationSum?: number;
+  durationN?: number;
+  gradeCorrect?: number;
+  gradeN?: number;
+  seriesId?: string;
+  seriesOrd?: number;
+  seriesTitle?: string;
   confusedCount?: number;
   isHardSpotlight?: boolean;
   promoted?: boolean;

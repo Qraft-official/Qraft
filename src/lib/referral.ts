@@ -31,6 +31,8 @@ export function parseInviteCodeFromLocation(href: string) {
   return "";
 }
 
+export type ReferralClaimStatus = "pending" | "allowed" | "held" | "rejected" | "rewarded";
+
 export type ReferralClaimView = {
   referrerId: string;
   appliedAt: string;
@@ -42,6 +44,7 @@ export type ReferralClaimView = {
   completedAt: string | null;
   expiredAt: string | null;
   discountAwardedAt: string | null;
+  status: ReferralClaimStatus;
 };
 
 export type ReferralMe = {

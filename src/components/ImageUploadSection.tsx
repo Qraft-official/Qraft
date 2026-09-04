@@ -48,7 +48,7 @@ export function ImageUploadSection({
       <button
         type="button"
         onClick={handleImageClick}
-        className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-gray-800 bg-white/5 px-3 py-2 text-left text-xs text-gray-200 hover:bg-white/10"
+        className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl border border-gray-800 bg-white/5 px-3 py-2 text-left text-sm text-gray-200 hover:bg-white/10"
       >
         {!isPremium ? (
           <Lock size={14} className="shrink-0 text-amber-400" aria-hidden />
@@ -57,7 +57,7 @@ export function ImageUploadSection({
         )}
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {!isPremium && (
-          <span className="shrink-0 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 px-2 py-0.5 text-[10px] font-bold text-black">
+          <span className="shrink-0 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 px-2 py-0.5 text-xs font-bold text-black">
             PREMIUM
           </span>
         )}
@@ -70,7 +70,7 @@ export function ImageUploadSection({
             <button
               type="button"
               onClick={onClear}
-              className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white"
+              className="absolute right-1.5 top-1.5 tap-target flex items-center justify-center rounded-full bg-black/70 text-white"
               aria-label="画像を外す"
             >
               <X size={12} />

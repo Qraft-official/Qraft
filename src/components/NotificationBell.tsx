@@ -17,7 +17,7 @@ export function NotificationBell({
   return (
     <Link
       href="/notifications"
-      className={`relative inline-flex items-center justify-center ${className}`}
+      className={`relative inline-flex h-11 w-11 items-center justify-center ${className}`}
       aria-label={unread ? "未読の通知があります" : "通知"}
     >
       <span className="relative">

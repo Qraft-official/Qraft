@@ -1,5 +1,6 @@
 "use client";
 
+import { promptDialog } from "@/lib/app-dialog";
 import { LatexText } from "@/lib/latex";
 import { Menu } from "lucide-react";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
@@ -208,8 +209,13 @@ export function LatexEditor({
                   className="w-full px-3 py-2.5 text-left text-xs font-bold hover:bg-white/5"
                   onClick={() => {
                     setMenuOpen(false);
-                    const raw = window.prompt("テキストを入力（通常の文章）", "");
-                    if (raw?.trim()) insertTemplate(raw.trim());
+                    void promptDialog({
+                      title: "テキストを入力",
+                      message: "通常の文章を入力します。",
+                      confirmLabel: "挿入",
+                    }).then((raw) => {
+                      if (raw?.trim()) insertTemplate(raw.trim());
+                    });
                   }}
                 >
                   テキストを入力（通常の文章入力）

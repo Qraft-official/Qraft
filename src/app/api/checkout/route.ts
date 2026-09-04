@@ -1,6 +1,6 @@
 import { adminSupabase } from "@/lib/admin-supabase";
 import { bearerTokenFromRequest, userFromRequest } from "@/lib/api-auth";
-import { PREMIUM_PRICE_JPY } from "@/lib/constants";
+import { PREMIUM_PRICE_JPY, PREMIUM_THANKS_MESSAGE, PREMIUM_THANKS_TITLE } from "@/lib/constants";
 import { isComplimentaryPremiumAccount } from "@/lib/premium";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -78,6 +78,16 @@ export async function POST(request: Request) {
         name,
       })
     ) {
+      if (user && admin) {
+        const { error } = await admin.from("notifications").insert({
+          user_id: user.id,
+          title: PREMIUM_THANKS_TITLE,
+          message: PREMIUM_THANKS_MESSAGE,
+        });
+        if (error && !/duplicate|unique/i.test(error.message)) {
+          console.warn("premium thanks insert failed:", error.message);
+        }
+      }
       return NextResponse.json({
         url: `${origin}/premium?success=true`,
         alreadyPremium: true,
@@ -136,6 +146,13 @@ export async function POST(request: Request) {
       cancel_url: `${origin}/premium?canceled=true`,
       client_reference_id: user?.id,
       metadata: user ? { user_id: user.id } : undefined,
+      ...(user
+        ? {
+            subscription_data: {
+              metadata: { user_id: user.id },
+            },
+          }
+        : {}),
       ...(user?.email ? { customer_email: user.email } : {}),
       ...(couponId.startsWith("c_") ? { discounts: [{ coupon: couponId }] } : {}),
     });

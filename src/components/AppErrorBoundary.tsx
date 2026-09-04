@@ -20,14 +20,21 @@ export class AppErrorBoundary extends Component<Props, State> {
           Qraft
         </p>
         <p className="mt-3 text-sm text-muted">画面の読み込みで問題が起きました。</p>
-        <p className="mt-2 max-w-sm text-[11px] text-red-400">{this.state.error}</p>
+        <p className="mt-2 max-w-sm text-sm text-red-400">{this.state.error}</p>
+        <button
+          type="button"
+          onClick={() => this.setState({ error: null })}
+          className="mt-6 min-h-11 rounded-full bg-aha px-5 text-sm font-black text-black"
+        >
+          再試行
+        </button>
         <button
           type="button"
           onClick={() => {
             this.setState({ error: null });
             window.location.replace("/");
           }}
-          className="mt-6 rounded-full bg-white px-5 py-2 text-sm font-bold text-black"
+          className="mt-3 min-h-11 rounded-full border border-gray-700 px-5 text-sm font-bold text-white"
         >
           トップへ戻る
         </button>

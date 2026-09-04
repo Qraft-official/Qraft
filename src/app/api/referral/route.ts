@@ -6,6 +6,7 @@ import {
   userFromRequest,
 } from "@/lib/api-auth";
 import { DEVICE_ID_COOKIE, REFERRAL_APPLIED_COOKIE } from "@/lib/device-id";
+import { clientIpFromRequest, hashNetworkKey, referralFraudSecret } from "@/lib/referral-fraud";
 import { applyReferralCode, getReferralMe, getReferralMeWithToken } from "@/lib/referral-server";
 import { NextResponse } from "next/server";
 
@@ -37,12 +38,14 @@ export async function POST(request: Request) {
     deviceFingerprint?: string;
   };
   const deviceId = deviceIdFromRequest(request, body.deviceId);
+  const networkHash = hashNetworkKey(clientIpFromRequest(request), referralFraudSecret());
   const result = await applyReferralCode({
     refereeId: user.id,
     code: body.code ?? "",
     deviceId,
     deviceFingerprint: clip(body.deviceFingerprint, 128),
     cookieApplied: cookieHasReferralApplied(request),
+    networkHash,
   });
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 400 });

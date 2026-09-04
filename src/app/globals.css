@@ -8,6 +8,7 @@
   --purple: #a855f7;
   --lime: #ccff00;
   --muted: #8b98a5;
+  --tap: 2.75rem;
 }
 
 @theme inline {
@@ -282,3 +283,33 @@ html.qraft-scroll-lock body {
     min-height: 7.25rem;
   }
 }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+}
+
+.tap-target {
+  min-height: var(--tap);
+  min-width: var(--tap);
+}
+
+.safe-bottom {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

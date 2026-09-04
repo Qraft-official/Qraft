@@ -4,6 +4,7 @@ import { PREMIUM_PERKS, PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { useApp } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Crown } from "lucide-react";
+import { useEffect } from "react";
 import { FeedbackEntryButton } from "@/components/FeedbackModal";
 import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
 import { PremiumDevMessage } from "@/components/PremiumDevMessage";
@@ -17,6 +18,15 @@ export function PremiumModal() {
     subscribed,
     unsubscribe,
   } = useApp();
+
+  useEffect(() => {
+    if (!premiumOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePremium();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [premiumOpen, closePremium]);
 
   return (
     <AnimatePresence>
@@ -43,7 +53,7 @@ export function PremiumModal() {
                   e.stopPropagation();
                   closePremium();
                 }}
-                className="relative z-20 mt-0.5 shrink-0 text-muted"
+                className="relative z-20 mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center text-muted"
                 aria-label="戻る"
               >
                 <ArrowLeft size={20} />
@@ -126,6 +136,15 @@ export function PaywallModal() {
   const { paywallOpen, paywallReason, closePaywall, openPremium, isDeveloper } =
     useApp();
 
+  useEffect(() => {
+    if (!paywallOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePaywall();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [paywallOpen, closePaywall]);
+
   return (
     <AnimatePresence>
       {paywallOpen && (
@@ -144,7 +163,12 @@ export function PaywallModal() {
             className="w-full max-w-lg rounded-t-3xl border border-amber-500/40 bg-black p-5 sm:rounded-3xl"
           >
             <p className="text-lg font-black">Qraft Premium が必要です</p>
-            <p className="mt-2 text-sm text-muted">{paywallReason}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{paywallReason}</p>
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[#c5cdd6]">
+              <li>画像添付で問題・解法を分かりやすく共有</li>
+              <li>Lounge など Premium 限定コミュニティ</li>
+              <li>特別リアクションと広告非表示</li>
+            </ul>
             <p className="mt-3 text-2xl font-black text-amber-300">月額 ¥{PREMIUM_PRICE_JPY}</p>
             {isDeveloper ? (
               <p className="mt-3 text-xs text-aha">開発者は無料で利用できます。</p>
@@ -162,7 +186,11 @@ export function PaywallModal() {
                 </button>
               </div>
             )}
-            <button onClick={closePaywall} className="mt-3 w-full py-2 text-xs text-muted">
+            <button
+              type="button"
+              onClick={closePaywall}
+              className="mt-3 min-h-11 w-full text-sm text-muted"
+            >
               閉じる
             </button>
           </motion.div>

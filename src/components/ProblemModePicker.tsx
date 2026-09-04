@@ -62,18 +62,18 @@ export function ProblemModePicker({
             <button
               type="button"
               onClick={() => onChange(id)}
-              className={`min-w-0 flex-1 rounded-l-xl border border-r-0 px-1.5 py-1.5 text-left sm:px-2 ${
+              className={`min-h-11 min-w-0 flex-1 rounded-l-xl border border-r-0 px-1.5 py-1.5 text-left sm:px-2 ${
                 on ? meta.selected : "border-gray-800 bg-transparent text-white"
               }`}
             >
-              <p className="truncate text-[10px] font-bold sm:text-[11px]">{meta.title}</p>
+              <p className="truncate text-xs font-bold">{meta.title}</p>
             </button>
             <button
               type="button"
               aria-label={`${meta.title}の説明`}
               aria-expanded={modeHelp === id}
               onClick={() => setModeHelp((v) => (v === id ? null : id))}
-              className={`flex items-center rounded-r-xl border border-l-0 px-1 ${
+              className={`flex min-h-11 min-w-11 items-center justify-center rounded-r-xl border border-l-0 ${
                 on ? `${meta.selected} text-white/70` : "border-gray-800 bg-transparent text-muted"
               }`}
             >
@@ -84,8 +84,8 @@ export function ProblemModePicker({
                 role="dialog"
                 className={`absolute top-[calc(100%+6px)] z-30 w-[min(18rem,calc(100vw-2.5rem))] rounded-xl border border-gray-700 bg-[#1a222c] px-3 py-2.5 text-left shadow-xl ${meta.helpPos}`}
               >
-                <p className="text-[11px] font-bold text-white">{meta.title}</p>
-                <p className="mt-1 text-[11px] leading-snug text-[#b8c0c8]">{meta.body}</p>
+                <p className="text-xs font-bold text-white">{meta.title}</p>
+                <p className="mt-1 text-xs leading-snug text-[#b8c0c8]">{meta.body}</p>
               </div>
             )}
           </div>
@@ -99,7 +99,7 @@ export function ProblemModePicker({
             placeholder="正解"
             className="w-full border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
           />
-          <p className="mt-0.5 text-[11px] text-muted">※単位は書かなくていいです</p>
+          <p className="mt-0.5 text-xs text-muted">※単位は書かなくていいです</p>
         </div>
       )}
       </div>

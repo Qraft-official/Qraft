@@ -36,6 +36,39 @@ export function isComplimentaryPremiumAccount(identity: PremiumIdentity) {
     .some(tokenIsComplimentaryPremium);
 }
 
+export function isEntitledStripeStatus(status?: string | null) {
+  return status === "active" || status === "trialing";
+}
+
+export type PremiumStatusPayload = {
+  premium: boolean;
+  complimentary: boolean;
+  subscribed: boolean;
+  developer: boolean;
+  trial: boolean;
+  status: string | null;
+};
+
+export function evaluatePremiumAccess(input: {
+  complimentary: boolean;
+  developer: boolean;
+  stripeStatus?: string | null;
+  trialUntil?: string | null;
+}): PremiumStatusPayload {
+  const subscribed = isEntitledStripeStatus(input.stripeStatus);
+  const trial = Boolean(
+    input.trialUntil && Number.isFinite(Date.parse(input.trialUntil)) && Date.parse(input.trialUntil) > Date.now(),
+  );
+  return {
+    complimentary: input.complimentary,
+    developer: input.developer,
+    subscribed,
+    trial,
+    status: input.stripeStatus ?? null,
+    premium: input.complimentary || input.developer || subscribed || trial,
+  };
+}
+
 export function accountHasPremium(identity: PremiumIdentity & {
   subscribed?: boolean;
   isDeveloper?: boolean;

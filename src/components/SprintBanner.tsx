@@ -1,9 +1,8 @@
 "use client";
 
-import { PULSE_BLURB, PULSE_NAME } from "@/lib/constants";
+import { PULSE_NAME } from "@/lib/constants";
 import { getNextRelease } from "@/lib/sprint";
 import { useApp } from "@/lib/store";
-import { motion } from "framer-motion";
 import { Flame } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -29,29 +28,28 @@ export function SprintBanner() {
   }, []);
 
   const status = sprint.submittedAt
-    ? "提出済み — みんなの解答が開放"
+    ? "提出済み"
     : sprint.timedOut
-      ? "タイムアウト — 解答フィード開放"
+      ? "タイムアウト"
       : sprint.startedAt
         ? "挑戦中"
-        : "いつでもスタート可（開始後は10分一本勝負）";
+        : "10分一本勝負";
 
   return (
-    <motion.button
-      whileTap={{ scale: 0.98 }}
+    <button
+      type="button"
       onClick={() => router.push("/sprint")}
-      className="mx-4 mt-3 w-[calc(100%-2rem)] rounded-2xl border border-orange-500/40 bg-gradient-to-r from-orange-500/20 via-purple-600/20 to-aha/10 p-4 text-left"
+      className="mx-4 mt-2 flex w-[calc(100%-2rem)] min-h-11 items-center gap-3 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-left"
     >
-      <div className="flex items-center gap-2 text-sm font-black">
-        <Flame className="text-orange-400" size={18} />
-        {PULSE_NAME} 公開中
-      </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-muted">{PULSE_BLURB}</p>
-      <p className="mt-1 text-xs text-muted">{status}</p>
-      <div className="mt-2 flex items-center justify-between text-[11px]">
-        <span className="text-aha">次の配信まで {toNext}</span>
-        {sprintUnlocked && <span className="text-purple-300">Live 精度開放中</span>}
-      </div>
-    </motion.button>
+      <Flame className="shrink-0 text-orange-400" size={18} aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-black">{PULSE_NAME}</span>
+        <span className="block text-xs text-muted">毎日21時の共通問題 · {status}</span>
+      </span>
+      <span className="shrink-0 text-right text-xs font-bold text-aha">
+        {toNext}
+        {sprintUnlocked ? <span className="mt-0.5 block text-purple-300">Live</span> : null}
+      </span>
+    </button>
   );
 }

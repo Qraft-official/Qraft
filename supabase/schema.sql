@@ -425,6 +425,14 @@ create unique index if not exists referral_claims_device_fingerprint_uidx
 alter table public.referral_claims enable row level security;
 revoke all on public.referral_claims from anon, authenticated;
 
+-- Fraud review (see migrations/20260904130000_referral_fraud_check.sql)
+alter table public.referral_claims
+  add column if not exists status text,
+  add column if not exists risk_score integer,
+  add column if not exists risk_reasons jsonb,
+  add column if not exists network_hash text,
+  add column if not exists reviewed_at timestamptz;
+
 -- Challenge / 教えて！Qraft modes (also applied remotely)
 alter table public.problems
   add column if not exists mode text not null default 'question',
@@ -724,4 +732,84 @@ create policy "authors or post owners can delete comments"
 grant select on public.comments to anon, authenticated;
 grant insert, delete on public.comments to authenticated;
 
+-- Stripe billing (server/webhook only; see migrations/20260904124000_add_stripe_subscription_status.sql)
+alter table public.profiles
+  add column if not exists stripe_subscription_id text,
+  add column if not exists premium_status text,
+  add column if not exists premium_current_period_end timestamptz;
+
+-- Learning features (canonical DDL: migrations/20260904140000_learning_features.sql)
+alter table public.notifications
+  add column if not exists link text,
+  add column if not exists dedupe_key text;
+
+alter table public.problems
+  add column if not exists hints jsonb not null default '[]'::jsonb,
+  add column if not exists felt_easy integer not null default 0,
+  add column if not exists felt_normal integer not null default 0,
+  add column if not exists felt_hard integer not null default 0,
+  add column if not exists duration_sum integer not null default 0,
+  add column if not exists duration_n integer not null default 0,
+  add column if not exists grade_correct integer not null default 0,
+  add column if not exists grade_n integer not null default 0,
+  add column if not exists series_id uuid,
+  add column if not exists series_ord integer;
+
+create table if not exists public.saved_problems (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  problem_id uuid not null references public.problems (id) on delete cascade,
+  category text not null default 'later'
+    check (category in ('later', 'exam', 'hard')),
+  created_at timestamptz not null default now(),
+  primary key (user_id, problem_id)
+);
+
+create table if not exists public.problem_attempts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  problem_id uuid not null references public.problems (id) on delete cascade,
+  started_at timestamptz,
+  submitted_at timestamptz,
+  duration_seconds integer,
+  grade text check (grade is null or grade in ('correct', 'incorrect', 'ungraded')),
+  solver_answer text,
+  is_revenge boolean not null default false,
+  revenge_available_at timestamptz,
+  revenge_completed_at timestamptz,
+  revenge_prompted_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.difficulty_votes (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  problem_id uuid not null references public.problems (id) on delete cascade,
+  vote smallint not null check (vote in (1, 2, 3)),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, problem_id)
+);
+
+create table if not exists public.problem_series (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles (id) on delete cascade,
+  title text not null,
+  description text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.user_post_notifications (
+  subscriber_id uuid not null references public.profiles (id) on delete cascade,
+  author_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (subscriber_id, author_id),
+  check (subscriber_id <> author_id)
+);
+
+create table if not exists public.learning_activity (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  kind text not null check (kind in ('solve', 'post', 'pulse')),
+  problem_id uuid references public.problems (id) on delete set null,
+  created_at timestamptz not null default now()
+);
 

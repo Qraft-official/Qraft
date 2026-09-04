@@ -1,4 +1,5 @@
 import { userFromRequest } from "@/lib/api-auth";
+import { clientIpFromRequest, hashNetworkKey, referralFraudSecret } from "@/lib/referral-fraud";
 import { recordReferralEvent } from "@/lib/referral-server";
 import { NextResponse } from "next/server";
 
@@ -12,7 +13,8 @@ export async function POST(request: Request) {
   if (type !== "login" && type !== "solve" && type !== "post") {
     return NextResponse.json({ error: "不正なイベントです。" }, { status: 400 });
   }
-  const result = await recordReferralEvent(user.id, type);
+  const networkHash = hashNetworkKey(clientIpFromRequest(request), referralFraudSecret());
+  const result = await recordReferralEvent(user.id, type, networkHash);
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }

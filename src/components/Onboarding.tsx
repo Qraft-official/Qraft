@@ -20,14 +20,14 @@ export function Onboarding() {
   return (
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-black px-5 py-10">
       <div className="mx-auto max-w-md">
-        <p className="text-sm font-bold tracking-[0.2em] text-aha">QRAFT</p>
+        <p className="text-sm font-bold tracking-[0.2em] text-aha">QRAFT · あと2ステップ</p>
         <h1 className="mt-2 text-3xl font-black leading-tight">
           はじめに、年齢と
           <br />
           3科目の現在地を選ぶ。
         </h1>
         <p className="mt-3 text-sm text-muted">
-          この画面は初回登録時のみです。レベルはあとからプロフィールで変えられます。
+          完了後すぐ問題フィードへ進めます。Welcome Mission はあとからでも大丈夫です。
         </p>
 
         <div className="mt-8 space-y-6">

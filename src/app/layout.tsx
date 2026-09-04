@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Noto_Sans_JP } from "next/font/google";
 import { headers } from "next/headers";
 import Script from "next/script";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { AppDialogHost } from "@/components/AppDialogHost";
 import { AppProvider } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
 import { ADSENSE_CLIENT_ID, isAdsenseCrawler } from "@/lib/adsense";
@@ -116,6 +117,7 @@ export default async function RootLayout({
           <AppErrorBoundary>
             <AppProvider>
               <AppShell adsensePreview={adsensePreview}>{children}</AppShell>
+              <AppDialogHost />
             </AppProvider>
           </AppErrorBoundary>
         </div>

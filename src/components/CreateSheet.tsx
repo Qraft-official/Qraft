@@ -2,8 +2,17 @@
 
 import { SUBJECTS } from "@/lib/constants";
 import { emptyCanvasPage, sharedTypedHeight } from "@/lib/draw-canvas";
+import { confirmDialog } from "@/lib/app-dialog";
 import { generateAiProblem } from "@/lib/premium";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
+import {
+  clearComposerDraft,
+  draftIsEmpty,
+  readComposerDraft,
+  writeComposerDraft,
+  type ComposerDraft,
+} from "@/lib/composer-draft";
+import { sanitizeHints } from "@/lib/learn";
 import { useApp } from "@/lib/store";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
@@ -11,7 +20,9 @@ import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { AnimatePresence, motion } from "framer-motion";
 import { Keyboard, PenLine, Sparkles, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, type FocusEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
+import { ComposerModeTabs } from "./ComposerModeTabs";
+import { HintEditor } from "./HintEditor";
 import { ImageUploadSection } from "./ImageUploadSection";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { ComposerExpandOverlay, NotebookExpandButton } from "./NotebookExpandControls";
@@ -30,7 +41,7 @@ const TypedNotebook = dynamic(
 );
 
 export function CreateSheet() {
-  const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall } =
+  const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall, me } =
     useApp();
   const quotePostId = composer.open && composer.mode === "solution" ? composer.quotePostId : undefined;
   const openProblem = composer.open && composer.mode === "problem";
@@ -54,6 +65,7 @@ export function CreateSheet() {
   const [difficultyLevel, setDifficultyLevel] = useState<Tier>(3);
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [solverAnswer, setSolverAnswer] = useState("");
+  const [hints, setHints] = useState<string[]>([]);
   const [pulseToast, setPulseToast] = useState("");
   const [editorExpanded, setEditorExpanded] = useState(false);
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
@@ -144,9 +156,15 @@ export function CreateSheet() {
     }, 120);
   };
 
+  const composerSession = openProblem
+    ? `problem:${isSprintProblem ? "sprint" : "normal"}`
+    : openSolution
+      ? `solution:${quotePostId ?? ""}`
+      : "";
+
   useEffect(() => {
-    if (!composer.open) return;
-    if (composer.mode === "problem") {
+    if (!composerSession) return;
+    if (composerSession.startsWith("problem")) {
       setText("");
       setTitle("");
       setSolutionDraft("");
@@ -161,25 +179,119 @@ export function CreateSheet() {
       setTypedIndex(0);
       setPostMode("question");
       setCorrectAnswer("");
+      setHints([]);
+      return;
     }
-    if (composer.mode === "solution") {
-      setText("");
-      setPhoto(undefined);
-      setPages([emptyCanvasPage("page-1")]);
-      setTypedPages([{ id: "t-1", latex: "" }]);
-      setTypedIndex(0);
-      setInputMode("hand");
-      setPostError("");
-      setPosting(false);
-      setSolverAnswer("");
-      const q = getPost(composer.quotePostId);
-      if (q) setSubject(q.subject);
-    }
-  }, [composer, getPost]);
+    setText("");
+    setPhoto(undefined);
+    setPages([emptyCanvasPage("page-1")]);
+    setTypedPages([{ id: "t-1", latex: "" }]);
+    setTypedIndex(0);
+    setInputMode("hand");
+    setPostError("");
+    setPosting(false);
+    setSolverAnswer("");
+    const q = quotePostId ? getPost(quotePostId) : undefined;
+    if (q) setSubject(q.subject);
+  }, [composerSession, getPost, quotePostId]);
+
+  const askedRestore = useRef("");
+  useEffect(() => {
+    if (!open || !composerSession || !me.id) return;
+    if (askedRestore.current === composerSession) return;
+    askedRestore.current = composerSession;
+    const kind = openProblem ? "problem" : "solution";
+    const draft = readComposerDraft(me.id, kind, quotePostId);
+    if (!draft || draftIsEmpty(draft)) return;
+    void confirmDialog({
+      title: "前回の下書きを復元しますか？",
+      message: "前回入力した内容を戻せます。破棄すると下書きは消えます。",
+      confirmLabel: "復元する",
+      cancelLabel: "破棄",
+    }).then((ok) => {
+      if (!ok) {
+        clearComposerDraft(me.id, kind, quotePostId);
+        return;
+      }
+      applyDraft(draft);
+    });
+  }, [composerSession, open, me.id, openProblem, quotePostId]);
+
+  const applyDraft = (d: ComposerDraft) => {
+    setTitle(d.title);
+    setText(d.text ?? "");
+    setSolutionDraft(d.solutionDraft);
+    setSubject(d.subject);
+    setPostMode(d.postMode);
+    setDifficultyLevel(d.difficultyLevel);
+    setCorrectAnswer(d.correctAnswer);
+    setHints(sanitizeHints(d.hints));
+    setInputMode(d.inputMode);
+    setTypedPages(d.typedPages.length ? d.typedPages : [{ id: "t-1", latex: "" }]);
+    setTypedIndex(0);
+    if (d.pages?.length) setPages(d.pages);
+    if (d.photo) setPhoto(d.photo);
+    if (d.solverAnswer) setSolverAnswer(d.solverAnswer);
+  };
+
+  useEffect(() => {
+    if (!open || !me.id || posting) return;
+    const t = window.setTimeout(() => {
+      const kind = openProblem ? "problem" : "solution";
+      const draft: ComposerDraft = {
+        v: 1,
+        userId: me.id,
+        kind,
+        quotePostId,
+        isSprint: isSprintProblem,
+        savedAt: Date.now(),
+        title,
+        subject,
+        postMode,
+        difficultyLevel,
+        correctAnswer,
+        solutionDraft,
+        hints,
+        inputMode,
+        typedPages,
+        pages,
+        photo,
+        text,
+        solverAnswer,
+      };
+      if (draftIsEmpty(draft)) return;
+      writeComposerDraft(draft);
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [
+    open,
+    me.id,
+    posting,
+    openProblem,
+    quotePostId,
+    isSprintProblem,
+    title,
+    subject,
+    postMode,
+    difficultyLevel,
+    correctAnswer,
+    solutionDraft,
+    hints,
+    inputMode,
+    typedPages,
+    pages,
+    photo,
+    text,
+    solverAnswer,
+  ]);
 
   const attachPhoto = (file: File) => {
     const r = new FileReader();
-    r.onload = () => setPhoto(String(r.result));
+    r.onerror = () => setPostError("画像の読み込みに失敗しました。もう一度お試しください。");
+    r.onload = () => {
+      setPhoto(String(r.result));
+      setPostError("");
+    };
     r.readAsDataURL(file);
   };
 
@@ -194,28 +306,70 @@ export function CreateSheet() {
 
   const close = () => closeComposer();
 
-  const modeTabs = (
-    <div className="flex shrink-0 gap-1 px-4 py-2">
-      <button
-        type="button"
-        onClick={() => setInputMode("hand")}
-        className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
-          inputMode === "hand" ? "bg-aha text-black" : "border border-gray-800 text-muted"
-        }`}
-      >
-        <PenLine size={14} /> 手書き
-      </button>
-      <button
-        type="button"
-        onClick={() => setInputMode("typed")}
-        className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
-          inputMode === "typed" ? "bg-aha text-black" : "border border-gray-800 text-muted"
-        }`}
-      >
-        <Keyboard size={14} /> 打ち込み
-      </button>
-    </div>
-  );
+  const isDirty = () => {
+    if (title.trim() || text.trim() || solutionDraft.trim() || photo || aiPrompt.trim() || correctAnswer.trim() || solverAnswer.trim()) {
+      return true;
+    }
+    if (hints.some((h) => h.trim())) return true;
+    if (typedPages.some((p) => p.latex.trim())) return true;
+    if (pages.some((p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0 || p.backgroundImage)) return true;
+    return false;
+  };
+
+  const clearDraft = () => {
+    if (!me.id) return;
+    clearComposerDraft(me.id, openProblem ? "problem" : "solution", quotePostId);
+  };
+
+  const requestClose = useCallback(() => {
+    if (posting) return;
+    void (async () => {
+      if (!isDirty()) {
+        close();
+        return;
+      }
+      const ok = await confirmDialog({
+        title: "下書きを破棄しますか？",
+        message: "入力中の問題・手書き・数式は保存されません。",
+        confirmLabel: "破棄",
+        cancelLabel: "編集を続ける",
+        destructive: true,
+      });
+      if (ok) {
+        clearDraft();
+        close();
+      }
+    })();
+  }, [
+    posting,
+    title,
+    text,
+    solutionDraft,
+    photo,
+    aiPrompt,
+    correctAnswer,
+    solverAnswer,
+    hints,
+    typedPages,
+    pages,
+    closeComposer,
+    me.id,
+    openProblem,
+    quotePostId,
+  ]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      requestClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, requestClose]);
+
+  const modeTabs = <ComposerModeTabs value={inputMode} onChange={setInputMode} />;
 
   const extras = (
     <div className="min-w-0 space-y-2">
@@ -227,7 +381,7 @@ export function CreateSheet() {
         className="w-full resize-none border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
       />
       <div className="border-b border-gray-800 pb-2">
-        <p className="mb-1 flex items-center gap-1 text-[11px] font-bold">
+        <p className="mb-1 flex items-center gap-1 text-xs font-bold">
           <Sparkles size={12} className="text-aha" /> AI問題メーカー
         </p>
         <div className="flex min-w-0 gap-2">
@@ -255,13 +409,14 @@ export function CreateSheet() {
               setTypedIndex(0);
               setText(latex);
             }}
-            className="shrink-0 rounded-full bg-neon/20 px-3 py-1.5 text-[11px] font-bold text-purple-200"
+            className="min-h-11 shrink-0 rounded-full bg-neon/20 px-3 text-xs font-bold text-purple-200"
           >
             生成
           </button>
         </div>
       </div>
       {photoRow}
+      {!isSprintProblem && <HintEditor hints={hints} onChange={setHints} />}
     </div>
   );
 
@@ -297,6 +452,7 @@ export function CreateSheet() {
             doodle: i,
             contentHeight: sharedTypedHeight(typedPages),
           })),
+          hints: sanitizeHints(hints),
         };
       } else {
         const images = (await canvasRef.current?.exportPageBlobs()) ?? [];
@@ -328,6 +484,7 @@ export function CreateSheet() {
             contentWidth: size.w,
             contentHeight: size.h,
           })),
+          hints: sanitizeHints(hints),
         };
       }
       if (!isSprintProblem && postMode === "challenge" && !correctAnswer.trim()) {
@@ -341,6 +498,7 @@ export function CreateSheet() {
         setPostError(res.error);
         return;
       }
+      clearDraft();
       if (res.pulseSubmitted) {
         setPulseToast(
           "問題の応募が完了しました！運営が選別の上、PULSE問題として配信されます",
@@ -370,13 +528,13 @@ export function CreateSheet() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={close}
+          onClick={requestClose}
         >
           <motion.div
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
-            transition={{ type: "spring", damping: 22, stiffness: 260 }}
+            transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
             className={`composer-dialog relative mx-auto w-full max-w-lg rounded-2xl border border-gray-800 bg-black md:max-w-[640px] ${
               editorExpanded ? "composer-dialog-expanded" : ""
@@ -384,12 +542,22 @@ export function CreateSheet() {
           >
             {openProblem && (
               <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
-                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 md:px-4 md:py-1">
-                  <p className="text-sm font-bold">
-                    {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
-                  </p>
-                  <button onClick={close} className="rounded-full p-1 text-muted">
-                    <X size={18} />
+                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-2 md:px-4">
+                  <div>
+                    <p className="text-sm font-bold">
+                      {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {inputMode === "hand" ? "手書きモード" : "打ち込み · 数式キーボード"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={requestClose}
+                    className="tap-target flex items-center justify-center rounded-full text-muted"
+                    aria-label="閉じる"
+                  >
+                    <X size={20} />
                   </button>
                 </div>
                 <div
@@ -397,7 +565,11 @@ export function CreateSheet() {
                   className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
+                <label className="sr-only" htmlFor="composer-subject">
+                  教科
+                </label>
                 <select
+                  id="composer-subject"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value as Subject)}
                   className="w-full border-0 border-b border-gray-800 bg-transparent px-3 py-1.5 text-sm outline-none md:px-4"
@@ -415,14 +587,14 @@ export function CreateSheet() {
                   className="w-full border-0 border-b border-gray-800 bg-transparent px-3 py-1.5 text-base font-semibold outline-none placeholder:text-muted md:px-4 md:text-lg"
                 />
                 <div className="border-b border-gray-800 px-3 py-1 md:px-4">
-                  <p className="mb-0.5 text-[10px] font-bold text-muted">難易度</p>
+                  <p className="mb-1 text-xs font-bold text-muted">難易度</p>
                   <div className="aha-scroll flex flex-nowrap gap-1 overflow-x-auto pb-0.5">
                     {DIFFICULTY_LEVELS.map((d) => (
                       <button
                         key={d.id}
                         type="button"
                         onClick={() => setDifficultyLevel(d.id)}
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold sm:px-2.5 sm:py-1 ${
+                      className={`min-h-11 shrink-0 rounded-full px-3 text-xs font-bold ${
                           difficultyLevel === d.id
                             ? "bg-aha text-black"
                             : "border border-gray-700 text-muted"
@@ -435,7 +607,7 @@ export function CreateSheet() {
                   </div>
                 </div>
                 {isSprintProblem && (
-                  <p className="border-b border-gray-800 px-4 py-2 text-[11px] text-muted">
+                  <p className="border-b border-gray-800 px-4 py-2 text-xs text-muted">
                     応募内容は運営メールへ送られ、選別のうえ PULSE として配信されます。タイムラインにはすぐには載りません。
                   </p>
                 )}
@@ -464,7 +636,7 @@ export function CreateSheet() {
                     </div>
                     )}
                     <div className="border-t border-gray-800 px-4 py-2">
-                      <p className="mb-1 text-[11px] font-bold text-muted">解答メモ・画像・AI</p>
+                      <p className="mb-1 text-xs font-bold text-muted">解答メモ・画像・AI</p>
                       {extras}
                     </div>
                   </div>
@@ -502,7 +674,7 @@ export function CreateSheet() {
                   <button
                     disabled={posting}
                     onClick={submitProblem}
-                    className="inline-block rounded-full bg-neon px-5 py-1.5 text-sm font-bold text-white disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center rounded-full bg-neon px-5 text-sm font-bold text-white disabled:opacity-40"
                   >
                     {posting ? "送信中…" : isSprintProblem ? "応募する" : "投稿する"}
                   </button>
@@ -533,7 +705,12 @@ export function CreateSheet() {
                         </option>
                       ))}
                     </select>
-                    <button onClick={close} className="text-muted">
+                    <button
+                      type="button"
+                      onClick={requestClose}
+                      className="tap-target flex items-center justify-center text-muted"
+                      aria-label="閉じる"
+                    >
                       <X size={18} />
                     </button>
                   </div>
@@ -547,7 +724,7 @@ export function CreateSheet() {
                 {inputMode === "hand" ? (
                   <div>
                     <div className="border-b border-gray-800 px-4 pb-3">
-                      <p className="pt-2 text-[10px] font-bold tracking-wide text-muted">
+                      <p className="pt-2 text-xs font-bold tracking-wide text-muted">
                         引用する問題 · スクロールでいつでも確認できます
                       </p>
                       <QuoteEmbed postId={quotePostId} />
@@ -597,7 +774,7 @@ export function CreateSheet() {
                     }}
                     header={
                       <div className="mb-2 shrink-0 border-b border-gray-800 px-4 pb-2">
-                        <p className="px-2 pt-2 text-[10px] font-bold tracking-wide text-muted">
+                        <p className="px-2 pt-2 text-xs font-bold tracking-wide text-muted">
                           引用する問題 · 上にスクロールして確認
                         </p>
                         <QuoteEmbed postId={quotePostId} />
@@ -619,7 +796,7 @@ export function CreateSheet() {
                         placeholder="あなたの答え"
                         className="w-full border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
                       />
-                      <p className="mt-1 text-[11px] text-muted">※単位は書かなくていいです</p>
+                      <p className="mt-1 text-xs text-muted">※単位は書かなくていいです</p>
                     </div>
                   )}
                   <div className="flex items-center justify-end gap-3">
@@ -680,10 +857,11 @@ export function CreateSheet() {
                           setPostError(res.error);
                           return;
                         }
+                        clearDraft();
                         close();
                       })();
                     }}
-                    className="inline-block rounded-full bg-aha px-5 py-1.5 text-sm font-bold text-black disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center rounded-full bg-aha px-5 text-sm font-bold text-black disabled:opacity-40"
                   >
                     {posting ? "投稿中…" : "投稿する"}
                   </button>

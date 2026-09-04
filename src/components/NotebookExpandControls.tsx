@@ -14,8 +14,9 @@ export function NotebookExpandButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md p-1 text-muted hover:bg-white/10 hover:text-white ${className}`}
+      className={`tap-target rounded-md p-2 text-muted hover:bg-white/10 hover:text-white ${className}`}
       aria-label="拡大"
+      title="拡大"
     >
       <Maximize2 size={16} />
     </button>
@@ -38,15 +39,16 @@ export function ComposerExpandOverlay({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md p-1.5 text-muted hover:bg-white/10 hover:text-white"
-          aria-label="メニュー"
+          className="tap-target rounded-md p-2 text-muted hover:bg-white/10 hover:text-white"
+          aria-label="縮小"
+          title="縮小"
         >
           <Menu size={20} />
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15"
+          className="inline-flex min-h-11 items-center gap-1 rounded-full bg-white/10 px-3 text-sm font-bold text-white hover:bg-white/15"
         >
           <ArrowLeft size={14} />
           完了

@@ -196,7 +196,7 @@ export function VisualMathEditor({
         {header}
         {chrome && (
         <div className="mb-1 flex items-center justify-between gap-2 px-3 sm:px-4">
-          <p className="text-[10px] font-bold tracking-wide text-muted">
+          <p className="text-xs font-bold tracking-wide text-muted">
             視覚数式エディタ · 枠をタップして中に入力
           </p>
           <div className="flex items-center gap-1">
@@ -205,7 +205,7 @@ export function VisualMathEditor({
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
+              className="tap-target rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
               aria-label="エディタメニュー"
               aria-expanded={menuOpen}
             >

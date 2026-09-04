@@ -30,7 +30,13 @@ import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./consta
 import { getDeviceIdentity, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
 import { referralFetch } from "./referral-client";
-import { isVerifiedCreator, isComplimentaryPremiumAccount, LOUNGE_POSTS } from "./premium";
+import {
+  isVerifiedCreator,
+  isComplimentaryPremiumAccount,
+  isDeveloperAccount,
+  LOUNGE_POSTS,
+  type PremiumStatusPayload,
+} from "./premium";
 import { userIsVerified } from "./verified";
 import {
   communityForDay,
@@ -58,6 +64,24 @@ import {
   toggleConfusedReaction,
 } from "./problem-reactions";
 import { asDifficulty, MOCK_PROBLEM_META, isProblemUuid } from "./difficulty";
+import {
+  fetchLearningBootstrap,
+  fetchLearningCardState,
+  promptDueRevenge,
+  assignProblemSeries,
+  setSavedCategory as persistSaveCategory,
+  startProblemAttempt,
+  submitProblemAttempt,
+  toggleAuthorNotify,
+  toggleSavedProblem,
+  upsertFeltVote,
+} from "./learn-client";
+import type {
+  AttemptSummary,
+  FeltVote,
+  RevengeItem,
+  SaveCategory,
+} from "./learn";
 import {
   deleteComment as persistDeleteComment,
   fetchComments,
@@ -169,6 +193,7 @@ type Store = {
   subscribed: boolean;
   subscribe: () => void;
   unsubscribe: () => void;
+  refreshPremiumStatus: () => Promise<PremiumStatusPayload | null>;
   premiumOpen: boolean;
   openPremium: () => void;
   closePremium: () => void;
@@ -190,6 +215,26 @@ type Store = {
   searchUsers: (query: string) => Promise<{ error?: string }>;
   toggleConfused: (postId: string) => Promise<void>;
   confusedMine: Record<string, boolean>;
+  saved: Record<string, SaveCategory>;
+  toggleSave: (problemId: string, category?: SaveCategory) => Promise<void>;
+  setSaveCategory: (problemId: string, category: SaveCategory) => Promise<void>;
+  feltVotes: Record<string, FeltVote>;
+  voteFeltDifficulty: (problemId: string, vote: FeltVote) => Promise<void>;
+  lastAttempts: Record<string, AttemptSummary>;
+  attemptStarts: Record<string, string>;
+  startAttempt: (problemId: string) => Promise<void>;
+  notifyAuthors: string[];
+  toggleNotifyAuthor: (authorId: string) => Promise<void>;
+  revengeDue: RevengeItem[];
+  learnStreak: { current: number; longest: number };
+  calendarDays: string[];
+  refreshLearn: () => Promise<void>;
+  assignToSeries: (
+    problemId: string,
+    seriesId: string | null,
+    seriesTitle?: string,
+    ord?: number,
+  ) => Promise<{ error?: string }>;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -253,6 +298,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [composer, setComposer] = useState<Composer>(emptyComposer);
   const [subscribed, setSubscribed] = useState(false);
+  const [serverPremium, setServerPremium] = useState<boolean | null>(null);
   const [referralMe, setReferralMe] = useState<ReferralMe | null>(null);
   const [referralReady, setReferralReady] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
@@ -264,6 +310,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reactions, setReactions] = useState<Record<string, string>>({});
   const [confusedMine, setConfusedMine] = useState<Record<string, boolean>>({});
   const [confusedCounts, setConfusedCounts] = useState<Record<string, number>>({});
+  const [saved, setSaved] = useState<Record<string, SaveCategory>>({});
+  const [feltVotes, setFeltVotes] = useState<Record<string, FeltVote>>({});
+  const [lastAttempts, setLastAttempts] = useState<Record<string, AttemptSummary>>({});
+  const [attemptStarts, setAttemptStarts] = useState<Record<string, string>>({});
+  const [notifyAuthors, setNotifyAuthors] = useState<string[]>([]);
+  const [revengeDue, setRevengeDue] = useState<RevengeItem[]>([]);
+  const [learnStreak, setLearnStreak] = useState({ current: 0, longest: 0 });
+  const [calendarDays, setCalendarDays] = useState<string[]>([]);
   const [sprint, setSprint] = useState<SprintRecord>(() =>
     freshSprint(getSprintDayId()),
   );
@@ -281,7 +335,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setExtra(load(STORAGE_KEYS.extraPosts, [] as Post[]));
     setProfile(load(STORAGE_KEYS.profile, {} as ProfilePatch));
     setActivities(load(STORAGE_KEYS.activities, [] as ActivityItem[]));
-    setSubscribed(load(STORAGE_KEYS.premium, false));
     setBgmOnState(load(STORAGE_KEYS.bgm, false));
     setAccentColorState(load(STORAGE_KEYS.accent, "#A855F7"));
     setReactions(load(STORAGE_KEYS.reactions, {} as Record<string, string>));
@@ -319,6 +372,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setNotifications([]);
         setReferralMe(null);
         setReferralReady(false);
+        setSaved({});
+        setFeltVotes({});
+        setLastAttempts({});
+        setNotifyAuthors([]);
+        setRevengeDue([]);
+        setCalendarDays([]);
+        setLearnStreak({ current: 0, longest: 0 });
       }
     };
 
@@ -334,13 +394,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           await ensureProfile(user);
           await ensureWelcomeNotification();
-          const [inbox, profileResult, admin] = await Promise.all([
+          const [inbox, profileResult, admin, boot] = await Promise.all([
             fetchNotifications(),
             fetchLearningProfile(user.id),
             checkIsAdmin(),
+            fetchLearningBootstrap(),
           ]);
           if (cancelled) return;
           setNotifications(inbox);
+          setNotifyAuthors(boot.notifyAuthors);
+          setRevengeDue(boot.revenge);
+          setCalendarDays(boot.calendarDays);
+          setLearnStreak({ current: boot.currentStreak, longest: boot.longestStreak });
+          void promptDueRevenge().then(() => {
+            void fetchNotifications().then((next) => {
+              if (!cancelled) setNotifications(next);
+            });
+          });
           const { data, error } = profileResult;
           if (error) {
             console.warn("Failed to load learning profile:", error.message);
@@ -510,7 +580,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.sprint, JSON.stringify(sprint));
     localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profile));
     localStorage.setItem(STORAGE_KEYS.activities, JSON.stringify(activities));
-    localStorage.setItem(STORAGE_KEYS.premium, JSON.stringify(subscribed));
     localStorage.setItem(STORAGE_KEYS.bgm, JSON.stringify(bgmOn));
     localStorage.setItem(STORAGE_KEYS.accent, JSON.stringify(accentColor));
     localStorage.setItem(STORAGE_KEYS.reactions, JSON.stringify(reactions));
@@ -527,7 +596,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     sprint,
     profile,
     activities,
-    subscribed,
     bgmOn,
     accentColor,
     reactions,
@@ -541,8 +609,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
     if (sessionEmail && emails.includes(sessionEmail.toLowerCase())) return true;
+    const handle = typeof profile.handle === "string" ? profile.handle : undefined;
+    if (supabaseUid && isDeveloperAccount(supabaseUid, handle)) return true;
     return false;
-  }, [isAdmin, sessionEmail]);
+  }, [isAdmin, sessionEmail, supabaseUid, profile.handle]);
   const complimentaryPremium = useMemo(() => {
     const base = supabaseUid
       ? (remoteUsers[supabaseUid] ?? fallbackUser(supabaseUid))
@@ -557,7 +627,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const trialPremium = Boolean(
     referralMe?.trialUntil && new Date(referralMe.trialUntil).getTime() > Date.now(),
   );
-  const hasPremium = isDeveloper || subscribed || complimentaryPremium || trialPremium;
+  const localPremiumHint = isDeveloper || complimentaryPremium || trialPremium;
+  const hasPremium = serverPremium === true || (serverPremium === null && localPremiumHint);
 
   const me: User = useMemo(() => {
     const base = supabaseUid
@@ -831,6 +902,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAge(null);
     setProfileHydrated(true);
     setNotifications([]);
+    setSaved({});
+    setFeltVotes({});
+    setLastAttempts({});
+    setAttemptStarts({});
+    setNotifyAuthors([]);
+    setRevengeDue([]);
+    setCalendarDays([]);
+    setLearnStreak({ current: 0, longest: 0 });
   }, []);
 
   const toggleFollow = useCallback((userId: string) => {
@@ -1076,13 +1155,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...a,
       ]);
       if (input.problemId) {
+        const startedAt = attemptStarts[input.problemId];
+        const last = lastAttempts[input.problemId];
+        const isRevenge = Boolean(
+          last?.grade === "incorrect" && !last.revengeCompletedAt,
+        );
+        void submitProblemAttempt({
+          problemId: input.problemId,
+          grade: challengeGrade ?? (isChallenge ? "ungraded" : "ungraded"),
+          solverAnswer: isChallenge ? solverAnswer : undefined,
+          startedAt,
+          isRevenge,
+        }).then(() => {
+          setLastAttempts((prev) => ({
+            ...prev,
+            [input.problemId!]: {
+              grade: challengeGrade ?? "ungraded",
+              durationSeconds: startedAt
+                ? Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000))
+                : null,
+              submittedAt: new Date().toISOString(),
+              isRevenge,
+              revengeAvailableAt: null,
+              revengeCompletedAt: challengeGrade === "correct" ? new Date().toISOString() : null,
+            },
+          }));
+          if (challengeGrade === "correct") {
+            setRevengeDue((prev) => prev.filter((r) => r.problemId !== input.problemId));
+          }
+        });
         void notifyConfusedReactors(input.problemId).then(() => {
           void fetchNotifications().then(setNotifications);
         });
       }
       return {};
     },
-    [supabaseUid, getPost],
+    [supabaseUid, getPost, attemptStarts, lastAttempts],
   );
 
   const addReply = useCallback(async (input: { replyToId: string; text: string }) => {
@@ -1202,6 +1310,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (next: Exclude<Composer, { open: false }>) => {
       if (next.mode === "solution" && !next.quotePostId) return;
       setComposer(next);
+      if (next.mode === "solution" && next.quotePostId) {
+        void startProblemAttempt(next.quotePostId).then((res) => {
+          if (res.startedAt) {
+            setAttemptStarts((prev) => ({ ...prev, [next.quotePostId]: res.startedAt! }));
+          }
+        });
+      }
     },
     [],
   );
@@ -1246,16 +1361,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { error: res.error };
   }, []);
 
+  const refreshPremiumStatus = useCallback(async (): Promise<PremiumStatusPayload | null> => {
+    if (!supabaseUid) {
+      setServerPremium(false);
+      setSubscribed(false);
+      return null;
+    }
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        setServerPremium(false);
+        setSubscribed(false);
+        return null;
+      }
+      const res = await fetch("/api/premium-status", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        setServerPremium(false);
+        setSubscribed(false);
+        return null;
+      }
+      if (!res.ok) return null;
+      const payload = (await res.json()) as PremiumStatusPayload;
+      setServerPremium(Boolean(payload.premium));
+      setSubscribed(Boolean(payload.subscribed));
+      return payload;
+    } catch {
+      return null;
+    }
+  }, [supabaseUid]);
+
+  useEffect(() => {
+    void refreshPremiumStatus();
+  }, [refreshPremiumStatus]);
+
   const subscribe = useCallback(() => {
-    setSubscribed(true);
     setPaywallOpen(false);
     setPremiumOpen(false);
-  }, []);
+    void refreshPremiumStatus();
+  }, [refreshPremiumStatus]);
 
   const unsubscribe = useCallback(() => {
-    if (isDeveloper) return;
-    setSubscribed(false);
-  }, [isDeveloper]);
+    void refreshPremiumStatus();
+  }, [refreshPremiumStatus]);
 
   const openPremium = useCallback(() => setPremiumOpen(true), []);
   const closePremium = useCallback(() => setPremiumOpen(false), []);
@@ -1290,6 +1441,158 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [confusedMine, getPost],
   );
+
+  const toggleSave = useCallback(
+    async (problemId: string, category: SaveCategory = "later") => {
+      const currently = !!saved[problemId];
+      setSaved((prev) => {
+        const next = { ...prev };
+        if (currently) delete next[problemId];
+        else next[problemId] = category;
+        return next;
+      });
+      const res = await toggleSavedProblem(problemId, currently, category);
+      if (res.error) {
+        setSaved((prev) => {
+          const next = { ...prev };
+          if (currently) next[problemId] = saved[problemId];
+          else delete next[problemId];
+          return next;
+        });
+      }
+    },
+    [saved],
+  );
+
+  const setSaveCategory = useCallback(async (problemId: string, category: SaveCategory) => {
+    setSaved((prev) => ({ ...prev, [problemId]: category }));
+    const res = await persistSaveCategory(problemId, category);
+    if (res.error) console.warn("setSaveCategory:", res.error);
+  }, []);
+
+  const voteFeltDifficulty = useCallback(async (problemId: string, vote: FeltVote) => {
+    const prev = feltVotes[problemId];
+    if (prev === vote) return;
+    setFeltVotes((p) => ({ ...p, [problemId]: vote }));
+    const bump = (posts: Post[]) =>
+      posts.map((x) => {
+        if (x.id !== problemId) return x;
+        let easy = x.feltEasy ?? 0;
+        let normal = x.feltNormal ?? 0;
+        let hard = x.feltHard ?? 0;
+        if (prev === 1) easy = Math.max(0, easy - 1);
+        if (prev === 2) normal = Math.max(0, normal - 1);
+        if (prev === 3) hard = Math.max(0, hard - 1);
+        if (vote === 1) easy += 1;
+        if (vote === 2) normal += 1;
+        if (vote === 3) hard += 1;
+        return { ...x, feltEasy: easy, feltNormal: normal, feltHard: hard };
+      });
+    setRemotePosts(bump);
+    setExtra(bump);
+    const res = await upsertFeltVote(problemId, vote);
+    if (res.error) {
+      setFeltVotes((p) => {
+        const next = { ...p };
+        if (prev) next[problemId] = prev;
+        else delete next[problemId];
+        return next;
+      });
+      const revert = (posts: Post[]) =>
+        posts.map((x) => {
+          if (x.id !== problemId) return x;
+          let easy = x.feltEasy ?? 0;
+          let normal = x.feltNormal ?? 0;
+          let hard = x.feltHard ?? 0;
+          if (vote === 1) easy = Math.max(0, easy - 1);
+          if (vote === 2) normal = Math.max(0, normal - 1);
+          if (vote === 3) hard = Math.max(0, hard - 1);
+          if (prev === 1) easy += 1;
+          if (prev === 2) normal += 1;
+          if (prev === 3) hard += 1;
+          return { ...x, feltEasy: easy, feltNormal: normal, feltHard: hard };
+        });
+      setRemotePosts(revert);
+      setExtra(revert);
+    }
+  }, [feltVotes]);
+
+  const startAttempt = useCallback(async (problemId: string) => {
+    const res = await startProblemAttempt(problemId);
+    if (res.startedAt) {
+      setAttemptStarts((prev) => ({ ...prev, [problemId]: res.startedAt! }));
+    }
+  }, []);
+
+  const toggleNotifyAuthor = useCallback(
+    async (authorId: string) => {
+      const on = notifyAuthors.includes(authorId);
+      setNotifyAuthors((prev) =>
+        on ? prev.filter((id) => id !== authorId) : [...prev, authorId],
+      );
+      const res = await toggleAuthorNotify(authorId, on);
+      if (res.error) {
+        setNotifyAuthors((prev) =>
+          on ? [...prev, authorId] : prev.filter((id) => id !== authorId),
+        );
+      }
+    },
+    [notifyAuthors],
+  );
+
+  const refreshLearn = useCallback(async () => {
+    if (!supabaseUid) return;
+    const [boot, cards] = await Promise.all([
+      fetchLearningBootstrap(),
+      fetchLearningCardState(remotePosts.map((p) => p.id)),
+    ]);
+    setNotifyAuthors(boot.notifyAuthors);
+    setRevengeDue(boot.revenge);
+    setCalendarDays(boot.calendarDays);
+    setLearnStreak({ current: boot.currentStreak, longest: boot.longestStreak });
+    setSaved(cards.saved);
+    setFeltVotes(cards.votes);
+    setLastAttempts(cards.attempts);
+  }, [supabaseUid, remotePosts]);
+
+  const assignToSeries = useCallback(
+    async (
+      problemId: string,
+      seriesId: string | null,
+      seriesTitle?: string,
+      ord?: number,
+    ) => {
+      const res = await assignProblemSeries(problemId, seriesId, ord);
+      if (res.error) return { error: res.error };
+      setRemotePosts((p) =>
+        p.map((x) =>
+          x.id === problemId
+            ? {
+                ...x,
+                seriesId: seriesId ?? undefined,
+                seriesOrd: seriesId ? (ord ?? 0) : undefined,
+                seriesTitle: seriesId ? seriesTitle : undefined,
+              }
+            : x,
+        ),
+      );
+      return {};
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!supabaseUid) return;
+    const ids = remotePosts.map((p) => p.id).filter(isProblemUuid);
+    const t = window.setTimeout(() => {
+      void fetchLearningCardState(ids).then((s) => {
+        setSaved(s.saved);
+        setFeltVotes(s.votes);
+        setLastAttempts(s.attempts);
+      });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [remotePosts, supabaseUid]);
   const authorVerified = useCallback(
     (userId: string) => {
       const u = userId === me.id ? me : USER_MAP[userId] ?? remoteUsers[userId];
@@ -1399,6 +1702,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     searchUsers,
     toggleConfused,
     confusedMine,
+    saved,
+    toggleSave,
+    setSaveCategory,
+    feltVotes,
+    voteFeltDifficulty,
+    lastAttempts,
+    attemptStarts,
+    startAttempt,
+    notifyAuthors,
+    toggleNotifyAuthor,
+    revengeDue,
+    learnStreak,
+    calendarDays,
+    refreshLearn,
+    assignToSeries,
     openComposer,
     closeComposer,
     userOf,
@@ -1414,6 +1732,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     subscribed,
     subscribe,
     unsubscribe,
+    refreshPremiumStatus,
     premiumOpen,
     openPremium,
     closePremium,

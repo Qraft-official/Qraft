@@ -14,6 +14,7 @@ import {
   postReactionScore,
   type WeeklyHighlights,
 } from "@/lib/weekly";
+import { DiscoverSkeleton, EmptyState } from "@/components/UiStates";
 import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -144,13 +145,7 @@ export default function DiscoverPage() {
 }
 
 function DiscoverFallback() {
-  return (
-    <div className="mx-auto w-full max-w-[600px]">
-      <header className="sticky top-0 z-30 border-b border-gray-800 bg-black/80 px-4 py-3 backdrop-blur">
-        <p className="text-sm text-muted">読み込み中…</p>
-      </header>
-    </div>
-  );
+  return <DiscoverSkeleton />;
 }
 
 function DiscoverInner() {
@@ -186,8 +181,15 @@ function DiscoverInner() {
     const onDoc = (e: MouseEvent) => {
       if (!filterWrapRef.current?.contains(e.target as Node)) setFilterOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFilterOpen(false);
+    };
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [filterOpen]);
 
   const patchParams = useCallback(
@@ -264,6 +266,7 @@ function DiscoverInner() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={view === "users" ? "ユーザーを検索" : "投稿を検索"}
+              aria-label={view === "users" ? "ユーザーを検索" : "投稿を検索"}
               className="w-full bg-transparent text-[15px] outline-none placeholder:text-muted"
             />
           </div>
@@ -271,19 +274,42 @@ function DiscoverInner() {
             <button
               type="button"
               onClick={() => setFilterOpen((v) => !v)}
-              className={`relative flex h-10 w-10 items-center justify-center rounded-full border border-gray-800 bg-[#202327] text-muted transition hover:bg-white/5 hover:text-white ${
+              className={`relative flex h-11 w-11 items-center justify-center rounded-full border border-gray-800 bg-[#202327] text-muted ${
                 filterOpen || filtersActive ? "text-aha" : ""
               }`}
-              aria-label="フィルター"
+              aria-label={filtersActive ? "フィルター（適用中）" : "フィルター"}
               aria-expanded={filterOpen}
+              aria-haspopup="dialog"
             >
               <SlidersHorizontal size={18} strokeWidth={2} />
               {filtersActive && (
-                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-aha" />
+                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-aha ring-2 ring-[#202327]" />
               )}
             </button>
             {filterOpen && (
-              <div className="absolute right-0 z-40 mt-2 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-gray-800 bg-[#15202b] p-3 shadow-2xl">
+              <div
+                className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+                role="presentation"
+                onClick={() => setFilterOpen(false)}
+              >
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="検索フィルター"
+                  className="w-full max-w-lg rounded-t-3xl border border-gray-800 bg-[#15202b] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-3xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-black">フィルター</p>
+                    <button
+                      type="button"
+                      className="tap-target flex items-center justify-center rounded-full text-muted"
+                      aria-label="閉じる"
+                      onClick={() => setFilterOpen(false)}
+                    >
+                      閉じる
+                    </button>
+                  </div>
                 <FilterSelect
                   label="並び替え"
                   value={sort}
@@ -310,7 +336,7 @@ function DiscoverInner() {
                   />
                 </div>
                 <div className="mt-3">
-                  <p className="mb-1 text-[10px] font-bold tracking-wide text-muted">難易度</p>
+                  <p className="mb-1 text-xs font-bold tracking-wide text-muted">難易度</p>
                   <div className="flex flex-wrap gap-1">
                     <LevelChip active={level === "all"} onClick={() => patchParams({ lv: null })}>
                       すべて
@@ -325,6 +351,22 @@ function DiscoverInner() {
                       </LevelChip>
                     ))}
                   </div>
+                </div>
+                <div className="mt-4 flex items-center justify-between gap-2 border-t border-gray-800 pt-3">
+                  <p className="text-xs font-bold text-muted">
+                    {filtersActive ? "フィルター適用中" : "絞り込み"}
+                  </p>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-full px-4 text-sm font-bold text-aha disabled:text-muted"
+                    disabled={!filtersActive}
+                    onClick={() => {
+                      patchParams({ sort: null, subject: null, mode: null, lv: null });
+                    }}
+                  >
+                    すべてリセット
+                  </button>
+                </div>
                 </div>
               </div>
             )}
@@ -342,9 +384,10 @@ function DiscoverInner() {
                     view: t.id === "posts" ? null : t.id,
                   })
                 }
-                className={`relative flex-1 py-3 text-[15px] font-bold ${
+                className={`relative flex min-h-11 flex-1 py-3 text-[15px] font-bold ${
                   active ? "text-white" : "text-muted"
                 }`}
+                aria-current={active ? "page" : undefined}
               >
                 {t.label}
                 {active && (
@@ -359,11 +402,24 @@ function DiscoverInner() {
       {view === "users" ? (
         <div>
           {!searching && <WeeklyDiscoverBlock weekly={weekly} showQuestion={false} />}
+          {searching && (
+            <p className="px-4 py-2 text-xs text-muted">「{q.trim()}」を検索中</p>
+          )}
           <div className="divide-y divide-gray-800">
             {matchedUsers.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted">
-                {q.trim() ? "一致するユーザーが見つかりません" : "ユーザーが見つかりません"}
-              </p>
+              <EmptyState
+                title={q.trim() ? "一致するユーザーがいません" : "ユーザーが見つかりません"}
+                body="キーワードを変えるか、フィルターをリセットしてみてください。"
+                actionLabel={q.trim() || filtersActive ? "条件をリセット" : undefined}
+                onAction={
+                  q.trim() || filtersActive
+                    ? () => {
+                        setQ("");
+                        patchParams({ q: null, sort: null, subject: null, mode: null, lv: null });
+                      }
+                    : undefined
+                }
+              />
             ) : (
               matchedUsers.map((u) => (
                 <UserResultCard
@@ -380,16 +436,28 @@ function DiscoverInner() {
       ) : (
         <div>
           {!searching && <WeeklyDiscoverBlock weekly={weekly} />}
-          <p className="px-4 py-2 text-[11px] text-muted">
+          {searching && (
+            <p className="px-4 py-2 text-xs font-bold text-aha">検索結果 · {filteredPosts.length}件</p>
+          )}
+          {!searching && (
+          <p className="px-4 py-2 text-xs text-muted">
             {view === "newest"
               ? "新着順"
               : SORT_OPTIONS.find((s) => s.id === sort)?.label}{" "}
             · {filteredPosts.length}件
+            {filtersActive ? " · フィルター適用中" : ""}
           </p>
+          )}
           {filteredPosts.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted">
-              {q.trim() ? "一致する投稿が見つかりません" : "条件に合う投稿はまだありません"}
-            </p>
+            <EmptyState
+              title={q.trim() ? "一致する投稿がありません" : "条件に合う投稿はまだありません"}
+              body="検索語を変えるか、フィルターをリセットすると見つかりやすくなります。"
+              actionLabel="フィルターをリセット"
+              onAction={() => {
+                setQ("");
+                patchParams({ q: null, sort: null, subject: null, mode: null, lv: null });
+              }}
+            />
           ) : (
             filteredPosts.map((p, i) => (
               <div key={p.id} className="relative">
@@ -415,21 +483,21 @@ function WeeklyDiscoverBlock({
   const question = weekly.weeklyQuestion;
   if (!qrafter && !question) return null;
   return (
-    <div className="border-b border-gray-800 px-4 py-3">
+    <div className="border-b border-gray-800 px-4 py-2">
       {qrafter && (
-        <div className="mb-3">
-          <p className="text-[11px] font-black tracking-wide text-aha">WeeklyQrafter</p>
+        <div className={question && showQuestion ? "mb-2" : ""}>
+          <p className="text-xs font-black tracking-wide text-aha">WeeklyQrafter</p>
           <Link
             href={`/u/${qrafter.user.handle}`}
-            className="mt-2 flex items-center gap-3 rounded-2xl border border-gray-800 bg-panel px-3 py-2.5"
+            className="mt-1.5 flex items-center gap-3 rounded-xl border border-gray-800 bg-panel px-3 py-2"
           >
-            <UserAvatar user={qrafter.user} className="h-11 w-11 text-lg" />
+            <UserAvatar user={qrafter.user} className="h-10 w-10 text-lg" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1">
                 <p className="truncate text-sm font-bold">{qrafter.user.name}</p>
                 <VerifiedBadge show={userIsVerified(qrafter.user)} tone={verifiedBadgeTone(qrafter.user)} />
               </div>
-              <p className="truncate text-[11px] text-muted">
+              <p className="truncate text-xs text-muted">
                 @{qrafter.user.handle} · 今週 {qrafter.weeklyReactions} リアクション
               </p>
             </div>
@@ -438,7 +506,7 @@ function WeeklyDiscoverBlock({
       )}
       {showQuestion && question && (
         <div>
-          <p className="mb-1 text-[11px] font-black tracking-wide text-aha">WeeklyQuestion</p>
+          <p className="mb-1 text-xs font-black tracking-wide text-aha">WeeklyQuestion</p>
           <div className="-mx-4">
             <PostCard post={question} />
           </div>
@@ -461,7 +529,7 @@ function FilterSelect<T extends string>({
 }) {
   return (
     <label className="relative block">
-      <span className="mb-1 block text-[10px] font-bold tracking-wide text-muted">{label}</span>
+      <span className="mb-1 block text-xs font-bold tracking-wide text-muted">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
@@ -494,7 +562,7 @@ function LevelChip({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+      className={`min-h-11 rounded-full border px-3 text-xs font-bold ${
         active
           ? "border-aha bg-aha/15 text-aha"
           : "border-gray-700 text-muted hover:border-gray-500 hover:text-white"
@@ -549,7 +617,7 @@ function UserResultCard({
         <button
           type="button"
           onClick={onFollow}
-          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${
+          className={`min-h-11 shrink-0 rounded-full px-4 text-sm font-bold ${
             following ? "border border-gray-700" : "bg-white text-black"
           }`}
         >

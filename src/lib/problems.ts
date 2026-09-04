@@ -3,6 +3,7 @@ import { ME_ID } from "./constants";
 import { ensureProfile } from "./auth";
 import { asProblemMode, type ProblemMode } from "./challenge";
 import { asDifficulty } from "./difficulty";
+import { sanitizeHints } from "./learn";
 import { persistHandwritingPages, firstDrawingUrl } from "./problem-images";
 import { supabase } from "./supabase";
 import { userIsVerified } from "./verified";
@@ -28,6 +29,17 @@ export type ProblemRow = {
   is_hard_spotlight?: boolean | null;
   promoted?: boolean | null;
   promoted_at?: string | null;
+  hints?: unknown;
+  felt_easy?: number | null;
+  felt_normal?: number | null;
+  felt_hard?: number | null;
+  duration_sum?: number | null;
+  duration_n?: number | null;
+  grade_correct?: number | null;
+  grade_n?: number | null;
+  series_id?: string | null;
+  series_ord?: number | null;
+  series?: { id: string; title: string } | { id: string; title: string }[] | null;
 };
 
 export type ProfileRow = {
@@ -50,6 +62,7 @@ export type NewProblem = {
   mode?: ProblemMode;
   correctAnswer?: string | null;
   difficultyLevel?: number;
+  hints?: string[];
 };
 
 export type ProblemPatch = {
@@ -61,11 +74,15 @@ export type ProblemPatch = {
   drawingBlobs?: (Blob | null)[];
   photo?: string;
   format?: "handwriting" | "typed";
+  hints?: string[];
 };
 
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
 
 const PROBLEM_COLUMNS =
+  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, hints, felt_easy, felt_normal, felt_hard, duration_sum, duration_n, grade_correct, grade_n, series_id, series_ord";
+
+const PROBLEM_COLUMNS_LEGACY =
   "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at";
 
 export function asSubject(value: string): Subject {
@@ -117,7 +134,11 @@ function asNotePages(value: unknown): NotePage[] | undefined {
   return pages.length ? pages : undefined;
 }
 
-export function problemToPost(row: ProblemRow, viewerId?: string | null): Post {
+export function problemToPost(
+  row: ProblemRow,
+  viewerId?: string | null,
+  seriesTitles: Record<string, string> = {},
+): Post {
   const title = row.title?.trim() ?? "";
   const body = row.problem_text ?? "";
   const text = title ? `**${title}**\n\n${body}` : body;
@@ -155,6 +176,17 @@ export function problemToPost(row: ProblemRow, viewerId?: string | null): Post {
     isHardSpotlight: !!row.is_hard_spotlight,
     promoted: !!row.promoted,
     promotedAt: row.promoted_at ?? undefined,
+    hints: sanitizeHints(row.hints),
+    feltEasy: Number(row.felt_easy ?? 0),
+    feltNormal: Number(row.felt_normal ?? 0),
+    feltHard: Number(row.felt_hard ?? 0),
+    durationSum: Number(row.duration_sum ?? 0),
+    durationN: Number(row.duration_n ?? 0),
+    gradeCorrect: Number(row.grade_correct ?? 0),
+    gradeN: Number(row.grade_n ?? 0),
+    seriesId: row.series_id ?? undefined,
+    seriesOrd: row.series_ord ?? undefined,
+    seriesTitle: row.series_id ? seriesTitles[row.series_id] : undefined,
   };
 }
 
@@ -164,12 +196,21 @@ export async function fetchProblems(): Promise<{
   error: string | null;
 }> {
   const viewerTask = supabase.auth.getSession();
-  const problemsTask = supabase
+  let problemsTask = await supabase
     .from("problems")
     .select(PROBLEM_COLUMNS)
     .order("created_at", { ascending: false });
+  if (problemsTask.error && /hints|felt_easy|series_id|duration_sum|grade_correct/i.test(problemsTask.error.message)) {
+    problemsTask = (await supabase
+      .from("problems")
+      .select(PROBLEM_COLUMNS_LEGACY)
+      .order("created_at", { ascending: false })) as typeof problemsTask;
+  }
 
-  const [{ data: sessionWrap }, { data, error }] = await Promise.all([viewerTask, problemsTask]);
+  const [{ data: sessionWrap }, { data, error }] = await Promise.all([
+    viewerTask,
+    Promise.resolve(problemsTask),
+  ]);
   const viewerId = sessionWrap.session?.user?.id ?? null;
 
   if (error) {
@@ -177,7 +218,19 @@ export async function fetchProblems(): Promise<{
   }
 
   const rows = (data ?? []) as ProblemRow[];
-  const posts = rows.map((row) => problemToPost(row, viewerId));
+  const seriesIds = [...new Set(rows.map((r) => r.series_id).filter((id): id is string => !!id))];
+  const seriesTitles: Record<string, string> = {};
+  if (seriesIds.length) {
+    const { data: seriesRows } = await supabase
+      .from("problem_series")
+      .select("id, title")
+      .in("id", seriesIds);
+    for (const s of seriesRows ?? []) {
+      const row = s as { id: string; title?: string };
+      seriesTitles[row.id] = row.title ?? "";
+    }
+  }
+  const posts = rows.map((row) => problemToPost(row, viewerId, seriesTitles));
   const authorIds = [...new Set(rows.map((r) => r.author_id))];
   const profiles: Record<string, User> = {};
 
@@ -237,25 +290,38 @@ export async function insertProblem(input: NewProblem): Promise<{
       ? drawingUrl ?? (input.photo && !input.photo.startsWith("data:") ? input.photo : null)
       : (input.photo ?? null);
 
-  const { data, error } = await supabase
-    .from("problems")
-    .insert({
-      author_id: authorId,
-      title: input.title?.trim() ?? "",
-      problem_text: input.text,
-      solution: input.solution?.trim() || null,
-      subject: input.subject,
-      photo,
-      is_sprint: false,
-      sprint_day: null,
-      pages,
-      problem_format: input.format ?? null,
-      mode: challenge.mode,
-      correct_answer: challenge.correct_answer,
-      difficulty_level: asDifficulty(input.difficultyLevel),
-    })
-    .select(PROBLEM_COLUMNS)
-    .single();
+  const row = {
+    author_id: authorId,
+    title: input.title?.trim() ?? "",
+    problem_text: input.text,
+    solution: input.solution?.trim() || null,
+    subject: input.subject,
+    photo,
+    is_sprint: false,
+    sprint_day: null,
+    pages,
+    problem_format: input.format ?? null,
+    mode: challenge.mode,
+    correct_answer: challenge.correct_answer,
+    difficulty_level: asDifficulty(input.difficultyLevel),
+    hints: sanitizeHints(input.hints),
+  };
+  let { data, error } = await supabase.from("problems").insert(row).select(PROBLEM_COLUMNS).single();
+  if (error && /hints/i.test(error.message)) {
+    const { hints: _hints, ...legacy } = row;
+    void _hints;
+    ({ data, error } = (await supabase
+      .from("problems")
+      .insert(legacy)
+      .select(PROBLEM_COLUMNS_LEGACY)
+      .single()) as { data: typeof data; error: typeof error });
+  } else if (error && /felt_easy|series_id|duration_sum|grade_correct/i.test(error.message)) {
+    ({ data, error } = (await supabase
+      .from("problems")
+      .insert(row)
+      .select(PROBLEM_COLUMNS_LEGACY)
+      .single()) as { data: typeof data; error: typeof error });
+  }
 
   if (error) return { post: null, error: error.message };
   return { post: problemToPost(data as ProblemRow, authorId), error: null };
@@ -290,7 +356,8 @@ export async function updateProblem(
     }
   }
 
-  if (patch.format === "handwriting" || patch.format === "typed") {
+  if (patch.hints !== undefined) updates.hints = sanitizeHints(patch.hints);
+  if (patch.format !== undefined) {
     updates.problem_format = patch.format;
   }
   if (patch.pages !== undefined || patch.drawingBlobs?.some(Boolean)) {

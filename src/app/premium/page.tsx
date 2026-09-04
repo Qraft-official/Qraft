@@ -1,38 +1,51 @@
 "use client";
 
 import { PREMIUM_PERKS, PREMIUM_PRICE_JPY } from "@/lib/constants";
-import { ensurePremiumThanksNotification } from "@/lib/notifications";
 import { goBackFromPremium } from "@/lib/premium-navigation";
 import { useApp } from "@/lib/store";
 import { ArrowLeft, Crown } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { AppBootSkeleton } from "@/components/UiStates";
 import { PremiumCheckoutButton } from "@/components/PremiumCheckoutButton";
 import { PremiumDevMessage } from "@/components/PremiumDevMessage";
 
 function PremiumCheckoutResult() {
   const params = useSearchParams();
-  const { subscribe, refreshNotifications } = useApp();
+  const { hasPremium, refreshPremiumStatus, refreshNotifications } = useApp();
   const success = params.get("success") === "true";
   const canceled = params.get("canceled") === "true";
+  const [checking, setChecking] = useState(success);
 
   useEffect(() => {
     if (!success) return;
-    subscribe();
-    void (async () => {
-      await ensurePremiumThanksNotification();
-      await refreshNotifications();
-    })();
-  }, [success, subscribe, refreshNotifications]);
+    let cancelled = false;
+    let attempts = 0;
 
-  if (success) {
-    return (
-      <div className="mb-4 rounded-2xl border border-aha/40 bg-aha/10 px-4 py-3">
-        <p className="text-sm font-black text-aha">プレミアムプランへの登録が完了しました</p>
-        <p className="mt-1 text-xs text-muted">特典はすぐに利用できます。</p>
-      </div>
-    );
-  }
+    const poll = async () => {
+      const payload = await refreshPremiumStatus();
+      await refreshNotifications();
+      if (cancelled) return;
+      if (payload?.premium) {
+        setChecking(false);
+        return;
+      }
+      attempts += 1;
+      if (attempts >= 20) {
+        setChecking(false);
+        return;
+      }
+      window.setTimeout(() => {
+        void poll();
+      }, 1500);
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [success, refreshPremiumStatus, refreshNotifications]);
+
   if (canceled) {
     return (
       <div className="mb-4 rounded-2xl border border-gray-700 bg-panel px-4 py-3">
@@ -41,12 +54,37 @@ function PremiumCheckoutResult() {
       </div>
     );
   }
-  return null;
+
+  if (!success) return null;
+
+  if (hasPremium) {
+    return (
+      <div className="mb-4 rounded-2xl border border-aha/40 bg-aha/10 px-4 py-3">
+        <p className="text-sm font-black text-aha">プレミアムプランへの登録が完了しました</p>
+        <p className="mt-1 text-xs text-muted">特典はすぐに利用できます。</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+      <p className="text-sm font-black text-amber-200">決済情報を確認しています…</p>
+      <p className="mt-1 text-xs text-muted">
+        {checking
+          ? "Stripe の反映を待っています。このまま少しお待ちください。"
+          : "まだ Premium が確認できていません。しばらくしてからこのページを再読み込みしてください。"}
+      </p>
+    </div>
+  );
 }
 
 function PremiumPageInner() {
   const router = useRouter();
-  const { hasPremium, isDeveloper } = useApp();
+  const { hasPremium, isDeveloper, refreshPremiumStatus } = useApp();
+
+  useEffect(() => {
+    void refreshPremiumStatus();
+  }, [refreshPremiumStatus]);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -103,11 +141,7 @@ function PremiumPageInner() {
 
 export default function PremiumPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="px-4 py-10 text-sm text-muted">読み込み中…</div>
-      }
-    >
+    <Suspense fallback={<AppBootSkeleton />}>
       <PremiumPageInner />
     </Suspense>
   );

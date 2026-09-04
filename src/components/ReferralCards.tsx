@@ -55,7 +55,7 @@ function WelcomeMissionDetailsModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full p-1 text-muted"
+                className="tap-target flex items-center justify-center rounded-full text-muted"
                 aria-label="閉じる"
               >
                 <X size={18} />
@@ -191,11 +191,13 @@ export function WelcomeMissionCard({ compact = false }: { compact?: boolean }) {
           <WelcomeMissionText className="text-sm font-black text-white underline decoration-white/30 underline-offset-2" onOpen={() => setInfoOpen(true)} />
           {clock && (
             <p className={`mt-1 text-[11px] font-bold ${expired ? "text-red-400" : "text-aha"}`}>
-              {completed
-                ? "達成済み"
-                : expired
-                  ? "期限切れ（紹介者への半額特典は付与されません）"
-                  : `${clock.remainingLabel} · ${clock.deadlineLabel}まで`}
+              {completed && (claim.status === "held" || claim.status === "pending")
+                ? "紹介を確認しています"
+                : completed
+                  ? "達成済み"
+                  : expired
+                    ? "期限切れ（紹介者への半額特典は付与されません）"
+                    : `${clock.remainingLabel} · ${clock.deadlineLabel}まで`}
             </p>
           )}
         </div>

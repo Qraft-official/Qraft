@@ -88,7 +88,9 @@ html.qraft-scroll-lock body {
 .composer-dialog {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   height: fit-content;
   max-height: min(90vh, var(--composer-vvh, 90vh));
   overflow-x: hidden;
@@ -108,8 +110,10 @@ html.qraft-scroll-lock body {
     padding: 0.75rem;
   }
   .composer-dialog {
-    width: min(1000px, 94vw);
-    max-width: min(1000px, 94vw);
+    width: min(640px, 94vw);
+    max-width: min(640px, 94vw);
+    margin-left: auto;
+    margin-right: auto;
     max-height: min(92vh, var(--composer-vvh, 92vh));
     overflow: hidden;
   }

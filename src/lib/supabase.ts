@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const supabaseUrl = "https://orvfimwduohqojfirhsk.supabase.co";
+const supabaseAnonKey = "sb_publishable_Dk7UY_2Vy23WfrhRY11CWQ_061vzuNv";
 
 const memoryStorage = {
   getItem: (_key: string) => null as string | null,
@@ -10,8 +10,8 @@ const memoryStorage = {
 };
 
 export const supabase = createClient(
-  supabaseUrl || "https://placeholder.supabase.co",
-  supabaseAnonKey || "placeholder",
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       persistSession: true,

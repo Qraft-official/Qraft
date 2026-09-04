@@ -57,6 +57,10 @@ export type ProblemPatch = {
   text?: string;
   correctAnswer?: string | null;
   mode?: ProblemMode;
+  pages?: NotePage[];
+  drawingBlobs?: (Blob | null)[];
+  photo?: string;
+  format?: "handwriting" | "typed";
 };
 
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
@@ -284,6 +288,17 @@ export async function updateProblem(
       }
       updates.correct_answer = trimmed || null;
     }
+  }
+
+  if (patch.pages || patch.drawingBlobs) {
+    const hydrated = await persistHandwritingPages(viewerId, patch.pages, patch.drawingBlobs);
+    if (hydrated.error) return { post: null, error: hydrated.error };
+    const pages = hydrated.pages ?? null;
+    updates.pages = pages;
+    const drawingUrl = firstDrawingUrl(pages ?? undefined, patch.photo);
+    if (drawingUrl) updates.photo = drawingUrl;
+    else if (patch.photo !== undefined) updates.photo = patch.photo;
+    if (patch.format) updates.problem_format = patch.format;
   }
 
   if (!Object.keys(updates).length) {

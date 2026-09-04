@@ -4,6 +4,36 @@ export function emptyCanvasPage(id = `p-${Math.random().toString(36).slice(2, 9)
   return { id, strokes: [], texts: [] };
 }
 
+const canvasImageCache = new Map<string, HTMLImageElement>();
+
+export function loadCanvasImage(src: string): Promise<HTMLImageElement> {
+  const hit = canvasImageCache.get(src);
+  if (hit?.complete && hit.naturalWidth > 0) return Promise.resolve(hit);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      canvasImageCache.set(src, img);
+      resolve(img);
+    };
+    img.onerror = () => reject(new Error("background image failed"));
+    img.src = src;
+  });
+}
+
+export async function loadCanvasBackgrounds(pages: CanvasPage[]) {
+  const srcs = [...new Set(pages.map((p) => p.backgroundImage).filter(Boolean) as string[])];
+  await Promise.all(srcs.map((src) => loadCanvasImage(src).catch(() => null)));
+}
+
+function cachedBackground(page: CanvasPage) {
+  const src = page.backgroundImage;
+  if (!src) return undefined;
+  const img = canvasImageCache.get(src);
+  if (!img?.complete || img.naturalWidth <= 0) return undefined;
+  return img;
+}
+
 const LINE_HEIGHT = 1.35;
 const NOTE_EDGE_PAD = 8;
 
@@ -91,6 +121,10 @@ function drawInkStrokes(ctx: CanvasRenderingContext2D, page: CanvasPage, w: numb
   ink.height = Math.max(1, Math.ceil(h));
   const ictx = ink.getContext("2d");
   if (!ictx) return;
+  const bg = cachedBackground(page);
+  if (bg) {
+    ictx.drawImage(bg, 0, 0, w, h);
+  }
   for (const s of page.strokes) {
     if (s.points.length < 2) continue;
     if (s.eraser) {
@@ -212,7 +246,11 @@ export function rasterizePageBlob(page: CanvasPage, cssW: number, cssH: number) 
 }
 
 export function pageHasInk(page: CanvasPage) {
-  return page.strokes.length > 0 || (page.texts?.length ?? 0) > 0;
+  return (
+    page.strokes.length > 0 ||
+    (page.texts?.length ?? 0) > 0 ||
+    Boolean(page.backgroundImage)
+  );
 }
 
 const NOTE_MIN_H = 280;
@@ -232,7 +270,18 @@ export function pageInkMaxY(page: CanvasPage): number {
     const bottom = t.y + textBounds(t).h;
     if (bottom > maxY) maxY = bottom;
   }
+  if (page.backgroundHeight && page.backgroundHeight > maxY) maxY = page.backgroundHeight;
   return maxY;
+}
+
+/** Display height that keeps a saved raster's aspect ratio at the current width. */
+export function backgroundHeightForWidth(page: CanvasPage, cssW: number) {
+  if (page.backgroundWidth && page.backgroundHeight && page.backgroundWidth > 0) {
+    return (cssW * page.backgroundHeight) / page.backgroundWidth;
+  }
+  const img = cachedBackground(page);
+  if (img?.naturalWidth) return (cssW * img.naturalHeight) / img.naturalWidth;
+  return 0;
 }
 
 /** Shared canvas CSS height: tallest used range among pages + padding. */

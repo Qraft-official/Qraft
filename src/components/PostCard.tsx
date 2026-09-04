@@ -9,6 +9,7 @@ import { isDisplayImageSrc } from "@/lib/problem-images";
 import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
+import { verifiedBadgeTone } from "@/lib/verified";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Brain,
@@ -188,7 +189,7 @@ export function PostCard({
                 <Link href={`/u/${author.handle}`} className="truncate font-bold text-white">
                   {author.name}
                 </Link>
-                <VerifiedBadge show={authorVerified(author.id)} />
+                <VerifiedBadge show={authorVerified(author.id)} tone={verifiedBadgeTone(author)} />
                 <span className="truncate text-muted">@{author.handle}</span>
                 <span className="text-muted">· {timeAgo(post.createdAt)}</span>
               </div>
@@ -449,7 +450,7 @@ export function PostCard({
             <img
               src={post.photo}
               alt=""
-              className="mt-3 max-h-64 w-full rounded-2xl border border-gray-800 object-cover"
+              className="mt-3 h-auto w-full rounded-2xl border border-gray-800 object-contain"
             />
           )}
 

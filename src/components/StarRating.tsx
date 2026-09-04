@@ -26,7 +26,7 @@ export function StarRating({
             key={n}
             type="button"
             whileTap={{ scale: 1.25 }}
-            onClick={() => onChange?.(n)}
+            onClick={() => onChange?.(n === value ? 0 : n)}
             className="p-0.5"
             aria-label={`${n} stars`}
           >

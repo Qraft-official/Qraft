@@ -27,7 +27,7 @@ function PageBody({ page, index }: { page: NotePage; index: number }) {
   const imageSrc = isDisplayImageSrc(page.image) ? page.image : undefined;
   return (
     <div
-      className="paper-grid relative w-full max-w-full overflow-visible rounded-2xl border border-gray-800 bg-[#0b1220]"
+      className="paper-grid relative w-full max-w-full overflow-hidden rounded-2xl border border-gray-800 bg-[#0b1220]"
       style={pageFrameStyle(page)}
     >
       {imageSrc ? (
@@ -35,7 +35,7 @@ function PageBody({ page, index }: { page: NotePage; index: number }) {
         <img
           src={imageSrc}
           alt={`ノート ${index + 1}ページ`}
-          className="pointer-events-none block h-auto w-full max-w-full select-none rounded-2xl"
+          className="pointer-events-none block h-auto w-full max-w-full select-none rounded-2xl object-contain object-top"
           draggable={false}
         />
       ) : (

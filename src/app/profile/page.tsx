@@ -9,6 +9,7 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
 import { PREMIUM_PRICE_JPY, PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
 import { useApp } from "@/lib/store";
+import { verifiedBadgeTone } from "@/lib/verified";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Settings } from "lucide-react";
@@ -44,7 +45,7 @@ export default function ProfilePage() {
           <div>
             <h1 className="flex items-center gap-1 text-xl font-black">
               {me.name}
-              <VerifiedBadge show={authorVerified(me.id)} />
+              <VerifiedBadge show={authorVerified(me.id)} tone={verifiedBadgeTone(me)} />
             </h1>
             <p className="text-sm text-muted">@{me.handle}</p>
             <p className="mt-1 text-xs text-aha">{me.school}</p>

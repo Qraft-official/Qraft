@@ -8,6 +8,7 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
 import { INITIAL_FOLLOWS } from "@/lib/mock-data";
 import { useApp } from "@/lib/store";
+import { verifiedBadgeTone } from "@/lib/verified";
 import { ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -75,7 +76,7 @@ export default function UserPage() {
           <div>
             <h1 className="flex items-center gap-1 text-xl font-black">
               {user.name}
-              <VerifiedBadge show={authorVerified(user.id)} />
+              <VerifiedBadge show={authorVerified(user.id)} tone={verifiedBadgeTone(user)} />
             </h1>
             <p className="text-sm text-muted">@{user.handle}</p>
             <p className="mt-1 text-xs text-aha">{user.school}</p>

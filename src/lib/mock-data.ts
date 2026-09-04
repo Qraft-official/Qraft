@@ -31,7 +31,7 @@ export const USERS: User[] = [
   {
     id: "u-official",
     name: "Qraft Official",
-    handle: "aha_official",
+    handle: "qraft",
     bio: "毎日21:00、全国一斉の10分一本勝負。",
     school: "Qraft HQ",
     avatar: "🔥",

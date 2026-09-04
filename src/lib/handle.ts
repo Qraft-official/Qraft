@@ -3,7 +3,7 @@ export const HANDLE_MAX = 20;
 export const HANDLE_PATTERN = /^[a-zA-Z0-9_]+$/;
 
 /** Case-insensitive reserved account IDs that users cannot claim. */
-export const RESERVED_HANDLES = ["advertisement"] as const;
+export const RESERVED_HANDLES = ["advertisement", "qraft", "aha_official"] as const;
 
 export const RESERVED_HANDLE_ERROR = "このユーザーIDは予約されているため使用できません";
 

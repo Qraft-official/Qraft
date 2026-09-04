@@ -1,21 +1,22 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
 const memoryStorage = {
   getItem: (_key: string) => null as string | null,
   setItem: (_key: string, _value: string) => {},
   removeItem: (_key: string) => {},
 };
 
-function requirePublicEnv(name: "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_ANON_KEY") {
-  const value = process.env[name];
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${name} is not configured`);
-  }
-  return value.trim();
-}
-
 function createSupabaseClient(): SupabaseClient {
-  return createClient(requirePublicEnv("NEXT_PUBLIC_SUPABASE_URL"), requirePublicEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"), {
+  if (!supabaseUrl) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured");
+  }
+  if (!supabaseAnonKey) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured");
+  }
+  return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,

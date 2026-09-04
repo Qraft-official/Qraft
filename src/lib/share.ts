@@ -1,11 +1,37 @@
-export async function sharePost(input: { id: string; text: string }) {
-  const url =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/p/${input.id}`
-      : `/p/${input.id}`;
-  const title = "Qraft";
-  const snippet = input.text.replace(/\s+/g, " ").trim().slice(0, 120);
-  const shareData = { title, text: snippet || "Qraftの問題", url };
+import { CANONICAL_ORIGIN, problemShareUrl } from "./constants";
+
+export { CANONICAL_ORIGIN, problemShareUrl };
+
+export function sanitizeInviteCode(code: unknown): string | null {
+  if (typeof code !== "string") return null;
+  const trimmed = code.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (lower === "undefined" || lower === "null" || lower === "nan") return null;
+  return trimmed;
+}
+
+export function problemShareCopy(inviteCode: string | null | undefined) {
+  const code = sanitizeInviteCode(inviteCode);
+  if (code) {
+    return {
+      title: "Qraftの問題",
+      text: `この問題解ける？\n招待コードは【${code}】`,
+    };
+  }
+  return {
+    title: "Qraftの問題",
+    text: "この問題解ける？\nQraftで挑戦してみよう！",
+  };
+}
+
+export async function sharePost(input: {
+  id: string;
+  inviteCode?: string | null;
+}) {
+  const url = problemShareUrl(input.id);
+  const { title, text } = problemShareCopy(input.inviteCode);
+  const shareData = { title, text, url };
 
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
@@ -18,8 +44,9 @@ export async function sharePost(input: { id: string; text: string }) {
     }
   }
 
+  const payload = `${text}\n${url}`;
   try {
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(payload);
     return { ok: true as const, method: "copy" as const };
   } catch {
     return { ok: false as const, method: "copy" as const };

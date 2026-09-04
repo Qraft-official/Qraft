@@ -20,19 +20,17 @@ import {
   MessageCircle,
   MoreVertical,
   Pencil,
-  PenLine,
-  Quote,
   Repeat2,
   Share2,
   Star,
   Trash2,
-  Undo2,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CommentThread } from "./CommentThread";
 import { EditProblemModal } from "./EditProblemModal";
 import { NotePages } from "./NotePages";
+import { QuoteActionMenu } from "./QuoteActionMenu";
 import { QuoteEmbed } from "./QuoteEmbed";
 import { StarRating } from "./StarRating";
 import { UserAvatar } from "./UserAvatar";
@@ -117,6 +115,7 @@ export function PostCard({
     promoteProblem,
     sprintUnlocked,
     lastAttempts,
+    referralMe,
   } = useApp();
   const author = userOf(post.authorId);
   const [rateOpen, setRateOpen] = useState(false);
@@ -130,8 +129,8 @@ export function PostCard({
   const [revealed, setRevealed] = useState(false);
   const [menuBusy, setMenuBusy] = useState(false);
   const [menuMsg, setMenuMsg] = useState("");
-  const menuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
+  const quoteBtnRef = useRef<HTMLButtonElement>(null);
   const following = follows.includes(author.id);
   const liked = likes.includes(post.id);
   const reposted = reposts.includes(post.id);
@@ -147,18 +146,6 @@ export function PostCard({
   const showCaption = !typed && Boolean(meta.body.trim());
   const pulseLocked = post.kind === "sprint" && !sprintUnlocked && !isMe;
   const lastAttempt = lastAttempts[post.id];
-
-  useEffect(() => {
-    if (!repostOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setRepostOpen(false);
-    };
-    const t = window.setTimeout(() => document.addEventListener("click", onDoc), 0);
-    return () => {
-      window.clearTimeout(t);
-      document.removeEventListener("click", onDoc);
-    };
-  }, [repostOpen]);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -428,8 +415,7 @@ export function PostCard({
                             void (async () => {
                               const blob = await renderShareCard(post, author.handle);
                               if (!blob) return;
-                              const url = `${window.location.origin}/p/${post.id}`;
-                              const res = await shareCardImage(blob, url);
+                              const res = await shareCardImage(blob, post.id);
                               if (res.ok && res.method === "download") {
                                 setShareToast("画像を保存し、リンクをコピーしました");
                                 window.setTimeout(() => setShareToast(""), 2200);
@@ -563,66 +549,32 @@ export function PostCard({
               <MessageCircle size={16} /> {comments.length}
             </button>
 
-            <div className="relative flex min-w-0 flex-1 justify-center" ref={menuRef}>
+            <div className="relative flex min-w-0 flex-1 justify-center">
               <button
                 type="button"
+                ref={quoteBtnRef}
                 onClick={() => setRepostOpen((v) => !v)}
                 className={`flex min-h-11 min-w-11 items-center justify-center ${reposted ? "text-emerald-400" : "hover:text-emerald-400"}`}
                 aria-label="引用・リポスト"
                 aria-expanded={repostOpen}
               >
-                <Quote size={16} />
+                <Repeat2 size={16} />
               </button>
-              <AnimatePresence>
-                {repostOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                    className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-700 bg-[#15202b] shadow-[0_8px_40px_rgba(0,0,0,0.6)]"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        toggleRepost(post.id);
-                        setRepostOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-white/5"
-                    >
-                      {reposted ? (
-                        <Undo2 size={18} className="text-emerald-400" />
-                      ) : (
-                        <Repeat2 size={18} />
-                      )}
-                      <span className="font-bold">
-                        {reposted ? "リポストを取り消す" : "リポスト"}
-                      </span>
-                    </button>
-                    {(post.kind === "problem" || post.kind === "sprint") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRepostOpen(false);
-                          openComposer({
-                            open: true,
-                            mode: "solution",
-                            quotePostId: post.id,
-                          });
-                        }}
-                        className="flex w-full items-center gap-3 border-t border-gray-800 px-4 py-3 text-left text-sm hover:bg-white/5"
-                      >
-                        <PenLine size={18} className="text-aha" />
-                        <span>
-                          <span className="block font-bold text-aha">引用して解法を投稿</span>
-                          <span className="text-[11px] text-muted">この問題を引用して解法を書く</span>
-                        </span>
-                      </button>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <QuoteActionMenu
+                open={repostOpen}
+                onClose={() => setRepostOpen(false)}
+                anchorRef={quoteBtnRef}
+                reposted={reposted}
+                onRepost={() => toggleRepost(post.id)}
+                showQuoteSolution={post.kind === "problem" || post.kind === "sprint"}
+                onQuoteSolution={() =>
+                  openComposer({
+                    open: true,
+                    mode: "solution",
+                    quotePostId: post.id,
+                  })
+                }
+              />
             </div>
 
             {(post.kind === "problem" || post.kind === "sprint") && (
@@ -701,7 +653,7 @@ export function PostCard({
             <button
               type="button"
               onClick={() => {
-                void sharePost({ id: post.id, text: post.text }).then((res) => {
+                void sharePost({ id: post.id, inviteCode: referralMe?.code }).then((res) => {
                   if (res.ok && res.method === "copy") {
                     setShareToast("リンクをコピーしました！");
                     window.setTimeout(() => setShareToast(""), 2200);

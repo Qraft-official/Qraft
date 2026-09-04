@@ -8,10 +8,12 @@ import { useEffect, useRef, useState } from "react";
 
 export function SaveProblemButton({ problemId }: { problemId: string }) {
   const { saved, toggleSave, setSaveCategory } = useApp();
-  const cat = saved[problemId];
+  const cat = saved[problemId] ?? saved[problemId.toLowerCase()];
   const on = Boolean(cat);
   const [sheet, setSheet] = useState(false);
   const hold = useRef<number | null>(null);
+
+  const openedSheet = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -29,13 +31,24 @@ export function SaveProblemButton({ problemId }: { problemId: string }) {
         aria-pressed={on}
         title={on ? "保存済み" : "保存"}
         className={`flex min-h-11 min-w-11 items-center justify-center ${on ? "text-aha" : "text-muted hover:text-aha"}`}
-        onClick={() => void toggleSave(problemId)}
+        onClick={() => {
+          if (openedSheet.current) {
+            openedSheet.current = false;
+            return;
+          }
+          void toggleSave(problemId);
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
+          openedSheet.current = true;
           setSheet(true);
         }}
         onPointerDown={() => {
-          hold.current = window.setTimeout(() => setSheet(true), 480);
+          openedSheet.current = false;
+          hold.current = window.setTimeout(() => {
+            openedSheet.current = true;
+            setSheet(true);
+          }, 480);
         }}
         onPointerUp={() => {
           if (hold.current) window.clearTimeout(hold.current);

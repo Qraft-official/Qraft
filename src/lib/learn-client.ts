@@ -91,32 +91,70 @@ export async function promptDueRevenge() {
 
 export async function toggleSavedProblem(
   problemId: string,
-  currentlySaved: boolean,
+  wantSaved: boolean,
   category: SaveCategory = "later",
-) {
+): Promise<{ error?: string; saved?: boolean; category?: SaveCategory | null }> {
   if (!isProblemUuid(problemId)) return { error: "この問題は保存できません" };
+  const { data, error } = await supabase.rpc("toggle_saved_problem", {
+    p_problem_id: problemId,
+    p_want_saved: wantSaved,
+    p_category: category,
+  });
+  if (error) {
+    console.error("toggle_saved_problem:", error.message, error);
+    return fallbackToggleSaved(problemId, wantSaved, category);
+  }
+  const raw = (data ?? {}) as {
+    ok?: boolean;
+    saved?: boolean;
+    error?: string;
+    category?: string | null;
+  };
+  if (!raw.ok) {
+    console.error("toggle_saved_problem:", raw.error ?? raw);
+    return { error: raw.error || "保存に失敗しました" };
+  }
+  return {
+    saved: !!raw.saved,
+    category: raw.saved ? asSaveCategory(raw.category) : null,
+  };
+}
+
+async function fallbackToggleSaved(
+  problemId: string,
+  wantSaved: boolean,
+  category: SaveCategory,
+): Promise<{ error?: string; saved?: boolean; category?: SaveCategory | null }> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
   const uid = session?.user?.id;
   if (!uid) return { error: "ログインしてください" };
-  if (currentlySaved) {
+  if (!wantSaved) {
     const { error } = await supabase
       .from("saved_problems")
       .delete()
       .eq("user_id", uid)
       .eq("problem_id", problemId);
-    return { error: error?.message };
+    if (error) {
+      console.error("saved_problems delete:", error.message, error);
+      return { error: error.message };
+    }
+    return { saved: false, category: null };
   }
-  const { error } = await supabase.from("saved_problems").upsert(
-    {
-      user_id: uid,
-      problem_id: problemId,
-      category,
-    },
-    { onConflict: "user_id,problem_id" },
-  );
-  return { error: error?.message };
+  const { data, error } = await supabase
+    .from("saved_problems")
+    .upsert(
+      { user_id: uid, problem_id: problemId, category },
+      { onConflict: "user_id,problem_id" },
+    )
+    .select("problem_id, category")
+    .maybeSingle();
+  if (error || !data) {
+    console.error("saved_problems upsert:", error?.message ?? "no row returned", error);
+    return { error: error?.message || "保存結果を確認できませんでした" };
+  }
+  return { saved: true, category: asSaveCategory((data as { category: string }).category) };
 }
 
 export async function setSavedCategory(problemId: string, category: SaveCategory) {
@@ -147,7 +185,7 @@ export async function fetchMySavedRows() {
     return null;
   }
   return (data ?? []).map((r) => ({
-    problemId: String((r as { problem_id: string }).problem_id),
+    problemId: String((r as { problem_id: string }).problem_id).toLowerCase(),
     category: asSaveCategory((r as { category: string }).category),
     createdAt: String((r as { created_at: string }).created_at),
   }));

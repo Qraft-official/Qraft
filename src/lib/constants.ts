@@ -10,6 +10,12 @@ export const VERIFIED_CREATOR_IDS = ["u-official", "u-mirai"] as const;
 export const OFFICIAL_USER_ID = "u-official";
 export const OFFICIAL_HANDLE = "qraft";
 export const PREMIUM_PRICE_JPY = 400;
+/** Canonical public origin for share URLs (never preview/vercel.app). */
+export const CANONICAL_ORIGIN = "https://qrafters.jp";
+
+export function problemShareUrl(problemId: string) {
+  return `${CANONICAL_ORIGIN}/p/${encodeURIComponent(problemId)}`;
+}
 
 export const PULSE_NAME = "PULSE（パルス）";
 export const PULSE_BLURB =

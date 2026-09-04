@@ -118,8 +118,10 @@ function overlayPendingSaved(
   prev: Record<string, SaveCategory>,
   pending: Set<string>,
 ) {
-  const next = { ...incoming };
-  for (const id of pending) {
+  const next: Record<string, SaveCategory> = {};
+  for (const [k, v] of Object.entries(incoming)) next[k.toLowerCase()] = v;
+  for (const raw of pending) {
+    const id = raw.toLowerCase();
     if (prev[id]) next[id] = prev[id];
     else delete next[id];
   }
@@ -420,7 +422,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             fetchMySavedMap(),
           ]);
           if (cancelled) return;
-          if (savedMap) setSaved(savedMap);
+          if (savedMap) {
+            setSaved((prev) => overlayPendingSaved(savedMap, prev, pendingSaveIds.current));
+          }
           setNotifications(inbox);
           setNotifyAuthors(boot.notifyAuthors);
           setRevengeDue(boot.revenge);
@@ -1463,49 +1467,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const toggleSave = useCallback(async (problemId: string, category: SaveCategory = "later") => {
-    if (saveLocks.current.has(problemId)) return;
-    saveLocks.current.add(problemId);
-    const currently = !!savedRef.current[problemId];
-    const prevCat = savedRef.current[problemId];
-    pendingSaveIds.current.add(problemId);
+    const id = problemId.toLowerCase();
+    if (saveLocks.current.has(id)) return;
+    saveLocks.current.add(id);
+    const currently = !!savedRef.current[id];
+    const prevCat = savedRef.current[id];
+    const wantSaved = !currently;
+    pendingSaveIds.current.add(id);
     setSaved((prev) => {
       const next = { ...prev };
-      if (currently) delete next[problemId];
-      else next[problemId] = category;
+      if (wantSaved) next[id] = category;
+      else delete next[id];
       return next;
     });
     try {
-      const res = await toggleSavedProblem(problemId, currently, category);
+      const res = await toggleSavedProblem(id, wantSaved, category);
       if (res.error) {
+        console.error("toggleSave failed:", res.error);
         setSaved((prev) => {
           const next = { ...prev };
-          if (currently && prevCat) next[problemId] = prevCat;
-          else if (currently) next[problemId] = "later";
-          else delete next[problemId];
+          if (currently && prevCat) next[id] = prevCat;
+          else if (currently) next[id] = "later";
+          else delete next[id];
           return next;
         });
         return;
       }
-      const map = await fetchMySavedMap();
-      pendingSaveIds.current.delete(problemId);
-      if (map) {
+      if (typeof res.saved !== "boolean") {
+        console.error("toggleSave: missing saved flag", res);
         setSaved((prev) => {
-          const next = overlayPendingSaved(map, prev, pendingSaveIds.current);
-          if (currently) delete next[problemId];
-          else next[problemId] = prev[problemId] ?? category;
+          const next = { ...prev };
+          if (currently && prevCat) next[id] = prevCat;
+          else if (currently) next[id] = "later";
+          else delete next[id];
           return next;
         });
+        return;
       }
+      setSaved((prev) => {
+        const next = { ...prev };
+        if (res.saved) next[id] = res.category ?? category;
+        else delete next[id];
+        return next;
+      });
     } finally {
-      pendingSaveIds.current.delete(problemId);
-      saveLocks.current.delete(problemId);
+      pendingSaveIds.current.delete(id);
+      saveLocks.current.delete(id);
     }
   }, []);
 
   const setSaveCategory = useCallback(async (problemId: string, category: SaveCategory) => {
-    setSaved((prev) => ({ ...prev, [problemId]: category }));
-    const res = await persistSaveCategory(problemId, category);
-    if (res.error) console.warn("setSaveCategory:", res.error);
+    const id = problemId.toLowerCase();
+    setSaved((prev) => ({ ...prev, [id]: category }));
+    const res = await persistSaveCategory(id, category);
+    if (res.error) console.error("setSaveCategory:", res.error);
   }, []);
 
   const voteFeltDifficulty = useCallback(async (problemId: string, vote: FeltVote) => {

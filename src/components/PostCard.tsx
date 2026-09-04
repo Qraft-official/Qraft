@@ -147,7 +147,6 @@ export function PostCard({
   const showCaption = !typed && Boolean(meta.body.trim());
   const pulseLocked = post.kind === "sprint" && !sprintUnlocked && !isMe;
   const lastAttempt = lastAttempts[post.id];
-  const canSolve = (post.kind === "problem" || post.kind === "sprint") && !isMe;
 
   useEffect(() => {
     if (!repostOpen) return;
@@ -181,7 +180,7 @@ export function PostCard({
 
   return (
     <article
-      className={`border-b border-gray-800 px-4 py-3 ${
+      className={`border-b border-gray-800 px-4 py-2.5 ${
         post.kind === "solution" && authorVerified(author.id)
           ? "bg-gradient-to-r from-amber-500/5 to-transparent"
           : ""
@@ -524,17 +523,6 @@ export function PostCard({
           {(post.kind === "problem" || post.kind === "sprint") && (
             <>
               <SeriesNav post={post} />
-              {canSolve && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    openComposer({ open: true, mode: "solution", quotePostId: post.id });
-                  }}
-                  className="mt-3 min-h-11 w-full rounded-full bg-aha text-sm font-black text-black"
-                >
-                  {lastAttempt?.submittedAt ? "もう一度解く" : "解く"}
-                </button>
-              )}
               <SpoilerReveal
                 post={post}
                 locked={pulseLocked}
@@ -551,7 +539,7 @@ export function PostCard({
             </>
           )}
 
-          <div className="mt-3 flex max-w-md items-center justify-between text-muted">
+          <div className="mt-2 flex max-w-md items-center justify-between text-muted">
             <button
               type="button"
               onClick={openComments}

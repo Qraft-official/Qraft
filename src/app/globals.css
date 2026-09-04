@@ -242,8 +242,9 @@ html.qraft-scroll-lock body {
   z-index: 25;
   width: 100%;
   max-width: 100%;
-  max-height: none;
-  overflow: visible;
+  max-height: min(36dvh, 18rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @media (min-width: 768px) {

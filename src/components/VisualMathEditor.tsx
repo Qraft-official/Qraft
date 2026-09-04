@@ -2,6 +2,7 @@
 
 import {
   applyMathfieldModePolicy,
+  applyTextSizeToMathfield,
   attachJapaneseTextMode,
   attachMultilineMathfield,
   attachPlainTextMenu,
@@ -11,11 +12,14 @@ import {
   setMathfieldInputMode,
   setMathfieldOsKeyboard,
 } from "@/lib/mathlive";
+import { HIDE_COMPOSER_KEYBOARD } from "@/lib/composer-keyboard";
+import type { TextSizeId } from "@/lib/text-size";
 import type { MathfieldElement } from "mathlive";
 import { Menu } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type InputMode, type MathKeyAction, MathKeyboard } from "./MathKeyboard";
 import { NotebookExpandButton } from "./NotebookExpandControls";
+import { TextSizeBar } from "./TextSizeBar";
 
 export function VisualMathEditor({
   value,
@@ -78,6 +82,7 @@ export function VisualMathEditor({
     const sync = () => onChangeRef.current(mf.getValue("latex"));
     const keepVkHidden = () => window.mathVirtualKeyboard?.hide();
     const onFocusIn = () => {
+      setKbVisible(true);
       keepVkHidden();
       enableMathfieldWrapping(mf);
       applyMathfieldModePolicy(mf, inputModeRef.current);
@@ -128,6 +133,20 @@ export function VisualMathEditor({
   }, [ready, value]);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [kbVisible, setKbVisible] = useState(true);
+
+  useEffect(() => {
+    const hide = () => setKbVisible(false);
+    window.addEventListener(HIDE_COMPOSER_KEYBOARD, hide);
+    return () => window.removeEventListener(HIDE_COMPOSER_KEYBOARD, hide);
+  }, []);
+
+  const applySize = (size: TextSizeId) => {
+    const mf = fieldRef.current;
+    if (!mf) return;
+    applyTextSizeToMathfield(mf, size);
+    onChangeRef.current(mf.getValue("latex"));
+  };
 
   const applyInputMode = (mode: InputMode) => {
     inputModeRef.current = mode;
@@ -176,9 +195,11 @@ export function VisualMathEditor({
     window.mathVirtualKeyboard?.hide();
 
     if (action.type === "backspace") {
+      const before = mf.getValue("latex");
       mf.executeCommand("deleteBackward");
-      onChangeRef.current(mf.getValue("latex"));
-      return;
+      const after = mf.getValue("latex");
+      onChangeRef.current(after);
+      return before !== after;
     }
     if (action.type === "enter") {
       insertMathNewline(mf);
@@ -195,11 +216,12 @@ export function VisualMathEditor({
       <div className={expanded ? "flex min-h-0 min-w-0 w-full flex-1 flex-col" : "w-full min-w-0"}>
         {header}
         {chrome && (
-        <div className="mb-1 flex items-center justify-between gap-2 px-3 sm:px-4">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4">
           <p className="text-xs font-bold tracking-wide text-muted">
             視覚数式エディタ · 枠をタップして中に入力
           </p>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
+            <TextSizeBar onPick={applySize} />
             {onToggleExpand && <NotebookExpandButton onClick={onToggleExpand} />}
             <div className="relative">
             <button
@@ -246,16 +268,23 @@ export function VisualMathEditor({
               className={`aha-mathfield aha-mathfield-visual w-full min-w-0 ${expanded ? "aha-mathfield-visual-expanded flex-1" : "h-full"}`}
               default-mode="math"
               smart-mode="true"
+              onFocus={() => setKbVisible(true)}
             />
           </div>
         )}
         {!expanded && footer && <div className="mt-2 min-w-0 shrink-0 px-3 pb-2 sm:px-4">{footer}</div>}
       </div>
-      {showKeyboard && (
+      {showKeyboard && kbVisible && (
         <MathKeyboard
           onAction={handleKeyboardClick}
           inputMode={inputMode}
           onInputModeChange={applyInputMode}
+          onDismiss={() => {
+            setKbVisible(false);
+            const el = document.activeElement;
+            if (el instanceof HTMLElement) el.blur();
+            window.mathVirtualKeyboard?.hide();
+          }}
         />
       )}
     </div>

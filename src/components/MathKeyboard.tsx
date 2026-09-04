@@ -1,5 +1,7 @@
 "use client";
 
+import { useHoldRepeat } from "@/lib/use-hold-repeat";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 export type MathKeyAction =
@@ -114,14 +116,57 @@ function abcKeys(shift: boolean): KeySpec[] {
 
 export type InputMode = "math" | "text";
 
+function keyClass(tone: KeySpec["tone"], shift: boolean) {
+  return `touch-manipulation min-h-10 rounded-md px-0.5 text-xs font-bold leading-none ${
+    tone === "warn"
+      ? "bg-[#4a2e24] text-orange-100"
+      : tone === "accent"
+        ? "bg-[#2d4a28] text-aha"
+        : tone === "shift"
+          ? shift
+            ? "bg-aha text-black"
+            : "bg-white/10 text-white"
+          : "bg-[#2f3d4a] text-white"
+  } active:brightness-125`;
+}
+
+function BackspaceKey({
+  span,
+  onDelete,
+}: {
+  span?: number;
+  onDelete: () => boolean | void;
+}) {
+  const hold = useHoldRepeat(onDelete);
+  return (
+    <button
+      type="button"
+      aria-label="削除"
+      className={`${keyClass("warn", false)} select-none [touch-action:none]`}
+      style={span ? { gridColumn: `span ${span}` } : undefined}
+      onPointerDown={hold.onPointerDown}
+      onPointerUp={hold.onPointerUp}
+      onPointerCancel={hold.onPointerCancel}
+      onPointerLeave={hold.onPointerLeave}
+      onLostPointerCapture={hold.onLostPointerCapture}
+      onClick={hold.onClick}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      ⌫
+    </button>
+  );
+}
+
 export function MathKeyboard({
   onAction,
   inputMode,
   onInputModeChange,
+  onDismiss,
 }: {
-  onAction: (action: MathKeyAction) => void;
+  onAction: (action: MathKeyAction) => void | boolean;
   inputMode: InputMode;
   onInputModeChange: (mode: InputMode) => void;
+  onDismiss?: () => void;
 }) {
   const [tab, setTab] = useState<TabId>("123");
   const [shift, setShift] = useState(false);
@@ -130,7 +175,19 @@ export function MathKeyboard({
 
   return (
     <div className="qraft-math-kb w-full min-w-0 shrink-0 border-t border-gray-800 bg-[#151c24] px-1 pt-0.5 pb-[max(0.1rem,env(safe-area-inset-bottom))] sm:px-2">
-      <div className="mb-0.5 grid grid-cols-2 gap-0.5">
+      {onDismiss ? (
+        <div className="mb-0.5 flex justify-end">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted hover:text-white"
+            aria-label="キーボードを閉じる"
+          >
+            <ChevronDown size={22} />
+          </button>
+        </div>
+      ) : null}
+      <div className="mb-0.5 grid grid-cols-[1fr_1fr_2.75rem] gap-0.5">
         <button
           type="button"
           onClick={() => onInputModeChange("text")}
@@ -153,6 +210,7 @@ export function MathKeyboard({
           <span className="text-xs font-black">[√x]</span>
           <span className="text-xs font-bold">数式</span>
         </button>
+        <BackspaceKey onDelete={() => onAction({ type: "backspace" })} />
       </div>
       {inputMode === "math" && (
         <>
@@ -184,37 +242,35 @@ export function MathKeyboard({
             style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
             onPointerDown={(e) => e.preventDefault()}
           >
-            {keys.map((k) => (
-              <button
-                key={k.id}
-                type="button"
-                aria-label={k.label}
-                onClick={() => {
-                  if (k.tone === "shift") {
-                    setShift((s) => !s);
-                    return;
-                  }
-                  if (tab === "abc" && k.action.type === "insert" && k.action.text && shift) {
-                    setShift(false);
-                  }
-                  onAction(k.action);
-                }}
-                className={`touch-manipulation min-h-10 rounded-md px-0.5 text-xs font-bold leading-none ${
-                  k.tone === "warn"
-                    ? "bg-[#4a2e24] text-orange-100"
-                    : k.tone === "accent"
-                      ? "bg-[#2d4a28] text-aha"
-                      : k.tone === "shift"
-                        ? shift
-                          ? "bg-aha text-black"
-                          : "bg-white/10 text-white"
-                        : "bg-[#2f3d4a] text-white"
-                } active:brightness-125`}
-                style={k.span ? { gridColumn: `span ${k.span}` } : undefined}
-              >
-                {k.label}
-              </button>
-            ))}
+            {keys.map((k) =>
+              k.action.type === "backspace" ? (
+                <BackspaceKey
+                  key={k.id}
+                  span={k.span}
+                  onDelete={() => onAction({ type: "backspace" })}
+                />
+              ) : (
+                <button
+                  key={k.id}
+                  type="button"
+                  aria-label={k.label}
+                  onClick={() => {
+                    if (k.tone === "shift") {
+                      setShift((s) => !s);
+                      return;
+                    }
+                    if (tab === "abc" && k.action.type === "insert" && k.action.text && shift) {
+                      setShift(false);
+                    }
+                    onAction(k.action);
+                  }}
+                  className={keyClass(k.tone, shift)}
+                  style={k.span ? { gridColumn: `span ${k.span}` } : undefined}
+                >
+                  {k.label}
+                </button>
+              ),
+            )}
           </div>
         </>
       )}

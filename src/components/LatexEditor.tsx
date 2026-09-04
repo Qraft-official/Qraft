@@ -3,8 +3,11 @@
 import { promptDialog } from "@/lib/app-dialog";
 import { LatexText } from "@/lib/latex";
 import { Menu } from "lucide-react";
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { TextSizeBar } from "./TextSizeBar";
+import { wrapWithTextSize, type TextSizeId } from "@/lib/text-size";
+import { dismissComposerKeyboard, HIDE_COMPOSER_KEYBOARD } from "@/lib/composer-keyboard";
 import { type InputMode, type MathKeyAction, MathKeyboard } from "./MathKeyboard";
 
 const FORMAT = [
@@ -46,6 +49,28 @@ export function LatexEditor({
   const pendingCaretRef = useRef<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [kbMode, setKbMode] = useState<InputMode>("math");
+  const [kbVisible, setKbVisible] = useState(true);
+
+  useEffect(() => {
+    const hide = () => setKbVisible(false);
+    window.addEventListener(HIDE_COMPOSER_KEYBOARD, hide);
+    return () => window.removeEventListener(HIDE_COMPOSER_KEYBOARD, hide);
+  }, []);
+
+  const applySize = (size: TextSizeId) => {
+    const el = textareaRef.current;
+    const src = draftRef.current;
+    const start = el?.selectionStart ?? src.length;
+    const end = el?.selectionEnd ?? start;
+    const selected = src.slice(start, end);
+    if (!selected && size === "md") return;
+    const wrapped = wrapWithTextSize(selected, size);
+    const caret =
+      size === "md"
+        ? start + wrapped.length
+        : start + `[[${size}]]`.length + selected.length;
+    insertAt(src, start, end, wrapped, caret);
+  };
 
   const applyCaret = (pos: number) => {
     const el = textareaRef.current;
@@ -125,11 +150,11 @@ export function LatexEditor({
       }
       if (start !== end) {
         insertAt(src, start, end, "", start);
-        return;
+        return true;
       }
-      if (start <= 0) return;
+      if (start <= 0) return false;
       insertAt(src, start - 1, start, "", start - 1);
-      return;
+      return true;
     }
     if (action.type === "enter") {
       insertTemplate("\n");
@@ -193,6 +218,7 @@ export function LatexEditor({
               {f.label}
             </button>
           ))}
+          <TextSizeBar onPick={applySize} />
           <div className="relative ml-auto shrink-0">
             <button
               type="button"
@@ -232,6 +258,7 @@ export function LatexEditor({
             pendingCaretRef.current = null;
             onChange(e.target.value);
           }}
+          onFocus={() => setKbVisible(true)}
           placeholder={placeholder}
           inputMode="text"
           enterKeyHint="enter"
@@ -263,7 +290,7 @@ export function LatexEditor({
         </div>
         {footer && <div className="mt-2 min-w-0 shrink-0 pb-2">{footer}</div>}
       </div>
-      {keyboard && (
+      {keyboard && kbVisible && (
         <MathKeyboard
           onAction={handleKeyboardClick}
           inputMode={kbMode}
@@ -272,6 +299,10 @@ export function LatexEditor({
             if (mode === "text") {
               requestAnimationFrame(() => textareaRef.current?.focus());
             }
+          }}
+          onDismiss={() => {
+            setKbVisible(false);
+            dismissComposerKeyboard();
           }}
         />
       )}

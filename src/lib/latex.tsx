@@ -3,6 +3,7 @@
 import katex from "katex";
 import { Fragment, useMemo } from "react";
 import { katexHtmlHasError, latexToPlainText, normalizeLatexForKatex } from "./latex-normalize";
+import { splitTextSizeParts, textSizeClass } from "./text-size";
 
 function render(math: string, display: boolean) {
   const prepared = normalizeLatexForKatex(math);
@@ -55,7 +56,7 @@ function tokenizeMath(text: string): Part[] {
   return parts;
 }
 
-function formatInline(value: string) {
+function formatInlinePlain(value: string) {
   const chunks = value.split(/(`[^`]+`|\*\*[^*]+\*\*|#{1,3} )/g);
   return chunks.map((c, i) => {
     if (c.startsWith("`") && c.endsWith("`") && c.length > 1) {
@@ -83,7 +84,7 @@ function formatInline(value: string) {
   });
 }
 
-function formatText(value: string) {
+function formatTextLines(value: string) {
   const lines = value.split("\n");
   return lines.map((line, li) => {
     const heading = /^(#{1,3})\s+(.*)$/.exec(line);
@@ -97,16 +98,30 @@ function formatText(value: string) {
               : "block text-sm font-bold text-white"
         }
       >
-        {formatInline(heading[2])}
+        {formatInlinePlain(heading[2])}
       </span>
     ) : (
-      formatInline(line)
+      formatInlinePlain(line)
     );
     return (
       <Fragment key={li}>
-        {li > 0 && !heading ? "\n" : li > 0 ? "\n" : null}
+        {li > 0 ? "\n" : null}
         {content}
       </Fragment>
+    );
+  });
+}
+
+function formatText(value: string) {
+  const sized = splitTextSizeParts(value);
+  if (!sized.some((p) => p.size)) return formatTextLines(value);
+  return sized.map((p, i) => {
+    const inner = formatTextLines(p.value);
+    if (!p.size) return <Fragment key={i}>{inner}</Fragment>;
+    return (
+      <span key={i} className={textSizeClass(p.size)}>
+        {inner}
+      </span>
     );
   });
 }

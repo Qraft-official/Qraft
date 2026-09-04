@@ -1,19 +1,23 @@
 import type { MathfieldElement } from "mathlive";
 import { promptDialog } from "./app-dialog";
 import { latexLooksLikePlainText, latexToPlainText, normalizeLatexForKatex } from "./latex-normalize";
+import { unwrapTextSize, wrapWithTextSize, type TextSizeId } from "./text-size";
 
 /** Wrap MathLive LaTeX so the existing KaTeX feed renderer can display it. */
 export function wrapMathliveLatex(latex: string) {
-  const t = latex.trim();
-  if (!t) return "";
-  if (latexLooksLikePlainText(t)) {
-    return latexToPlainText(t) || t;
+  if (!latex.replace(/\s/g, "") && !latex.includes("\n")) return "";
+  if (latexLooksLikePlainText(latex)) {
+    if (!/\\/.test(latex)) return latex;
+    const plain = latexToPlainText(latex);
+    return plain.length ? plain : latex;
   }
-  if (t.includes("$$")) {
-    return t.replace(/\$\$([\s\S]*?)\$\$/g, (_, inner: string) => `$$${normalizeLatexForKatex(inner)}$$`);
+  const math = latex.trim();
+  if (!math) return latex.includes("\n") ? latex : "";
+  if (math.includes("$$")) {
+    return math.replace(/\$\$([\s\S]*?)\$\$/g, (_, inner: string) => `$$${normalizeLatexForKatex(inner)}$$`);
   }
-  if (t.includes("$") && !t.trimStart().startsWith("\\")) return t;
-  return `$$${normalizeLatexForKatex(t)}$$`;
+  if (math.includes("$") && !math.trimStart().startsWith("\\")) return latex;
+  return `$$${normalizeLatexForKatex(math)}$$`;
 }
 
 /** Strip markdown/$ wrappers so MathLive can ingest AI-generated problems. */
@@ -41,6 +45,25 @@ function insertOpts(format: "latex" | "plain-text") {
   };
 }
 
+export function applyTextSizeToMathfield(mf: MathfieldElement, size: TextSizeId) {
+  mf.focus();
+  let selected = "";
+  try {
+    selected = mf.getValue(mf.selection, "latex") || "";
+  } catch {
+    selected = "";
+  }
+  if (/\\[a-zA-Z]/.test(selected)) return;
+  const inner = unwrapTextSize(selected);
+  if (!selected) {
+    if (size === "md") return;
+    mf.insert(wrapWithTextSize("\u00a0", size), insertOpts("plain-text"));
+  } else {
+    mf.insert(wrapWithTextSize(inner, size), insertOpts("plain-text"));
+  }
+  emitMathfieldInput(mf);
+}
+
 /**
  * MathLive only turns Enter into a line break inside a multiline environment.
  * `addRowAfter` promotes the root to a `lines` environment, so it is the only
@@ -49,12 +72,19 @@ function insertOpts(format: "latex" | "plain-text") {
 export function insertMathNewline(mf: MathfieldElement) {
   mf.focus();
   const before = mf.getValue("latex");
+  if (mf.mode === "text") {
+    mf.insert("\n", insertOpts("plain-text"));
+    if (mf.getValue("latex") !== before) {
+      emitMathfieldInput(mf);
+      return;
+    }
+  }
   mf.executeCommand("addRowAfter");
   if (mf.getValue("latex") !== before) {
     emitMathfieldInput(mf);
     return;
   }
-  mf.insert("\\\\", insertOpts("latex"));
+  mf.insert("\\\\[~0.6em]", insertOpts("latex"));
   emitMathfieldInput(mf);
 }
 
@@ -161,8 +191,10 @@ function isNewlineInput(ie: InputEvent) {
 }
 
 function deleteBackwardOrForward(mf: MathfieldElement, forward: boolean) {
+  const before = mf.getValue("latex");
   mf.executeCommand(forward ? "deleteForward" : "deleteBackward");
-  emitMathfieldInput(mf);
+  const after = mf.getValue("latex");
+  if (after !== before) emitMathfieldInput(mf);
 }
 
 function sinkAndHost(mf: MathfieldElement): EventTarget[] {
@@ -414,7 +446,8 @@ export async function insertPlainTextIntoMathfield(mf: MathfieldElement) {
     placeholder: "例: 次の式を求めよ",
     confirmLabel: "挿入",
   });
-  if (raw == null || !raw.trim()) return;
+  if (raw == null) return;
+  if (!raw.replace(/\s/g, "") && !raw.includes("\n")) return;
   mf.focus();
   const lines = raw.split(/\r?\n/);
   const latex = lines.map((line) => `\\text{${escapeLatexText(line)}}`).join("\\\\");

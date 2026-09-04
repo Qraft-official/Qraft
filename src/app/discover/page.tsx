@@ -9,12 +9,12 @@ import { avgStars, useApp } from "@/lib/store";
 import type { Post, ProblemMode, Subject, Tier, User } from "@/lib/types";
 import { userIsVerified, verifiedBadgeTone } from "@/lib/verified";
 import {
-  computeWeeklyHighlights,
+  computeWeeklyRankings,
   fetchWeeklyReactionBoosts,
   postReactionScore,
-  type WeeklyHighlights,
 } from "@/lib/weekly";
 import { DiscoverSkeleton, EmptyState } from "@/components/UiStates";
+import { WeeklyBoards } from "@/components/WeeklyBoards";
 import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -248,7 +248,7 @@ function DiscoverInner() {
   }, [users, q]);
 
   const weekly = useMemo(
-    () => computeWeeklyHighlights(posts, userOf, boosts.byProblem, boosts.byAuthor),
+    () => computeWeeklyRankings(posts, userOf, boosts.byProblem, boosts.byAuthor),
     [posts, userOf, boosts],
   );
 
@@ -401,7 +401,7 @@ function DiscoverInner() {
 
       {view === "users" ? (
         <div>
-          {!searching && <WeeklyDiscoverBlock weekly={weekly} showQuestion={false} />}
+          {!searching && <WeeklyBoards qrafters={weekly.weeklyQrafters} questions={weekly.weeklyQuestions} />}
           {searching && (
             <p className="px-4 py-2 text-xs text-muted">「{q.trim()}」を検索中</p>
           )}
@@ -435,7 +435,7 @@ function DiscoverInner() {
         </div>
       ) : (
         <div>
-          {!searching && <WeeklyDiscoverBlock weekly={weekly} />}
+          {!searching && <WeeklyBoards qrafters={weekly.weeklyQrafters} questions={weekly.weeklyQuestions} />}
           {searching && (
             <p className="px-4 py-2 text-xs font-bold text-aha">検索結果 · {filteredPosts.length}件</p>
           )}
@@ -466,50 +466,6 @@ function DiscoverInner() {
               </div>
             ))
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function WeeklyDiscoverBlock({
-  weekly,
-  showQuestion = true,
-}: {
-  weekly: WeeklyHighlights;
-  showQuestion?: boolean;
-}) {
-  const qrafter = weekly.weeklyQrafter;
-  const question = weekly.weeklyQuestion;
-  if (!qrafter && !question) return null;
-  return (
-    <div className="border-b border-gray-800 px-4 py-2">
-      {qrafter && (
-        <div className={question && showQuestion ? "mb-2" : ""}>
-          <p className="text-xs font-black tracking-wide text-aha">WeeklyQrafter</p>
-          <Link
-            href={`/u/${qrafter.user.handle}`}
-            className="mt-1.5 flex items-center gap-3 rounded-xl border border-gray-800 bg-panel px-3 py-2"
-          >
-            <UserAvatar user={qrafter.user} className="h-10 w-10 text-lg" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1">
-                <p className="truncate text-sm font-bold">{qrafter.user.name}</p>
-                <VerifiedBadge show={userIsVerified(qrafter.user)} tone={verifiedBadgeTone(qrafter.user)} />
-              </div>
-              <p className="truncate text-xs text-muted">
-                @{qrafter.user.handle} · 今週 {qrafter.weeklyReactions} リアクション
-              </p>
-            </div>
-          </Link>
-        </div>
-      )}
-      {showQuestion && question && (
-        <div>
-          <p className="mb-1 text-xs font-black tracking-wide text-aha">WeeklyQuestion</p>
-          <div className="-mx-4">
-            <PostCard post={question} />
-          </div>
         </div>
       )}
     </div>

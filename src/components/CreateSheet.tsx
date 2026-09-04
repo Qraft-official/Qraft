@@ -3,6 +3,7 @@
 import { SUBJECTS } from "@/lib/constants";
 import { emptyCanvasPage, sharedTypedHeight } from "@/lib/draw-canvas";
 import { confirmDialog } from "@/lib/app-dialog";
+import { dismissComposerKeyboard } from "@/lib/composer-keyboard";
 import { generateAiProblem } from "@/lib/premium";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
 import {
@@ -18,7 +19,7 @@ import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { AnimatePresence, motion } from "framer-motion";
-import { Keyboard, PenLine, Sparkles, X } from "lucide-react";
+import { Keyboard, PenLine, Sparkles, X, ChevronDown } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
 import { ComposerModeTabs } from "./ComposerModeTabs";
@@ -551,7 +552,16 @@ export function CreateSheet() {
                       {inputMode === "hand" ? "手書きモード" : "打ち込み · 数式キーボード"}
                     </p>
                   </div>
-                  <button
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => dismissComposerKeyboard()}
+                      className="tap-target flex items-center justify-center rounded-full text-muted"
+                      aria-label="キーボードを閉じる"
+                    >
+                      <ChevronDown size={22} />
+                    </button>
+                    <button
                     type="button"
                     onClick={requestClose}
                     className="tap-target flex items-center justify-center rounded-full text-muted"
@@ -559,6 +569,7 @@ export function CreateSheet() {
                   >
                     <X size={20} />
                   </button>
+                  </div>
                 </div>
                 <div
                   ref={scrollRef}
@@ -705,6 +716,14 @@ export function CreateSheet() {
                         </option>
                       ))}
                     </select>
+                    <button
+                      type="button"
+                      onClick={() => dismissComposerKeyboard()}
+                      className="tap-target flex items-center justify-center text-muted"
+                      aria-label="キーボードを閉じる"
+                    >
+                      <ChevronDown size={20} />
+                    </button>
                     <button
                       type="button"
                       onClick={requestClose}

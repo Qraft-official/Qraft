@@ -17,14 +17,16 @@ export function Fab({ onClick }: { onClick: () => void }) {
   }, []);
   if (keyboardOpen || composer.open || premiumOpen || paywallOpen) return null;
   return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-lg md:max-w-2xl lg:max-w-4xl">
     <button
       type="button"
       onClick={onClick}
-      className="glow-lime fixed right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-aha text-black"
-      style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
+      className="pointer-events-auto glow-lime absolute right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-aha text-black"
+      style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
       aria-label="新規投稿"
     >
       <Plus size={28} strokeWidth={2.6} />
     </button>
+    </div>
   );
 }

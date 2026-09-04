@@ -63,10 +63,8 @@ export function latexLooksLikePlainText(src: string) {
 }
 
 export function latexToPlainText(src: string) {
-  const unwrapped = replaceNamedBrace(src.trim(), "displaylines", (inner) => inner);
-  return stripSimpleTextCommands(unwrapped)
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const unwrapped = replaceNamedBrace(src, "displaylines", (inner) => inner);
+  return stripSimpleTextCommands(unwrapped);
 }
 
 /** Convert unsupported TeX (MathLive `\displaylines`) into KaTeX-friendly macros. */

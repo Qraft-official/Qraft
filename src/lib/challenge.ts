@@ -10,6 +10,10 @@ export function asProblemMode(value: unknown): ProblemMode {
   return "question";
 }
 
+export function modeStoresAnswer(mode: ProblemMode) {
+  return mode === "challenge" || mode === "aha";
+}
+
 const FULLWIDTH_DIGIT = /[０-９]/g;
 
 /** Compare challenge answers: trim, NFKC, collapse spaces, ignore case. */

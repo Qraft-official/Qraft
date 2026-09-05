@@ -1,6 +1,11 @@
 "use client";
 
-import { emptyCanvasPage, pageHasInk, sharedTypedHeight } from "@/lib/draw-canvas";
+import { emptyCanvasPage, sharedTypedHeight } from "@/lib/draw-canvas";
+import {
+  canvasPagesHaveInk,
+  HANDWRITING_EXPORT_ERROR,
+  packHandwritingExport,
+} from "@/lib/handwriting-export";
 import { confirmDialog } from "@/lib/app-dialog";
 import { COMPOSER_KB_DOCK_ID, dismissComposerKeyboard } from "@/lib/composer-keyboard";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
@@ -220,6 +225,10 @@ export function EditProblemModal({
       setError("Challenger モードでは正解の入力が必須です");
       return;
     }
+    if (mode === "aha" && !correctAnswer.trim()) {
+      setError("答えを入力してください");
+      return;
+    }
     setSaving(true);
     setError("");
     if (inputMode === "typed") {
@@ -233,7 +242,7 @@ export function EditProblemModal({
         title,
         text: wrapMathliveLatex(joined) || title.trim(),
         mode,
-        correctAnswer: mode === "challenge" ? correctAnswer : null,
+        correctAnswer: mode === "challenge" || mode === "aha" ? correctAnswer : null,
         format: "typed",
         hints,
         pages: typedPages.map((p, i) => ({
@@ -251,10 +260,19 @@ export function EditProblemModal({
       onClose();
       return;
     }
-    const images = (await canvasRef.current?.exportPageBlobs()) ?? [];
-    const size = canvasRef.current?.getContentSize() ?? { w: 800, h: 280 };
-    const hasInk = images.some(Boolean) || pages.some((p) => pageHasInk(p));
-    if (!hasInk && !title.trim()) {
+    const images = await canvasRef.current?.exportPageBlobs();
+    if (!images) {
+      setSaving(false);
+      setError(HANDWRITING_EXPORT_ERROR);
+      return;
+    }
+    const packed = packHandwritingExport(pages, images, canvasRef.current?.getContentSize() ?? { w: 800, h: 280 });
+    if (canvasPagesHaveInk(pages) && packed.drawingBlobs.length === 0) {
+      setSaving(false);
+      setError(HANDWRITING_EXPORT_ERROR);
+      return;
+    }
+    if (!packed.drawingBlobs.length && !title.trim()) {
       setSaving(false);
       setError("キャンバスに書くか、タイトルを入力してください");
       return;
@@ -263,18 +281,11 @@ export function EditProblemModal({
       title,
       text: title.trim() || "手書きの問題",
       mode,
-      correctAnswer: mode === "challenge" ? correctAnswer : null,
+      correctAnswer: mode === "challenge" || mode === "aha" ? correctAnswer : null,
       format: "handwriting",
       hints,
-      drawingBlobs: images,
-      pages: pages.map((p, i) => ({
-        id: p.id,
-        latex: "",
-        doodle: i,
-        image: p.backgroundImage,
-        contentWidth: size.w,
-        contentHeight: size.h,
-      })),
+      drawingBlobs: packed.drawingBlobs,
+      pages: packed.pages,
     });
     setSaving(false);
     if (res.error) {
@@ -346,6 +357,20 @@ export function EditProblemModal({
                   correctAnswer={correctAnswer}
                   onCorrectAnswer={setCorrectAnswer}
                 />
+                {mode === "aha" && (
+                  <div className="border-b border-gray-800 px-3 py-2 md:px-4">
+                    <label className="text-xs font-bold text-muted" htmlFor="edit-aha-answer">
+                      答え
+                    </label>
+                    <input
+                      id="edit-aha-answer"
+                      value={correctAnswer}
+                      onChange={(e) => setCorrectAnswer(e.target.value)}
+                      placeholder="答え（必須）"
+                      className="mt-0.5 w-full border-0 bg-transparent py-2 text-sm outline-none"
+                    />
+                  </div>
+                )}
                 <HintEditor hints={hints} onChange={setHints} />
                 {modeTabs}
                 {inputMode === "hand" ? (

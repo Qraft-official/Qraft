@@ -7,14 +7,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 
-const PATHS = [
-  "M12 40 C 40 20, 80 80, 120 50 S 180 20, 220 70",
-  "M20 90 C 60 110, 90 40, 150 80 S 210 120, 240 60",
-  "M30 30 Q 100 140 200 40 T 280 90",
-  "M8 70 C 70 10, 90 130, 170 50 S 250 10, 300 80",
-  "M16 110 C 50 60, 140 60, 180 110 S 260 150, 290 90",
-];
-
 const SWIPE_PX = 48;
 
 function pageFrameStyle(page: NotePage): CSSProperties | undefined {
@@ -39,34 +31,13 @@ function PageBody({ page, index }: { page: NotePage; index: number }) {
           draggable={false}
         />
       ) : (
-        <>
-          {!page.latex && (
-            <svg className="absolute inset-0 h-full w-full opacity-50" viewBox="0 0 320 208">
-              <path
-                d={PATHS[page.doodle % PATHS.length]}
-                fill="none"
-                stroke={index % 2 ? "#CCFF00" : "#A855F7"}
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <path
-                d={PATHS[(page.doodle + 2) % PATHS.length]}
-                fill="none"
-                stroke="#22D3EE"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                opacity={0.7}
-              />
-            </svg>
-          )}
-          <div className="relative z-10 flex min-h-[8rem] max-w-full flex-col p-3">
-            {page.latex ? (
-              <div className="mt-1 max-w-full [overflow-wrap:anywhere] [word-break:break-word]">
-                <LatexText text={page.latex} className="max-w-full text-sm" />
-              </div>
-            ) : null}
-          </div>
-        </>
+        <div className="relative z-10 flex min-h-[8rem] max-w-full flex-col p-3">
+          {page.latex ? (
+            <div className="mt-1 max-w-full [overflow-wrap:anywhere] [word-break:break-word]">
+              <LatexText text={page.latex} className="max-w-full text-sm" />
+            </div>
+          ) : null}
+        </div>
       )}
     </div>
   );

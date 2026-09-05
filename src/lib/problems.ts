@@ -1,9 +1,10 @@
 import { USER_MAP } from "./mock-data";
 import { ME_ID } from "./constants";
 import { ensureProfile } from "./auth";
-import { asProblemMode, type ProblemMode } from "./challenge";
+import { asProblemMode, modeStoresAnswer, type ProblemMode } from "./challenge";
 import { asDifficulty } from "./difficulty";
 import { sanitizeHints } from "./learn";
+import { HANDWRITING_UPLOAD_ERROR } from "./handwriting-export";
 import { persistHandwritingPages, firstDrawingUrl } from "./problem-images";
 import { supabase } from "./supabase";
 import { userIsVerified } from "./verified";
@@ -170,7 +171,12 @@ export function problemToPost(
     eleganceCount: 0,
     sprintDay: row.is_sprint ? (row.sprint_day ?? undefined) : undefined,
     problemMode,
-    correctAnswer: isAuthor && problemMode === "challenge" ? (row.correct_answer ?? "") : undefined,
+    correctAnswer:
+      problemMode === "aha"
+        ? (row.correct_answer ?? "")
+        : isAuthor && problemMode === "challenge"
+          ? (row.correct_answer ?? "")
+          : undefined,
     difficultyLevel: asDifficulty(row.difficulty_level),
     confusedCount: Number(row.confused_count ?? 0),
     isHardSpotlight: !!row.is_hard_spotlight,
@@ -247,10 +253,11 @@ export async function fetchProblems(): Promise<{
   return { posts, profiles, error: null };
 }
 
-function challengePayload(input: NewProblem) {
+function answerPayload(input: NewProblem) {
   const mode = asProblemMode(input.mode);
-  const correctAnswer =
-    mode === "challenge" ? (input.correctAnswer ?? "").trim() || null : null;
+  const correctAnswer = modeStoresAnswer(mode)
+    ? (input.correctAnswer ?? "").trim() || null
+    : null;
   return { mode, correct_answer: correctAnswer };
 }
 
@@ -276,18 +283,30 @@ export async function insertProblem(input: NewProblem): Promise<{
     return { post: null, error: "PULSE応募はメール審査のみです。データベースには保存しません。" };
   }
 
-  const challenge = challengePayload(input);
+  const challenge = answerPayload(input);
   if (challenge.mode === "challenge" && !challenge.correct_answer) {
     return { post: null, error: "Challenger モードでは正解の入力が必須です" };
+  }
+  if (challenge.mode === "aha" && !challenge.correct_answer) {
+    return { post: null, error: "答えを入力してください" };
   }
 
   const hydrated = await persistHandwritingPages(authorId, input.pages, input.drawingBlobs);
   if (hydrated.error) return { post: null, error: hydrated.error };
   const pages = hydrated.pages ?? null;
-  const drawingUrl = firstDrawingUrl(pages ?? undefined, input.photo);
+  const hadDrawingBlobs = input.drawingBlobs?.some((b) => !!b && b.size > 0) ?? false;
+  const drawingUrl = firstDrawingUrl(pages ?? undefined);
+  if ((input.format === "handwriting" && hadDrawingBlobs) && !drawingUrl) {
+    return { post: null, error: HANDWRITING_UPLOAD_ERROR };
+  }
   const photo =
     input.format === "handwriting"
-      ? drawingUrl ?? (input.photo && !input.photo.startsWith("data:") ? input.photo : null)
+      ? drawingUrl ??
+        (hadDrawingBlobs
+          ? null
+          : input.photo && !input.photo.startsWith("data:")
+            ? input.photo
+            : null)
       : (input.photo ?? null);
 
   const row = {
@@ -345,11 +364,17 @@ export async function updateProblem(
   if (patch.mode !== undefined) {
     const nextMode = asProblemMode(patch.mode);
     updates.mode = nextMode;
-    if (nextMode === "challenge") {
+    if (modeStoresAnswer(nextMode)) {
       if (patch.correctAnswer !== undefined) {
         const trimmed = (patch.correctAnswer ?? "").trim();
         if (!trimmed) {
-          return { post: null, error: "Challenger モードでは正解の入力が必須です" };
+          return {
+            post: null,
+            error:
+              nextMode === "aha"
+                ? "答えを入力してください"
+                : "Challenger モードでは正解の入力が必須です",
+          };
         }
         updates.correct_answer = trimmed;
       }
@@ -359,7 +384,7 @@ export async function updateProblem(
   } else if (patch.correctAnswer !== undefined) {
     const trimmed = (patch.correctAnswer ?? "").trim();
     if (!trimmed) {
-      return { post: null, error: "Challenger モードでは正解の入力が必須です" };
+      return { post: null, error: "答えを入力してください" };
     }
     updates.correct_answer = trimmed;
   }
@@ -373,7 +398,11 @@ export async function updateProblem(
     if (hydrated.error) return { post: null, error: hydrated.error };
     const pages = hydrated.pages ?? null;
     if (pages) updates.pages = pages;
-    const drawingUrl = firstDrawingUrl(pages ?? undefined, patch.photo);
+    const hadDrawingBlobs = patch.drawingBlobs?.some((b) => !!b && b.size > 0) ?? false;
+    const drawingUrl = firstDrawingUrl(pages ?? undefined);
+    if ((patch.format === "handwriting" && hadDrawingBlobs) && !drawingUrl) {
+      return { post: null, error: HANDWRITING_UPLOAD_ERROR };
+    }
     if (drawingUrl) updates.photo = drawingUrl;
     else if (patch.photo !== undefined) updates.photo = patch.photo;
   } else if (patch.photo !== undefined) {

@@ -5,13 +5,26 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { SUBJECTS } from "@/lib/constants";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
-import { avgStars, useApp } from "@/lib/store";
-import type { Post, ProblemMode, Subject, Tier, User } from "@/lib/types";
+import {
+  asDiscoverKind,
+  asDiscoverSort,
+  coerceDiscoverSort,
+  DISCOVER_KIND_OPTIONS,
+  DISCOVER_SORT_OPTIONS,
+  filterDiscoverPosts,
+  sortDiscoverPosts,
+  sortUnavailableForKind,
+  type DiscoverSortKey,
+  type LevelFilter,
+  type ModeFilter,
+  type SubjectFilter,
+} from "@/lib/discover-feed";
+import { useApp } from "@/lib/store";
+import type { Tier, User } from "@/lib/types";
 import { userIsVerified, verifiedBadgeTone } from "@/lib/verified";
 import {
   computeWeeklyRankings,
   fetchWeeklyReactionBoosts,
-  postReactionScore,
 } from "@/lib/weekly";
 import { DiscoverSkeleton, EmptyState } from "@/components/UiStates";
 import { WeeklyBoards } from "@/components/WeeklyBoards";
@@ -22,21 +35,11 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { createPortal } from "react-dom";
 
 type ViewTab = "posts" | "users" | "newest";
-type SortKey = "newest" | "trending" | "hall";
-type SubjectFilter = "all" | Subject;
-type ModeFilter = "all" | ProblemMode;
-type LevelFilter = "all" | Tier;
 
 const VIEW_TABS: { id: ViewTab; label: string }[] = [
   { id: "posts", label: "投稿" },
   { id: "users", label: "ユーザー" },
   { id: "newest", label: "新着順" },
-];
-
-const SORT_OPTIONS: { id: SortKey; label: string }[] = [
-  { id: "newest", label: "新着順" },
-  { id: "trending", label: "話題の問題" },
-  { id: "hall", label: "殿堂入り" },
 ];
 
 const MODE_OPTIONS: { id: ModeFilter; label: string }[] = [
@@ -55,11 +58,6 @@ function asView(v: string | null): ViewTab {
   return "posts";
 }
 
-function asSort(v: string | null): SortKey {
-  if (v === "trending" || v === "hall") return v;
-  return "newest";
-}
-
 function asSubject(v: string | null): SubjectFilter {
   if (v === "math" || v === "physics" || v === "chemistry") return v;
   return "all";
@@ -76,67 +74,6 @@ function asLevel(v: string | null): LevelFilter {
   return "all";
 }
 
-function matchesQuery(post: Post, q: string) {
-  if (!q) return true;
-  const n = q.toLowerCase();
-  return (
-    post.text.toLowerCase().includes(n) ||
-    (post.title ?? "").toLowerCase().includes(n) ||
-    (post.solution ?? "").toLowerCase().includes(n)
-  );
-}
-
-function filterPosts(
-  posts: Post[],
-  {
-    subject,
-    mode,
-    level,
-    q,
-  }: {
-    subject: SubjectFilter;
-    mode: ModeFilter;
-    level: LevelFilter;
-    q: string;
-  },
-) {
-  return posts.filter((p) => {
-    if (p.kind === "sprint" || p.kind === "reply") return false;
-    if (subject !== "all" && p.subject !== subject) return false;
-    if (mode !== "all" && (p.kind !== "problem" || p.problemMode !== mode)) return false;
-    if (level !== "all" && (p.kind !== "problem" || (p.difficultyLevel ?? 3) !== level)) {
-      return false;
-    }
-    return matchesQuery(p, q);
-  });
-}
-
-function sortPosts(list: Post[], sort: SortKey) {
-  const copy = [...list];
-  if (sort === "newest") {
-    return copy.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-  }
-  if (sort === "trending") {
-    return copy.sort((a, b) => {
-      const score = postReactionScore(b) - postReactionScore(a);
-      if (score !== 0) return score;
-      return +new Date(b.createdAt) - +new Date(a.createdAt);
-    });
-  }
-  return copy.sort((a, b) => {
-    const aScore =
-      a.kind === "solution"
-        ? avgStars(a.eleganceSum, a.eleganceCount)
-        : avgStars(a.ahaSum, a.ahaCount);
-    const bScore =
-      b.kind === "solution"
-        ? avgStars(b.eleganceSum, b.eleganceCount)
-        : avgStars(b.ahaSum, b.ahaCount);
-    if (bScore !== aScore) return bScore - aScore;
-    return postReactionScore(b) - postReactionScore(a);
-  });
-}
-
 export default function DiscoverPage() {
   return (
     <Suspense fallback={<DiscoverFallback />}>
@@ -150,13 +87,15 @@ function DiscoverFallback() {
 }
 
 function DiscoverInner() {
-  const { posts, users, me, follows, toggleFollow, searchUsers, userOf } = useApp();
+  const { posts, users, me, follows, toggleFollow, searchUsers, userOf, ratings, reposts } = useApp();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
   const view = asView(searchParams.get("view"));
-  const sort = asSort(searchParams.get("sort"));
+  const kind = asDiscoverKind(searchParams.get("kind"));
+  const requestedSort = asDiscoverSort(searchParams.get("sort"));
+  const sort = coerceDiscoverSort(requestedSort, kind);
   const subject = asSubject(searchParams.get("subject"));
   const mode = asMode(searchParams.get("mode"));
   const level = asLevel(searchParams.get("lv"));
@@ -225,13 +164,23 @@ function DiscoverInner() {
     return () => window.clearTimeout(t);
   }, [q, view, searchUsers, isComposing]);
 
-  const effectiveSort: SortKey = view === "newest" ? "newest" : sort;
+  const effectiveSort: DiscoverSortKey = view === "newest" ? "newest" : sort;
 
   const filterQuery = (isComposing ? qParam : q).trim();
 
+  const sortCtx = useMemo(
+    () => ({ ratings, repostedIds: reposts }),
+    [ratings, reposts],
+  );
+
   const filteredPosts = useMemo(
-    () => sortPosts(filterPosts(posts, { subject, mode, level, q: filterQuery }), effectiveSort),
-    [posts, subject, mode, level, filterQuery, effectiveSort],
+    () =>
+      sortDiscoverPosts(
+        filterDiscoverPosts(posts, { subject, mode, level, q: filterQuery, kind }),
+        effectiveSort,
+        sortCtx,
+      ),
+    [posts, subject, mode, level, filterQuery, kind, effectiveSort, sortCtx],
   );
 
   const matchedUsers = useMemo(() => {
@@ -259,7 +208,11 @@ function DiscoverInner() {
 
   const searching = filterQuery.length > 0;
   const filtersActive =
-    sort !== "newest" || subject !== "all" || mode !== "all" || level !== "all";
+    sort !== "newest" ||
+    subject !== "all" ||
+    mode !== "all" ||
+    level !== "all" ||
+    kind !== "all";
 
   return (
     <div className="mx-auto w-full max-w-[600px] overflow-x-hidden">
@@ -351,12 +304,76 @@ function DiscoverInner() {
                     </button>
                   </div>
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
-                    <FilterSelect
-                      label="並び替え"
-                      value={sort}
-                      onChange={(v) => patchParams({ sort: v === "newest" ? null : v })}
-                      options={SORT_OPTIONS}
-                    />
+                    <p className="mb-1 block text-xs font-bold tracking-wide text-muted">
+                      投稿タイプ
+                    </p>
+                    <div
+                      className="grid grid-cols-3 gap-1 rounded-2xl border border-gray-800 bg-black/30 p-1"
+                      role="group"
+                      aria-label="投稿タイプ"
+                    >
+                      {DISCOVER_KIND_OPTIONS.map((opt) => {
+                        const active = kind === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              const nextKind = opt.id;
+                              const nextSort = coerceDiscoverSort(sort, nextKind);
+                              patchParams({
+                                kind: nextKind === "all" ? null : nextKind,
+                                sort: nextSort === "newest" ? null : nextSort,
+                              });
+                            }}
+                            className={`min-h-11 rounded-xl text-sm font-bold ${
+                              active
+                                ? "bg-aha text-black"
+                                : "text-muted hover:bg-white/10 hover:text-white"
+                            }`}
+                            aria-pressed={active}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3">
+                      <p className="mb-1 block text-xs font-bold tracking-wide text-muted">
+                        並び替え
+                      </p>
+                      <div className="flex flex-col gap-1">
+                        {DISCOVER_SORT_OPTIONS.map((opt) => {
+                          const unavailable = sortUnavailableForKind(opt.id, kind);
+                          const active = sort === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              disabled={!!unavailable}
+                              title={unavailable ?? undefined}
+                              onClick={() =>
+                                patchParams({ sort: opt.id === "newest" ? null : opt.id })
+                              }
+                              className={`flex min-h-11 items-center justify-between rounded-xl border px-3 text-left text-sm font-bold ${
+                                unavailable
+                                  ? "cursor-not-allowed border-gray-800 text-muted/50"
+                                  : active
+                                    ? "border-aha bg-aha/15 text-aha"
+                                    : "border-gray-800 text-white hover:border-gray-600"
+                              }`}
+                            >
+                              <span>{opt.label}</span>
+                              {unavailable ? (
+                                <span className="ml-2 max-w-[55%] text-right text-[10px] font-semibold leading-tight text-muted">
+                                  {unavailable}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <div className="mt-3">
                       <FilterSelect
                         label="教科"
@@ -371,13 +388,24 @@ function DiscoverInner() {
                     <div className="mt-3">
                       <FilterSelect
                         label="問題モード"
-                        value={mode}
+                        value={kind === "solution" ? "all" : mode}
+                        disabled={kind === "solution"}
                         onChange={(v) => patchParams({ mode: v === "all" ? null : v })}
                         options={MODE_OPTIONS}
                       />
+                      {kind === "solution" ? (
+                        <p className="mt-1 text-[10px] font-semibold text-muted">
+                          問題モードは問題投稿向けのため、解法表示では使いません
+                        </p>
+                      ) : null}
                     </div>
                     <div className="mt-3 pb-2">
                       <p className="mb-1 text-xs font-bold tracking-wide text-muted">難易度</p>
+                      {kind === "solution" ? (
+                        <p className="text-[10px] font-semibold text-muted">
+                          難易度は問題投稿向けのため、解法表示では使いません
+                        </p>
+                      ) : (
                       <div className="flex flex-wrap gap-1">
                         <LevelChip active={level === "all"} onClick={() => patchParams({ lv: null })}>
                           すべて
@@ -392,6 +420,7 @@ function DiscoverInner() {
                           </LevelChip>
                         ))}
                       </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-800 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
@@ -403,7 +432,13 @@ function DiscoverInner() {
                       className="min-h-11 rounded-full bg-aha/15 px-4 text-sm font-bold text-aha disabled:bg-transparent disabled:text-muted"
                       disabled={!filtersActive}
                       onClick={() => {
-                        patchParams({ sort: null, subject: null, mode: null, lv: null });
+                        patchParams({
+                          sort: null,
+                          subject: null,
+                          mode: null,
+                          lv: null,
+                          kind: null,
+                        });
                       }}
                     >
                       すべてリセット
@@ -466,7 +501,7 @@ function DiscoverInner() {
                   q.trim() || filtersActive
                     ? () => {
                         setQ("");
-                        patchParams({ q: null, sort: null, subject: null, mode: null, lv: null });
+                        patchParams({ q: null, sort: null, subject: null, mode: null, lv: null, kind: null });
                       }
                     : undefined
                 }
@@ -494,7 +529,7 @@ function DiscoverInner() {
           <p className="px-4 py-2 text-xs text-muted">
             {view === "newest"
               ? "新着順"
-              : SORT_OPTIONS.find((s) => s.id === sort)?.label}{" "}
+              : DISCOVER_SORT_OPTIONS.find((s) => s.id === sort)?.label}{" "}
             · {filteredPosts.length}件
             {filtersActive ? " · フィルター適用中" : ""}
           </p>
@@ -506,7 +541,7 @@ function DiscoverInner() {
               actionLabel="フィルターをリセット"
               onAction={() => {
                 setQ("");
-                patchParams({ q: null, sort: null, subject: null, mode: null, lv: null });
+                patchParams({ q: null, sort: null, subject: null, mode: null, lv: null, kind: null });
               }}
             />
           ) : (
@@ -528,17 +563,20 @@ function FilterSelect<T extends string>({
   value,
   onChange,
   options,
+  disabled,
 }: {
   label: string;
   value: T;
   onChange: (value: T) => void;
   options: { id: T; label: string }[];
+  disabled?: boolean;
 }) {
   return (
-    <label className="relative block">
+    <label className={`relative block ${disabled ? "opacity-50" : ""}`}>
       <span className="mb-1 block text-xs font-bold tracking-wide text-muted">{label}</span>
       <select
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value as T)}
         className={SELECT_CLASS}
       >

@@ -2,6 +2,11 @@
 
 import { SUBJECTS, SUBJECT_LABEL } from "@/lib/constants";
 import { emptyCanvasPage, sharedTypedHeight } from "@/lib/draw-canvas";
+import {
+  canvasPagesHaveInk,
+  HANDWRITING_EXPORT_ERROR,
+  packHandwritingExport,
+} from "@/lib/handwriting-export";
 import { confirmDialog, choiceDialog } from "@/lib/app-dialog";
 import { COMPOSER_KB_DOCK_ID, dismissComposerKeyboard } from "@/lib/composer-keyboard";
 import { generateAiProblem } from "@/lib/premium";
@@ -64,6 +69,7 @@ export function CreateSheet() {
   const [solutionDraft, setSolutionDraft] = useState("");
   const [postError, setPostError] = useState("");
   const [posting, setPosting] = useState(false);
+  const [exportingDraw, setExportingDraw] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [photo, setPhoto] = useState<string | undefined>();
   const [pages, setPages] = useState<CanvasPage[]>([emptyCanvasPage("page-1")]);
@@ -81,6 +87,7 @@ export function CreateSheet() {
   const [problemStep, setProblemStep] = useState<1 | 2 | 3>(1);
   const [stepHint, setStepHint] = useState("");
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
+  const capturedDrawingRef = useRef<ReturnType<typeof packHandwritingExport> | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const postingRef = useRef(false);
@@ -202,6 +209,7 @@ export function CreateSheet() {
       setProblemStep(1);
       setStepHint("");
       setNotebookTextSize("md");
+      capturedDrawingRef.current = null;
       return;
     }
     setText("");
@@ -213,6 +221,7 @@ export function CreateSheet() {
     setPostError("");
     setPosting(false);
     setSolverAnswer("");
+    capturedDrawingRef.current = null;
     const q = quotePostId ? getPost(quotePostId) : undefined;
     if (q) setSubject(q.subject);
   }, [composerSession, getPost, quotePostId]);
@@ -476,7 +485,15 @@ export function CreateSheet() {
     };
   }, [openProblem]);
 
-  const modeTabs = <ComposerModeTabs value={inputMode} onChange={setInputMode} />;
+  const modeTabs = (
+    <ComposerModeTabs
+      value={inputMode}
+      onChange={(next) => {
+        setInputMode(next);
+        if (next === "typed") capturedDrawingRef.current = null;
+      }}
+    />
+  );
 
   const step1Tools = (
     <div className="min-w-0 space-y-2 px-3 pb-2 md:px-4">
@@ -501,6 +518,7 @@ export function CreateSheet() {
               const g = generateAiProblem(subject, aiPrompt);
               setSubject(g.subject);
               setInputMode("typed");
+              capturedDrawingRef.current = null;
               const latex = toMathliveLatex(g.text);
               setTypedPages((prev) => {
                 const first = prev[0] ?? { id: "t-1", latex: "" };
@@ -523,28 +541,68 @@ export function CreateSheet() {
   const hasProblemBody = () => {
     if (photo) return true;
     if (inputMode === "typed") return typedPages.some((p) => p.latex.trim());
-    return pages.some(
-      (p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0 || Boolean(p.backgroundImage),
-    );
+    return canvasPagesHaveInk(pages);
+  };
+
+  const captureHandwriting = async () => {
+    if (!canvasPagesHaveInk(pages)) {
+      capturedDrawingRef.current = null;
+      return { ok: true as const, packed: null };
+    }
+    const live = canvasRef.current;
+    if (live) {
+      try {
+        const blobs = await live.exportPageBlobs();
+        const size = live.getContentSize();
+        const packed = packHandwritingExport(pages, blobs, size);
+        if (!packed.drawingBlobs.length) {
+          return { ok: false as const, error: HANDWRITING_EXPORT_ERROR };
+        }
+        capturedDrawingRef.current = packed;
+        return { ok: true as const, packed };
+      } catch {
+        return { ok: false as const, error: HANDWRITING_EXPORT_ERROR };
+      }
+    }
+    if (capturedDrawingRef.current?.drawingBlobs.length) {
+      return { ok: true as const, packed: capturedDrawingRef.current };
+    }
+    return {
+      ok: false as const,
+      error: "手書きを保存できませんでした。STEP 1に戻って内容を確認してください。",
+    };
   };
 
   const goProblemNext = () => {
-    if (problemStep === 1) {
-      dismissComposerKeyboard();
-      if (!hasProblemBody()) {
-        setStepHint("問題を入力してください");
+    void (async () => {
+      if (exportingDraw || posting) return;
+      if (problemStep === 1) {
+        dismissComposerKeyboard();
+        if (!hasProblemBody()) {
+          setStepHint("問題を入力してください");
+          return;
+        }
+        if (inputMode === "hand" && canvasPagesHaveInk(pages)) {
+          setExportingDraw(true);
+          const captured = await captureHandwriting();
+          setExportingDraw(false);
+          if (!captured.ok) {
+            setStepHint(captured.error);
+            return;
+          }
+        }
+        setEditorExpanded(false);
+        setStepHint("");
+        setProblemStep(2);
+        return;
+      }
+      if (!isSprintProblem && postMode === "challenge" && !correctAnswer.trim()) {
+        setStepHint("Challenger モードでは正解の入力が必須です");
         return;
       }
       setStepHint("");
-      setProblemStep(2);
-      return;
-    }
-    if (!isSprintProblem && postMode === "challenge" && !correctAnswer.trim()) {
-      setStepHint("Challenger モードでは正解の入力が必須です");
-      return;
-    }
-    setStepHint("");
-    setProblemStep(3);
+      setProblemStep(3);
+    })();
   };
 
   const goProblemBack = () => {
@@ -558,6 +616,14 @@ export function CreateSheet() {
     void (async () => {
       setPosting(true);
       setPostError("");
+      if ((isSprintProblem || postMode === "aha") && !correctAnswer.trim()) {
+        postingRef.current = false;
+        setPosting(false);
+        setPostError("答えを入力してください");
+        setStepHint("答えを入力してください");
+        setProblemStep(3);
+        return;
+      }
       let payload: Parameters<typeof addProblem>[0];
       if (inputMode === "typed") {
         const joined = typedPages
@@ -580,7 +646,8 @@ export function CreateSheet() {
           isSprint: isSprintProblem,
           format: "typed",
           mode: isSprintProblem ? "aha" : postMode,
-          correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
+          correctAnswer:
+            isSprintProblem || postMode === "aha" || postMode === "challenge" ? correctAnswer : null,
           difficultyLevel,
           pages: typedPages.map((p, i) => ({
             id: p.id,
@@ -591,12 +658,17 @@ export function CreateSheet() {
           hints: sanitizeHints(hints),
         };
       } else {
-        const images = (await canvasRef.current?.exportPageBlobs()) ?? [];
-        const size = canvasRef.current?.getContentSize() ?? { w: 800, h: 280 };
-        const hasInk =
-          images.some(Boolean) ||
-          pages.some((p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0);
-        if (!hasInk && !photo) {
+        const captured = await captureHandwriting();
+        if (!captured.ok) {
+          postingRef.current = false;
+          setPosting(false);
+          setPostError(captured.error);
+          setStepHint(captured.error);
+          setProblemStep(1);
+          return;
+        }
+        const packed = captured.packed;
+        if (!packed?.drawingBlobs.length && !photo) {
           postingRef.current = false;
           setPosting(false);
           setPostError("問題を入力してください");
@@ -612,16 +684,11 @@ export function CreateSheet() {
           isSprint: isSprintProblem,
           format: "handwriting",
           mode: isSprintProblem ? "aha" : postMode,
-          correctAnswer: isSprintProblem || postMode !== "challenge" ? null : correctAnswer,
+          correctAnswer:
+            isSprintProblem || postMode === "aha" || postMode === "challenge" ? correctAnswer : null,
           difficultyLevel,
-          drawingBlobs: images,
-          pages: pages.map((p, i) => ({
-            id: p.id,
-            latex: "",
-            doodle: i,
-            contentWidth: size.w,
-            contentHeight: size.h,
-          })),
+          drawingBlobs: packed?.drawingBlobs ?? [],
+          pages: packed?.pages ?? [],
           hints: sanitizeHints(hints),
         };
       }
@@ -721,26 +788,32 @@ export function CreateSheet() {
                   className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
+                  {inputMode === "hand" && !editorExpanded && (
+                    <div
+                      className={
+                        problemStep === 1
+                          ? "flex min-w-0 w-full max-w-full flex-col"
+                          : "pointer-events-none h-0 overflow-hidden opacity-0"
+                      }
+                      aria-hidden={problemStep !== 1}
+                    >
+                      <div className="notebook-stage mx-3 min-h-0 md:mx-4">
+                        <MultiPageCanvas
+                          ref={canvasRef}
+                          pages={pages}
+                          onChange={setPages}
+                          premium={hasPremium}
+                          textSize={notebookTextSize}
+                          onTextSizeChange={setNotebookTextSize}
+                          onToggleExpand={() => setEditorExpanded(true)}
+                        />
+                      </div>
+                    </div>
+                  )}
                   {problemStep === 1 && (
                     <>
                       {modeTabs}
-                      {inputMode === "hand" ? (
-                        <div className="flex min-w-0 w-full max-w-full flex-col">
-                          {!editorExpanded && (
-                            <div className="notebook-stage mx-3 min-h-0 md:mx-4">
-                              <MultiPageCanvas
-                                ref={canvasRef}
-                                pages={pages}
-                                onChange={setPages}
-                                premium={hasPremium}
-                                textSize={notebookTextSize}
-                                onTextSizeChange={setNotebookTextSize}
-                                onToggleExpand={() => setEditorExpanded(true)}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ) : (
+                      {inputMode === "typed" &&
                         !editorExpanded && (
                           <TypedNotebook
                             pages={typedPages}
@@ -767,8 +840,7 @@ export function CreateSheet() {
                             textSize={notebookTextSize}
                             onTextSizeChange={setNotebookTextSize}
                           />
-                        )
-                      )}
+                        )}
                       {step1Tools}
                     </>
                   )}
@@ -857,6 +929,24 @@ export function CreateSheet() {
                         placeholder="タイトル（任意）"
                         className="w-full border-0 border-b border-gray-800 bg-transparent py-2 text-base font-semibold outline-none placeholder:text-muted"
                       />
+                      {(postMode === "aha" || isSprintProblem) && (
+                        <div>
+                          <label className="text-xs font-bold text-muted" htmlFor="composer-aha-answer">
+                            答え
+                          </label>
+                          <input
+                            id="composer-aha-answer"
+                            value={correctAnswer}
+                            onChange={(e) => {
+                              setCorrectAnswer(e.target.value);
+                              if (stepHint === "答えを入力してください") setStepHint("");
+                              if (postError === "答えを入力してください") setPostError("");
+                            }}
+                            placeholder="答え（必須）"
+                            className="mt-0.5 w-full border-0 border-b border-gray-800 bg-transparent py-2 text-sm outline-none"
+                          />
+                        </div>
+                      )}
                       <textarea
                         value={solutionDraft}
                         onChange={(e) => setSolutionDraft(e.target.value)}
@@ -888,12 +978,13 @@ export function CreateSheet() {
                     {problemStep < 3 ? (
                       <button
                         type="button"
+                        disabled={exportingDraw || posting}
                         onClick={goProblemNext}
-                        className={`inline-flex min-h-11 min-w-[5.5rem] items-center justify-center rounded-full bg-aha px-5 text-sm font-bold text-black ${
+                        className={`inline-flex min-h-11 min-w-[5.5rem] items-center justify-center rounded-full bg-aha px-5 text-sm font-bold text-black disabled:opacity-40 ${
                           problemStep === 1 ? "w-full" : "ml-auto"
                         }`}
                       >
-                        次へ
+                        {exportingDraw ? "保存中…" : "次へ"}
                       </button>
                     ) : (
                       <button
@@ -1073,19 +1164,25 @@ export function CreateSheet() {
                             solverAnswer: quotingChallenge ? solverAnswer : undefined,
                           });
                         } else {
-                          const images = (await canvasRef.current?.exportPageBlobs()) ?? [];
-                          const size = canvasRef.current?.getContentSize() ?? { w: 800, h: 280 };
+                          const captured = await captureHandwriting();
+                          if (!captured.ok) {
+                            postingRef.current = false;
+                            setPosting(false);
+                            setPostError(captured.error);
+                            return;
+                          }
+                          const packed = captured.packed;
+                          if (!packed?.drawingBlobs.length && !photo && !text.trim()) {
+                            postingRef.current = false;
+                            setPosting(false);
+                            setPostError("手書きを入力してください");
+                            return;
+                          }
                           res = await addSolution({
                             subject,
                             text: text.trim() || "引用解法を投稿した。",
-                            drawingBlobs: images,
-                            pages: pages.map((p, i) => ({
-                              id: p.id,
-                              latex: "",
-                              doodle: i,
-                              contentWidth: size.w,
-                              contentHeight: size.h,
-                            })),
+                            drawingBlobs: packed?.drawingBlobs ?? [],
+                            pages: packed?.pages ?? [],
                             problemId: quotePostId,
                             solutionFormat: "handwriting",
                             photo,

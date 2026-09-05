@@ -16,15 +16,15 @@ export function SpoilerReveal({
   onRevealed?: () => void;
 }) {
   const hints = sanitizeHints(post.hints);
-  const hasAnswer = isAuthor && Boolean(post.correctAnswer?.trim());
+  const hasAhaAnswer =
+    (post.problemMode === "aha" || post.kind === "sprint") && Boolean(post.correctAnswer?.trim());
   const hasExplain = Boolean(post.solution?.trim());
   const [hintStep, setHintStep] = useState(0);
-  const [showAnswer, setShowAnswer] = useState(isAuthor);
+  const [showAnswer, setShowAnswer] = useState(false);
   const [showExplain, setShowExplain] = useState(false);
 
   if (locked) return null;
-  if (!hints.length && !hasAnswer && !hasExplain) return null;
-  if (isAuthor && !hints.length && !hasExplain) return null;
+  if (!hints.length && !hasAhaAnswer && !hasExplain) return null;
 
   return (
     <div className="mt-3 space-y-2">
@@ -59,8 +59,8 @@ export function SpoilerReveal({
           )}
         </div>
       )}
-      {hasAnswer && !isAuthor && (
-        showAnswer ? (
+      {hasAhaAnswer &&
+        (showAnswer ? (
           <p className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm">
             答え: {post.correctAnswer}
           </p>
@@ -75,10 +75,9 @@ export function SpoilerReveal({
           >
             答えを見る
           </button>
-        )
-      )}
-      {hasExplain && (
-        showExplain || isAuthor ? (
+        ))}
+      {hasExplain &&
+        (showExplain || isAuthor ? (
           <p className="whitespace-pre-wrap rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm leading-relaxed">
             {post.solution}
           </p>
@@ -93,8 +92,7 @@ export function SpoilerReveal({
           >
             解説を見る
           </button>
-        )
-      )}
+        ))}
     </div>
   );
 }

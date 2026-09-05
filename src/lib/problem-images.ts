@@ -63,10 +63,13 @@ export async function persistHandwritingPages(
   if (!pages?.length) return { pages, error: null };
 
   const next: NotePage[] = [];
+  let hadExportBlob = false;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
     const existing = page.image;
-    const blob = await blobFromImageValue(existing, drawingBlobs?.[i]);
+    const incoming = drawingBlobs?.[i];
+    if (incoming && incoming.size > 0) hadExportBlob = true;
+    const blob = await blobFromImageValue(existing, incoming);
     if (blob) {
       const uploaded = await uploadDrawingBlob(userId, blob, i);
       if (uploaded.error || !uploaded.url) {
@@ -79,7 +82,12 @@ export async function persistHandwritingPages(
       next.push(page);
       continue;
     }
-    next.push({ ...page, image: isDisplayImageSrc(existing) ? existing : undefined });
+    if (page.latex?.trim()) {
+      next.push({ ...page, image: undefined });
+    }
+  }
+  if (hadExportBlob && !next.some((p) => isHttpUrl(p.image))) {
+    return { error: "手書き画像のアップロードに失敗しました" };
   }
   return { pages: next, error: null };
 }

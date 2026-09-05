@@ -267,7 +267,26 @@ export function rasterizePageBlob(
   const canvas = rasterizePageCanvas(page, cssW, cssH, background);
   if (!canvas) return Promise.resolve(null);
   return new Promise<Blob | null>((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), "image/png");
+    canvas.toBlob((blob) => {
+      if (blob && blob.size > 0) {
+        resolve(blob);
+        return;
+      }
+      try {
+        const dataUrl = canvas.toDataURL("image/png");
+        const comma = dataUrl.indexOf(",");
+        if (comma < 0) {
+          resolve(null);
+          return;
+        }
+        const binary = atob(dataUrl.slice(comma + 1));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        resolve(bytes.length ? new Blob([bytes], { type: "image/png" }) : null);
+      } catch {
+        resolve(null);
+      }
+    }, "image/png");
   });
 }
 

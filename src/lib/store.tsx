@@ -109,6 +109,7 @@ import type {
   User,
 } from "./types";
 import { sendPulseProblemMail } from "./dev-mail-client";
+import { HANDWRITING_UPLOAD_ERROR } from "./handwriting-export";
 import { firstDrawingUrl, persistHandwritingPages } from "./problem-images";
 import {
   ensureWelcomeNotification,
@@ -1009,7 +1010,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const hydrated = await persistHandwritingPages(authorId, input.pages, input.drawingBlobs);
     if (hydrated.error) return { error: hydrated.error };
     const pages = hydrated.pages;
-    const photo = firstDrawingUrl(pages, input.photo) ?? input.photo;
+    const hadDrawingBlobs = input.drawingBlobs?.some((b) => !!b && b.size > 0) ?? false;
+    if (input.format === "handwriting" && hadDrawingBlobs && !firstDrawingUrl(pages)) {
+      return { error: HANDWRITING_UPLOAD_ERROR };
+    }
+    const photo = firstDrawingUrl(pages) ?? (hadDrawingBlobs ? undefined : input.photo);
     const prepared = { ...input, pages, photo, drawingBlobs: undefined };
 
     if (prepared.isSprint) {
@@ -1133,7 +1138,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const hydrated = await persistHandwritingPages(authorId, input.pages, input.drawingBlobs);
       if (hydrated.error) return { error: hydrated.error };
       const pages = hydrated.pages;
-      const photo = firstDrawingUrl(pages, input.photo) ?? input.photo;
+      const hadDrawingBlobs = input.drawingBlobs?.some((b) => !!b && b.size > 0) ?? false;
+      if (
+        (input.solutionFormat === "handwriting" || hadDrawingBlobs) &&
+        hadDrawingBlobs &&
+        !firstDrawingUrl(pages)
+      ) {
+        return { error: HANDWRITING_UPLOAD_ERROR };
+      }
+      const photo = firstDrawingUrl(pages) ?? (hadDrawingBlobs ? undefined : input.photo);
       const format = input.solutionFormat ?? (pages?.length ? "handwriting" : "typed");
       const post: Post = {
         id: `local-sol-${Date.now()}`,

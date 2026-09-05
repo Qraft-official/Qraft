@@ -10,8 +10,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function joinErrorMessage(reason: string) {
-  if (reason === "prelaunch") return "先行公開は9月12日からです";
-  if (reason === "full") return "先行公開の参加枠（30人）は埋まりました";
+  if (reason === "prelaunch") return "Qraftは9月12日から30名限定で先行公開します";
+  if (reason === "full") return "先行公開の30名枠は満員になりました。正式公開は9月19日です。";
   if (reason === "invalid") return "招待コードが正しくありません";
   if (reason === "not_open") return "この期間は招待コードでの参加はできません";
   return "参加できませんでした";
@@ -134,6 +134,9 @@ export async function POST(request: Request) {
       { error: joinErrorMessage(reason) },
       { status: reason === "full" ? 409 : 400 },
     );
+  }
+  if (row.reason === "developer") {
+    return NextResponse.json({ ok: true, reason: "developer", created: true });
   }
   return NextResponse.json({ ok: true, reason: row.reason, created: true });
 }

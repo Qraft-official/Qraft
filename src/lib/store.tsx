@@ -638,15 +638,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const isDeveloper = useMemo(() => {
     if (isAdmin) return true;
-    const emails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-    if (sessionEmail && emails.includes(sessionEmail.toLowerCase())) return true;
     const handle = typeof profile.handle === "string" ? profile.handle : undefined;
     if (supabaseUid && isDeveloperAccount(supabaseUid, handle)) return true;
     return false;
-  }, [isAdmin, sessionEmail, supabaseUid, profile.handle]);
+  }, [isAdmin, supabaseUid, profile.handle]);
   const complimentaryPremium = useMemo(() => {
     const base = supabaseUid
       ? (remoteUsers[supabaseUid] ?? fallbackUser(supabaseUid))

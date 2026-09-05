@@ -17,8 +17,8 @@ export function canAccessApp(input: {
   isAdmin: boolean;
   isMember: boolean;
 }) {
-  if (input.phase === "public") return true;
   if (input.isAdmin) return true;
+  if (input.phase === "public") return true;
   if (input.phase === "early" && input.isMember) return true;
   return false;
 }
@@ -32,7 +32,7 @@ export function earlyAccessJoinOpen(phase: ReleasePhase) {
 }
 
 export type JoinDecision =
-  | { ok: true; reason: "enrolled" | "already" | "public" }
+  | { ok: true; reason: "enrolled" | "already" | "public" | "developer" }
   | { ok: false; reason: "prelaunch" | "full" | "invalid" | "not_open" };
 
 export function decideEarlyAccessJoin(input: {
@@ -41,7 +41,11 @@ export function decideEarlyAccessJoin(input: {
   cap: number;
   alreadyMember: boolean;
   validCode: boolean;
+  isTrustedDeveloper?: boolean;
+  isSample?: boolean;
 }): JoinDecision {
+  if (input.isTrustedDeveloper) return { ok: true, reason: "developer" };
+  if (input.isSample) return { ok: false, reason: "not_open" };
   if (input.phase === "public") return { ok: true, reason: "public" };
   if (input.phase !== "early") return { ok: false, reason: "prelaunch" };
   if (input.alreadyMember) return { ok: true, reason: "already" };

@@ -16,7 +16,9 @@ import { useState } from "react";
 
 export function EarlyAccessGate({ access }: { access: ClientAccess }) {
   const { signInWithEmail, refreshAccess } = useApp();
-  const [mode, setMode] = useState<"login" | "join">(access.joinOpen ? "join" : "login");
+  const [mode, setMode] = useState<"login" | "join">(
+    access.joinOpen && access.remaining > 0 ? "join" : "login",
+  );
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
@@ -50,8 +52,8 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
         <p className="text-4xl font-black">
           Qraft<span className="ml-1 text-aha">クラフト</span>
         </p>
-        <h1 className="mt-8 text-2xl font-black">先行公開は9月12日からです</h1>
-        <p className="mt-3 text-sm text-muted">一般公開の準備中です。開始までしばらくお待ちください。</p>
+        <h1 className="mt-8 text-2xl font-black">Qraftは9月12日から30名限定で先行公開します</h1>
+        <p className="mt-3 text-sm text-muted">公開までしばらくお待ちください。</p>
         <AdminLogin />
       </div>
     );
@@ -156,22 +158,32 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
         Qraft<span className="ml-1 text-aha">クラフト</span>
       </p>
       <h1 className="mt-8 text-2xl font-black">先行公開</h1>
-      <p className="mt-3 text-sm text-muted">
-        この期間の参加は招待コードのみです。定員 {access.cap} 人（残り {access.remaining} 人）。
-      </p>
-      <p className="mt-1 text-[11px] text-muted">友達紹介コードとは別です。</p>
+      {access.remaining <= 0 ? (
+        <p className="mt-3 text-sm text-muted">
+          先行公開の30名枠は満員になりました。正式公開は9月19日です。
+        </p>
+      ) : (
+        <>
+          <p className="mt-3 text-sm text-muted">
+            この期間の参加は招待コードのみです。定員 {access.cap} 人（残り {access.remaining} 人）。
+          </p>
+          <p className="mt-1 text-[11px] text-muted">友達紹介コードとは別です。</p>
+        </>
+      )}
 
       <div className="mt-8 flex gap-2 text-sm">
+        {access.remaining > 0 ? (
+          <button
+            type="button"
+            className={`rounded-full px-4 py-2 font-bold ${mode === "join" ? "bg-white text-black" : "border border-gray-700"}`}
+            onClick={() => setMode("join")}
+          >
+            招待コードで参加
+          </button>
+        ) : null}
         <button
           type="button"
-          className={`rounded-full px-4 py-2 font-bold ${mode === "join" ? "bg-white text-black" : "border border-gray-700"}`}
-          onClick={() => setMode("join")}
-        >
-          招待コードで参加
-        </button>
-        <button
-          type="button"
-          className={`rounded-full px-4 py-2 font-bold ${mode === "login" ? "bg-white text-black" : "border border-gray-700"}`}
+          className={`rounded-full px-4 py-2 font-bold ${mode === "login" || access.remaining <= 0 ? "bg-white text-black" : "border border-gray-700"}`}
           onClick={() => setMode("login")}
         >
           ログイン
@@ -182,11 +194,11 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
         className="mt-6 space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
-          if (mode === "join") void onJoin();
+          if (mode === "join" && access.remaining > 0) void onJoin();
           else void onLogin();
         }}
       >
-        {mode === "join" && (
+        {mode === "join" && access.remaining > 0 && (
           <>
             <label className="block text-xs text-muted">
               Early Access 招待コード
@@ -255,11 +267,11 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
           disabled={busy}
           className="w-full rounded-full bg-aha py-3 text-sm font-black text-black disabled:opacity-50"
         >
-          {busy ? "処理中…" : mode === "join" ? "招待コードで参加" : "ログイン"}
+          {busy ? "処理中…" : mode === "join" && access.remaining > 0 ? "招待コードで参加" : "ログイン"}
         </button>
       </form>
 
-      {mode === "login" && (
+      {mode === "login" && access.remaining > 0 && (
         <form
           className="mt-6 space-y-3"
           onSubmit={(e) => {

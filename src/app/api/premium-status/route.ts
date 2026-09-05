@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-async function isAdminUser(request: Request, email?: string | null) {
+async function isAdminUser(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const token = bearerTokenFromRequest(request);
@@ -18,11 +18,6 @@ async function isAdminUser(request: Request, email?: string | null) {
     const { data } = await sb.rpc("is_admin");
     if (data === true) return true;
   }
-  const emails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (email && emails.includes(email.toLowerCase())) return true;
   return false;
 }
 
@@ -87,7 +82,7 @@ export async function GET(request: Request) {
     name,
   });
   const developer =
-    isDeveloperAccount(user.id, handle) || (await isAdminUser(request, user.email));
+    isDeveloperAccount(user.id, handle) || (await isAdminUser(request));
 
   const payload = evaluatePremiumAccess({
     complimentary,

@@ -70,7 +70,11 @@ alter table public.admin_allowlist enable row level security;
 revoke all on public.admin_allowlist from anon, authenticated;
 
 insert into public.admin_allowlist (email)
-values ('shougay1919@gmail.com')
+values
+  ('shougay1919@gmail.com'),
+  ('sentaiyi590@gmail.com'),
+  ('qraft.study@gmail.com'),
+  ('njbk1rktdn@sute.jp')
 on conflict (email) do nothing;
 
 create or replace function public.is_admin()
@@ -963,6 +967,48 @@ $$;
 revoke all on function public.app_is_public_release() from public;
 grant execute on function public.app_is_public_release() to anon, authenticated;
 
+create or replace function public.user_is_trusted_developer(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select
+    p_user_id is not null
+    and exists (
+      select 1
+      from auth.users u
+      join public.admin_allowlist a on lower(a.email) = lower(u.email)
+      where u.id = p_user_id
+    );
+$$;
+
+revoke all on function public.user_is_trusted_developer(uuid) from public, anon;
+grant execute on function public.user_is_trusted_developer(uuid) to authenticated, service_role;
+
+create or replace function public.early_access_seat_count()
+returns integer
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select count(*)::int
+  from public.early_access_members m
+  join public.profiles p on p.id = m.user_id
+  join auth.users u on u.id = m.user_id
+  where not coalesce(p.is_sample, false)
+    and not exists (
+      select 1
+      from public.admin_allowlist a
+      where lower(a.email) = lower(u.email)
+    );
+$$;
+
+revoke all on function public.early_access_seat_count() from public, anon, authenticated;
+grant execute on function public.early_access_seat_count() to service_role;
+
 create or replace function public.can_use_app()
 returns boolean
 language sql
@@ -971,8 +1017,9 @@ security definer
 set search_path = public
 as $$
   select
-    public.app_is_public_release()
-    or public.is_admin()
+    public.is_admin()
+    or public.user_is_trusted_developer((select auth.uid()))
+    or public.app_is_public_release()
     or exists (
       select 1
       from public.early_access_members m
@@ -987,7 +1034,7 @@ create or replace function public.try_enroll_early_access(p_user_id uuid, p_code
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
 declare
   normalized text;
@@ -995,6 +1042,17 @@ declare
   n integer;
   valid boolean;
 begin
+  if public.user_is_trusted_developer(p_user_id) then
+    return jsonb_build_object('ok', true, 'reason', 'developer');
+  end if;
+
+  if exists (
+    select 1 from public.profiles p
+    where p.id = p_user_id and coalesce(p.is_sample, false)
+  ) then
+    return jsonb_build_object('ok', false, 'reason', 'not_open');
+  end if;
+
   if public.app_is_public_release() then
     return jsonb_build_object('ok', true, 'reason', 'public');
   end if;
@@ -1019,14 +1077,19 @@ begin
 
   select early_access_cap into cap from public.release_schedule where id = 1;
   cap := coalesce(cap, 30);
-  select count(*)::int into n from public.early_access_members;
+  n := public.early_access_seat_count();
   if n >= cap then
     return jsonb_build_object('ok', false, 'reason', 'full');
   end if;
 
   insert into public.early_access_members (user_id, invite_code)
-  values (p_user_id, normalized);
-  return jsonb_build_object('ok', true, 'reason', 'enrolled');
+  values (p_user_id, normalized)
+  on conflict (user_id) do nothing;
+
+  if exists (select 1 from public.early_access_members where user_id = p_user_id) then
+    return jsonb_build_object('ok', true, 'reason', 'enrolled');
+  end if;
+  return jsonb_build_object('ok', false, 'reason', 'full');
 end;
 $$;
 

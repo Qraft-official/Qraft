@@ -47,24 +47,17 @@ export async function loadReleaseSchedule(): Promise<ReleaseSchedule> {
   };
 }
 
-export async function isAdminRequest(request: Request, email?: string | null) {
+export async function isAdminRequest(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const token = bearerTokenFromRequest(request);
-  if (url && anon && token) {
-    const sb = createClient(url, anon, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data } = await sb.rpc("is_admin");
-    if (data === true) return true;
-  }
-  const emails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (email && emails.includes(email.toLowerCase())) return true;
-  return false;
+  if (!url || !anon || !token) return false;
+  const sb = createClient(url, anon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data } = await sb.rpc("is_admin");
+  return data === true;
 }
 
 export async function isEarlyAccessMember(userId: string) {
@@ -82,6 +75,8 @@ export async function isEarlyAccessMember(userId: string) {
 export async function countEarlyAccessMembers() {
   const admin = adminSupabase();
   if (!admin) return 0;
+  const { data, error } = await admin.rpc("early_access_seat_count");
+  if (!error && typeof data === "number") return data;
   const { count } = await admin
     .from("early_access_members")
     .select("user_id", { count: "exact", head: true });
@@ -92,7 +87,7 @@ export async function getAccessSnapshot(request: Request, nowMs = Date.now()): P
   const schedule = await loadReleaseSchedule();
   const phase = releasePhaseAt(nowMs, schedule);
   const user = await userFromRequest(request);
-  const isAdmin = user ? await isAdminRequest(request, user.email) : false;
+  const isAdmin = user ? await isAdminRequest(request) : false;
   const isMember = user ? await isEarlyAccessMember(user.id) : false;
   const memberCount = await countEarlyAccessMembers();
   const canAccess = canAccessApp({ phase, isAdmin, isMember });
@@ -116,7 +111,9 @@ export async function requireAppAccess(request: Request) {
   if (access.canAccess) return { access, error: null as string | null };
   const error =
     access.phase === "prelaunch"
-      ? "先行公開は9月12日からです"
-      : "先行公開期間は招待コードで参加したメンバーのみ利用できます";
+      ? "Qraftは9月12日から30名限定で先行公開します"
+      : access.remaining <= 0
+        ? "先行公開の30名枠は満員になりました。正式公開は9月19日です。"
+        : "先行公開期間は招待コードで参加したメンバーのみ利用できます";
   return { access, error };
 }

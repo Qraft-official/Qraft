@@ -65,6 +65,12 @@ import {
 } from "./problem-reactions";
 import { asDifficulty, MOCK_PROBLEM_META, isProblemUuid } from "./difficulty";
 import {
+  loadLocalSavedMap,
+  overlaySavedMap,
+  persistLocalSavedMap,
+  saveStateKey,
+} from "./save-post";
+import {
   fetchLearningBootstrap,
   fetchLearningCardState,
   fetchMySavedMap,
@@ -117,15 +123,9 @@ function overlayPendingSaved(
   incoming: Record<string, SaveCategory>,
   prev: Record<string, SaveCategory>,
   pending: Set<string>,
+  sticky: Record<string, boolean>,
 ) {
-  const next: Record<string, SaveCategory> = {};
-  for (const [k, v] of Object.entries(incoming)) next[k.toLowerCase()] = v;
-  for (const raw of pending) {
-    const id = raw.toLowerCase();
-    if (prev[id]) next[id] = prev[id];
-    else delete next[id];
-  }
-  return next;
+  return overlaySavedMap(incoming, prev, pending, sticky);
 }
 
 type Store = {
@@ -331,6 +331,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   savedRef.current = saved;
   const pendingSaveIds = useRef(new Set<string>());
   const saveLocks = useRef(new Set<string>());
+  const stickySave = useRef<Record<string, boolean>>({});
   const [feltVotes, setFeltVotes] = useState<Record<string, FeltVote>>({});
   const [lastAttempts, setLastAttempts] = useState<Record<string, AttemptSummary>>({});
   const [attemptStarts, setAttemptStarts] = useState<Record<string, string>>({});
@@ -358,6 +359,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setBgmOnState(load(STORAGE_KEYS.bgm, false));
     setAccentColorState(load(STORAGE_KEYS.accent, "#A855F7"));
     setReactions(load(STORAGE_KEYS.reactions, {} as Record<string, string>));
+    setSaved(loadLocalSavedMap());
     const saved = load<SprintRecord | null>(STORAGE_KEYS.sprint, null);
     if (saved && saved.dayId === dayId) {
       const timedOut =
@@ -392,7 +394,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setNotifications([]);
         setReferralMe(null);
         setReferralReady(false);
-        setSaved({});
+        setSaved(loadLocalSavedMap());
         setFeltVotes({});
         setLastAttempts({});
         setNotifyAuthors([]);
@@ -423,7 +425,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ]);
           if (cancelled) return;
           if (savedMap) {
-            setSaved((prev) => overlayPendingSaved(savedMap, prev, pendingSaveIds.current));
+            setSaved((prev) =>
+              overlayPendingSaved(savedMap, prev, pendingSaveIds.current, stickySave.current),
+            );
           }
           setNotifications(inbox);
           setNotifyAuthors(boot.notifyAuthors);
@@ -926,7 +930,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAge(null);
     setProfileHydrated(true);
     setNotifications([]);
-    setSaved({});
+    setSaved(loadLocalSavedMap());
     setFeltVotes({});
     setLastAttempts({});
     setAttemptStarts({});
@@ -1467,23 +1471,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const toggleSave = useCallback(async (problemId: string, category: SaveCategory = "later") => {
-    const id = problemId.toLowerCase();
+    const id = saveStateKey(problemId);
     if (saveLocks.current.has(id)) return;
     saveLocks.current.add(id);
     const currently = !!savedRef.current[id];
     const prevCat = savedRef.current[id];
     const wantSaved = !currently;
     pendingSaveIds.current.add(id);
+    stickySave.current[id] = wantSaved;
     setSaved((prev) => {
       const next = { ...prev };
       if (wantSaved) next[id] = category;
       else delete next[id];
+      if (!isProblemUuid(id)) persistLocalSavedMap(next);
       return next;
     });
+    if (!isProblemUuid(id)) {
+      pendingSaveIds.current.delete(id);
+      saveLocks.current.delete(id);
+      return;
+    }
     try {
       const res = await toggleSavedProblem(id, wantSaved, category);
       if (res.error) {
         console.error("toggleSave failed:", res.error);
+        delete stickySave.current[id];
         setSaved((prev) => {
           const next = { ...prev };
           if (currently && prevCat) next[id] = prevCat;
@@ -1495,6 +1507,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       if (typeof res.saved !== "boolean") {
         console.error("toggleSave: missing saved flag", res);
+        delete stickySave.current[id];
         setSaved((prev) => {
           const next = { ...prev };
           if (currently && prevCat) next[id] = prevCat;
@@ -1504,6 +1517,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         return;
       }
+      stickySave.current[id] = res.saved;
       setSaved((prev) => {
         const next = { ...prev };
         if (res.saved) next[id] = res.category ?? category;
@@ -1517,8 +1531,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setSaveCategory = useCallback(async (problemId: string, category: SaveCategory) => {
-    const id = problemId.toLowerCase();
-    setSaved((prev) => ({ ...prev, [id]: category }));
+    const id = saveStateKey(problemId);
+    setSaved((prev) => {
+      const next = { ...prev, [id]: category };
+      if (!isProblemUuid(id)) persistLocalSavedMap(next);
+      return next;
+    });
+    if (!isProblemUuid(id)) return;
     const res = await persistSaveCategory(id, category);
     if (res.error) console.error("setSaveCategory:", res.error);
   }, []);
@@ -1609,7 +1628,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setLastAttempts(cards.attempts);
     }
     if (savedMap) {
-      setSaved((prev) => overlayPendingSaved(savedMap, prev, pendingSaveIds.current));
+      setSaved((prev) =>
+        overlayPendingSaved(savedMap, prev, pendingSaveIds.current, stickySave.current),
+      );
     }
   }, [supabaseUid, remotePosts]);
 
@@ -1641,13 +1662,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!supabaseUid) {
-      setSaved({});
+      setSaved((prev) => {
+        const local = loadLocalSavedMap();
+        const next: Record<string, SaveCategory> = { ...local };
+        for (const [k, v] of Object.entries(prev)) {
+          if (!isProblemUuid(k)) next[k] = v;
+        }
+        return next;
+      });
       return;
     }
     let cancelled = false;
     void fetchMySavedMap().then((map) => {
       if (cancelled || !map) return;
-      setSaved((prev) => overlayPendingSaved(map, prev, pendingSaveIds.current));
+      setSaved((prev) =>
+        overlayPendingSaved(map, prev, pendingSaveIds.current, stickySave.current),
+      );
     });
     return () => {
       cancelled = true;

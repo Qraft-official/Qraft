@@ -36,6 +36,7 @@ import { StarRating } from "./StarRating";
 import { UserAvatar } from "./UserAvatar";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { SaveProblemButton } from "./SaveProblemButton";
+import { canSavePost, saveTargetId } from "@/lib/save-post";
 import { SpoilerReveal } from "./SpoilerReveal";
 import { FeltDifficulty } from "./FeltDifficulty";
 import { AttemptTime } from "./RevengeBanner";
@@ -642,13 +643,11 @@ export function PostCard({
               </button>
             )}
 
-            <div className="flex min-w-0 flex-1 justify-center">
-              <SaveProblemButton
-                problemId={
-                  post.kind === "solution" && post.problemId ? post.problemId : post.id
-                }
-              />
-            </div>
+            {canSavePost(post) && (
+              <div className="flex min-w-0 flex-1 justify-center">
+                <SaveProblemButton problemId={saveTargetId(post) ?? post.id} />
+              </div>
+            )}
 
             <button
               type="button"

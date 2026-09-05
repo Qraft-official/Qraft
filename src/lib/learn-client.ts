@@ -112,7 +112,10 @@ export async function toggleSavedProblem(
   };
   if (!raw.ok) {
     console.error("toggle_saved_problem:", raw.error ?? raw);
-    return { error: raw.error || "保存に失敗しました" };
+    if (raw.error === "not_authenticated" || raw.error === "invalid_problem") {
+      return { error: raw.error || "保存に失敗しました" };
+    }
+    return fallbackToggleSaved(problemId, wantSaved, category);
   }
   return {
     saved: !!raw.saved,
@@ -142,19 +145,28 @@ async function fallbackToggleSaved(
     }
     return { saved: false, category: null };
   }
-  const { data, error } = await supabase
-    .from("saved_problems")
-    .upsert(
-      { user_id: uid, problem_id: problemId, category },
-      { onConflict: "user_id,problem_id" },
-    )
-    .select("problem_id, category")
-    .maybeSingle();
-  if (error || !data) {
-    console.error("saved_problems upsert:", error?.message ?? "no row returned", error);
-    return { error: error?.message || "保存結果を確認できませんでした" };
+  const { error } = await supabase.from("saved_problems").upsert(
+    { user_id: uid, problem_id: problemId, category },
+    { onConflict: "user_id,problem_id" },
+  );
+  if (error) {
+    console.error("saved_problems upsert:", error.message, error);
+    return { error: error.message };
   }
-  return { saved: true, category: asSaveCategory((data as { category: string }).category) };
+  const { data: row, error: selErr } = await supabase
+    .from("saved_problems")
+    .select("problem_id, category")
+    .eq("user_id", uid)
+    .eq("problem_id", problemId)
+    .maybeSingle();
+  if (selErr) {
+    console.error("saved_problems verify select:", selErr.message, selErr);
+  }
+  if (row) {
+    return { saved: true, category: asSaveCategory((row as { category: string }).category) };
+  }
+  // Write reported success; keep saved even if replica/select lags.
+  return { saved: true, category };
 }
 
 export async function setSavedCategory(problemId: string, category: SaveCategory) {

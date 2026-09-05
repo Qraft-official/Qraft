@@ -1,18 +1,18 @@
 "use client";
 
 import { SAVE_CATEGORIES, saveCategoryLabel, type SaveCategory } from "@/lib/learn";
-import { isProblemUuid } from "@/lib/difficulty";
+import { saveStateKey } from "@/lib/save-post";
 import { useApp } from "@/lib/store";
 import { Bookmark } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export function SaveProblemButton({ problemId }: { problemId: string }) {
   const { saved, toggleSave, setSaveCategory } = useApp();
-  const cat = saved[problemId] ?? saved[problemId.toLowerCase()];
+  const key = saveStateKey(problemId);
+  const cat = saved[key] ?? saved[problemId] ?? saved[problemId.toLowerCase()];
   const on = Boolean(cat);
   const [sheet, setSheet] = useState(false);
   const hold = useRef<number | null>(null);
-
   const openedSheet = useRef(false);
 
   useEffect(() => {
@@ -21,15 +21,13 @@ export function SaveProblemButton({ problemId }: { problemId: string }) {
     };
   }, []);
 
-  if (!isProblemUuid(problemId)) return null;
-
   return (
     <div className="relative">
       <button
         type="button"
-        aria-label={on ? `保存済み（${saveCategoryLabel(cat)}）` : "保存する"}
+        aria-label={on ? "保存を解除" : "問題を保存"}
         aria-pressed={on}
-        title={on ? "保存済み" : "保存"}
+        title={on ? `保存済み（${saveCategoryLabel(cat)}）` : "保存"}
         className={`flex min-h-11 min-w-11 items-center justify-center ${on ? "text-aha" : "text-muted hover:text-aha"}`}
         onClick={() => {
           if (openedSheet.current) {

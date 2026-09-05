@@ -84,6 +84,7 @@ export const STORAGE_KEYS = {
   reactions: "aha.reactions",
   auth: "aha.auth",
   hiddenAds: "aha.hiddenAds",
+  savedLocal: "aha.savedLocal",
 } as const;
 
 export const TITLE_CATALOG = [

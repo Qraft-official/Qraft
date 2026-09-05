@@ -11,8 +11,27 @@ create table if not exists public.profiles (
   math_tier smallint not null default 1 check (math_tier between 1 and 5),
   physics_tier smallint not null default 1 check (physics_tier between 1 and 5),
   chemistry_tier smallint not null default 1 check (chemistry_tier between 1 and 5),
+  bio text not null default '',
+  is_sample boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+create index if not exists profiles_is_sample_idx
+  on public.profiles (id)
+  where is_sample;
+
+create table if not exists public.launch_seed_map (
+  seed_key text primary key,
+  kind text not null check (kind in ('user', 'problem')),
+  entity_id uuid not null,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists launch_seed_map_kind_entity_uidx
+  on public.launch_seed_map (kind, entity_id);
+
+alter table public.launch_seed_map enable row level security;
+revoke all on public.launch_seed_map from public, anon, authenticated;
 
 create table if not exists public.problems (
   id uuid primary key default gen_random_uuid(),
@@ -142,6 +161,27 @@ create policy "users can delete own problems"
 
 grant select on public.profiles to anon, authenticated;
 grant insert, update on public.profiles to authenticated;
+revoke update (is_sample) on table public.profiles from anon, authenticated;
+
+create or replace function public.protect_profile_is_sample()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'UPDATE' and new.is_sample is distinct from old.is_sample then
+    if coalesce(auth.role(), '') <> 'service_role' and not public.is_admin() then
+      new.is_sample := old.is_sample;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_protect_profile_is_sample on public.profiles;
+create trigger trg_protect_profile_is_sample
+before update of is_sample on public.profiles
+for each row
+execute function public.protect_profile_is_sample();
 grant select on public.problems to anon, authenticated;
 grant insert, update, delete on public.problems to authenticated;
 
@@ -225,6 +265,8 @@ set search_path = public
 as $$
 declare
   claimed_handle text;
+  is_sample boolean;
+  bio_text text;
 begin
   -- Do not insert public.profiles (or claim a unique handle) until email is confirmed.
   -- Unconfirmed signups stay in auth.users only, so abandoned IDs are not locked.
@@ -240,37 +282,49 @@ begin
     claimed_handle := null;
   end if;
 
+  is_sample := lower(coalesce(new.raw_app_meta_data ->> 'qraft_sample', '')) in ('true', 't', '1');
+  bio_text := coalesce(new.raw_user_meta_data ->> 'bio', '');
+
   begin
-    insert into public.profiles (id, name, handle)
+    insert into public.profiles (id, name, handle, bio, is_sample)
     values (
       new.id,
       coalesce(new.raw_user_meta_data ->> 'name', ''),
-      claimed_handle
+      claimed_handle,
+      bio_text,
+      is_sample
     )
     on conflict (id) do update
       set name = case
         when public.profiles.name = '' then excluded.name
         else public.profiles.name
       end,
-      handle = coalesce(public.profiles.handle, excluded.handle);
+      handle = coalesce(public.profiles.handle, excluded.handle),
+      bio = case
+        when public.profiles.bio = '' then excluded.bio
+        else public.profiles.bio
+      end,
+      is_sample = public.profiles.is_sample or excluded.is_sample;
   exception
     when unique_violation then
-      insert into public.profiles (id, name, handle)
-      values (new.id, coalesce(new.raw_user_meta_data ->> 'name', ''), null)
+      insert into public.profiles (id, name, handle, bio, is_sample)
+      values (new.id, coalesce(new.raw_user_meta_data ->> 'name', ''), null, bio_text, is_sample)
       on conflict (id) do nothing;
   end;
 
-  insert into public.notifications (user_id, title, message)
-  select
-    new.id,
-    '🎉 Qraftへようこそ！',
-    E'Qraft（クラフト）をご利用いただきありがとうございます！\nみんなで問題を出し合ったり、手書きや数式エディタで解法をシェアして楽しんでくださいね。\n\n【iPhone / iPad（iOS）をご利用の方へ】\n現在、開発者の環境都合によりネイティブアプリ版はAndroid限定公開となっています。\nApple端末（iOS）をご利用の方は、Webブラウザ（SafariやChromeなど）から快適にご利用いただけます！'
-  where not exists (
-    select 1
-    from public.notifications n
-    where n.user_id = new.id
-      and n.title = '🎉 Qraftへようこそ！'
-  );
+  if not is_sample then
+    insert into public.notifications (user_id, title, message)
+    select
+      new.id,
+      '🎉 Qraftへようこそ！',
+      E'Qraft（クラフト）をご利用いただきありがとうございます！\nみんなで問題を出し合ったり、手書きや数式エディタで解法をシェアして楽しんでくださいね。\n\n【iPhone / iPad（iOS）をご利用の方へ】\n現在、開発者の環境都合によりネイティブアプリ版はAndroid限定公開となっています。\nApple端末（iOS）をご利用の方は、Webブラウザ（SafariやChromeなど）から快適にご利用いただけます！'
+    where not exists (
+      select 1
+      from public.notifications n
+      where n.user_id = new.id
+        and n.title = '🎉 Qraftへようこそ！'
+    );
+  end if;
 
   return new;
 end;
@@ -654,12 +708,15 @@ as $$
     select p.author_id, coalesce(sum(rx.n), 0)::int as n
     from rx
     join public.problems p on p.id = rx.problem_id
+    join public.profiles pr on pr.id = p.author_id
+    where not coalesce(pr.is_sample, false)
     group by p.author_id
   ),
   qrafter as (
     select pr.id, pr.name, pr.handle, ba.n as weekly_reactions
     from by_author ba
     join public.profiles pr on pr.id = ba.author_id
+    where not coalesce(pr.is_sample, false)
     order by ba.n desc
     limit 1
   ),
@@ -813,3 +870,197 @@ create table if not exists public.learning_activity (
   created_at timestamptz not null default now()
 );
 
+-- Launch window + Early Access membership. Public release is timestamp-driven (JST).
+
+create table if not exists public.release_schedule (
+  id integer primary key check (id = 1),
+  early_access_start timestamptz not null,
+  public_release_at timestamptz not null,
+  early_access_cap integer not null default 30 check (early_access_cap > 0)
+);
+
+insert into public.release_schedule (id, early_access_start, public_release_at, early_access_cap)
+values (1, '2026-09-12 00:00:00+09', '2026-09-19 00:00:00+09', 30)
+on conflict (id) do nothing;
+
+alter table public.release_schedule enable row level security;
+revoke all on public.release_schedule from public, anon, authenticated;
+grant select on public.release_schedule to anon, authenticated;
+
+drop policy if exists "release_schedule is readable" on public.release_schedule;
+create policy "release_schedule is readable"
+  on public.release_schedule for select
+  to anon, authenticated
+  using (true);
+
+create table if not exists public.early_access_invite_codes (
+  code text primary key,
+  note text,
+  disabled boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.early_access_invite_codes enable row level security;
+revoke all on public.early_access_invite_codes from public, anon, authenticated;
+
+create table if not exists public.early_access_members (
+  user_id uuid primary key references public.profiles (id) on delete cascade,
+  invite_code text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists early_access_members_created_idx
+  on public.early_access_members (created_at);
+
+alter table public.early_access_members enable row level security;
+revoke all on public.early_access_members from public, anon;
+grant select on public.early_access_members to authenticated;
+
+drop policy if exists "members can read own early access row" on public.early_access_members;
+create policy "members can read own early access row"
+  on public.early_access_members for select
+  to authenticated
+  using (user_id = (select auth.uid()));
+
+create or replace function public.release_phase()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when now() < s.early_access_start then 'prelaunch'
+    when now() < s.public_release_at then 'early'
+    else 'public'
+  end
+  from (
+    select
+      coalesce(
+        (select early_access_start from public.release_schedule where id = 1),
+        timestamptz '2026-09-12 00:00:00+09'
+      ) as early_access_start,
+      coalesce(
+        (select public_release_at from public.release_schedule where id = 1),
+        timestamptz '2026-09-19 00:00:00+09'
+      ) as public_release_at
+  ) s;
+$$;
+
+revoke all on function public.release_phase() from public;
+grant execute on function public.release_phase() to anon, authenticated;
+
+create or replace function public.app_is_public_release()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.release_phase() = 'public';
+$$;
+
+revoke all on function public.app_is_public_release() from public;
+grant execute on function public.app_is_public_release() to anon, authenticated;
+
+create or replace function public.can_use_app()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.app_is_public_release()
+    or public.is_admin()
+    or exists (
+      select 1
+      from public.early_access_members m
+      where m.user_id = (select auth.uid())
+    );
+$$;
+
+revoke all on function public.can_use_app() from public;
+grant execute on function public.can_use_app() to anon, authenticated;
+
+create or replace function public.try_enroll_early_access(p_user_id uuid, p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized text;
+  cap integer;
+  n integer;
+  valid boolean;
+begin
+  if public.app_is_public_release() then
+    return jsonb_build_object('ok', true, 'reason', 'public');
+  end if;
+  if public.release_phase() <> 'early' then
+    return jsonb_build_object('ok', false, 'reason', 'prelaunch');
+  end if;
+  if exists (select 1 from public.early_access_members where user_id = p_user_id) then
+    return jsonb_build_object('ok', true, 'reason', 'already');
+  end if;
+
+  normalized := upper(btrim(coalesce(p_code, '')));
+  perform pg_advisory_xact_lock(87236401);
+
+  select exists (
+    select 1
+    from public.early_access_invite_codes c
+    where c.code = normalized and not c.disabled
+  ) into valid;
+  if not valid then
+    return jsonb_build_object('ok', false, 'reason', 'invalid');
+  end if;
+
+  select early_access_cap into cap from public.release_schedule where id = 1;
+  cap := coalesce(cap, 30);
+  select count(*)::int into n from public.early_access_members;
+  if n >= cap then
+    return jsonb_build_object('ok', false, 'reason', 'full');
+  end if;
+
+  insert into public.early_access_members (user_id, invite_code)
+  values (p_user_id, normalized);
+  return jsonb_build_object('ok', true, 'reason', 'enrolled');
+end;
+$$;
+
+revoke all on function public.try_enroll_early_access(uuid, text) from public, anon, authenticated;
+grant execute on function public.try_enroll_early_access(uuid, text) to service_role;
+
+drop policy if exists "users can insert own problems" on public.problems;
+create policy "users can insert own problems"
+  on public.problems for insert
+  to authenticated
+  with check (author_id = (select auth.uid()) and public.can_use_app());
+
+drop policy if exists "users can update own problems" on public.problems;
+create policy "users can update own problems"
+  on public.problems for update
+  to authenticated
+  using (author_id = (select auth.uid()) or public.is_admin())
+  with check ((author_id = (select auth.uid()) or public.is_admin()) and (public.is_admin() or public.can_use_app()));
+
+drop policy if exists "users can delete own problems" on public.problems;
+create policy "users can delete own problems"
+  on public.problems for delete
+  to authenticated
+  using ((author_id = (select auth.uid()) or public.is_admin()) and (public.is_admin() or public.can_use_app()));
+
+drop policy if exists "users can insert own comments" on public.comments;
+create policy "users can insert own comments"
+  on public.comments for insert
+  to authenticated
+  with check (author_id = (select auth.uid()) and public.can_use_app());
+
+drop policy if exists "users can update own profile" on public.profiles;
+create policy "users can update own profile"
+  on public.profiles for update
+  to authenticated
+  using (id = (select auth.uid()))
+  with check (id = (select auth.uid()) and (public.can_use_app() or public.app_is_public_release()));

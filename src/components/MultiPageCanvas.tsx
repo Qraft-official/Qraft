@@ -17,11 +17,10 @@ import {
   type ResizeCorner,
 } from "@/lib/draw-canvas";
 import type { CanvasPage, CanvasText, Stroke } from "@/lib/types";
-import { motion } from "framer-motion";
-import { Eraser, Plus, Redo2, RotateCcw, Trash2, Type, Undo2, Minimize2 } from "lucide-react";
 import type { TextSizeId } from "@/lib/text-size";
+import { motion } from "framer-motion";
+import { Eraser, PenLine, Plus, Redo2, RotateCcw, Trash2, Type, Undo2, Minimize2 } from "lucide-react";
 import { NotebookExpandButton } from "./NotebookExpandControls";
-import { TextSizeBar } from "./TextSizeBar";
 import {
   forwardRef,
   useCallback,
@@ -37,6 +36,13 @@ import {
 function uid() {
   return `p-${Math.random().toString(36).slice(2, 9)}`;
 }
+
+const WIDTH_PRESETS = [
+  { id: "s", value: 2, label: "細" },
+  { id: "m", value: 3.2, label: "中" },
+  { id: "l", value: 5, label: "太" },
+  { id: "xl", value: 7.5, label: "極太" },
+];
 
 function applyResize(
   r: {
@@ -101,7 +107,6 @@ export const MultiPageCanvas = forwardRef<
     premium = false,
     flush = false,
     textSize = "md",
-    onTextSizeChange,
     onToggleExpand,
     expanded = false,
   },
@@ -121,6 +126,10 @@ export const MultiPageCanvas = forwardRef<
   const [eraser, setEraser] = useState(false);
   const [textTool, setTextTool] = useState(false);
   const [width, setWidth] = useState(3.2);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [widthOpen, setWidthOpen] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const toolBarRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -135,6 +144,18 @@ export const MultiPageCanvas = forwardRef<
   editSizeRef.current = editSize;
   const editingIdRef = useRef(editingId);
   editingIdRef.current = editingId;
+
+  useEffect(() => {
+    if (!paletteOpen && !widthOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!toolBarRef.current?.contains(e.target as Node)) {
+        setPaletteOpen(false);
+        setWidthOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [paletteOpen, widthOpen]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resizeRef = useRef<{
     corner: ResizeCorner;
@@ -466,6 +487,8 @@ export const MultiPageCanvas = forwardRef<
     };
     drawing.current = stroke;
     lastKind.current = "stroke";
+    redoPageRef.current = null;
+    setCanRedo(false);
     patchPage((p) => ({ ...p, strokes: [...p.strokes, stroke] }), pageIndex);
     trackPointer(
       e.pointerId,
@@ -482,7 +505,10 @@ export const MultiPageCanvas = forwardRef<
 
   const undo = () => {
     const page = pagesRef.current[indexRef.current];
-    if (page) redoPageRef.current = page;
+    if (page) {
+      redoPageRef.current = page;
+      setCanRedo(true);
+    }
     patchPage((p) => {
       if (lastKind.current === "text" && pageTexts(p).length) {
         return { ...p, texts: pageTexts(p).slice(0, -1) };
@@ -495,6 +521,7 @@ export const MultiPageCanvas = forwardRef<
     const snap = redoPageRef.current;
     if (!snap) return;
     redoPageRef.current = null;
+    setCanRedo(false);
     patchPage(() => snap);
   };
 
@@ -706,6 +733,10 @@ export const MultiPageCanvas = forwardRef<
     );
   };
 
+  const canUndo =
+    (pages[index]?.strokes.length ?? 0) > 0 || (pages[index]?.texts?.length ?? 0) > 0;
+  const penOn = !eraser && !textTool;
+
   return (
     <div className={`flex h-full min-h-0 flex-col ${className}`}>
       <div className="flex items-center gap-1 overflow-x-auto px-2 py-1 sm:gap-1.5 sm:px-3">
@@ -739,20 +770,6 @@ export const MultiPageCanvas = forwardRef<
         >
           <Plus size={14} /> ページ追加
         </motion.button>
-        <TextSizeBar
-          compact
-          active={textSize}
-          onPick={(size) => {
-            onTextSizeChange?.(size);
-            if (!selectedId) return;
-            patchPage((p) => ({
-              ...p,
-              texts: pageTexts(p).map((t) =>
-                t.id === selectedId ? { ...t, fontSize: CANVAS_TEXT_PX[size] } : t,
-              ),
-            }));
-          }}
-        />
         {onToggleExpand &&
           (expanded ? (
             <button
@@ -780,6 +797,14 @@ export const MultiPageCanvas = forwardRef<
         >
           <Trash2 size={16} />
         </button>
+        <button
+          type="button"
+          onClick={clear}
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10"
+          aria-label="ページをクリア"
+        >
+          <RotateCcw size={16} />
+        </button>
         <span className="ml-auto shrink-0 text-[11px] text-muted">{pages.length}ページ</span>
       </div>
 
@@ -791,100 +816,165 @@ export const MultiPageCanvas = forwardRef<
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1.5 sm:gap-2 sm:px-3 sm:py-3">
+      <div
+        ref={toolBarRef}
+        className="relative flex shrink-0 items-center justify-between gap-0.5 px-1 py-1 sm:px-2"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setEraser(false);
+            setTextTool(false);
+            setPaletteOpen(false);
+            setWidthOpen(false);
+          }}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+            penOn ? "bg-aha text-black" : "bg-white/10 text-muted"
+          }`}
+          aria-label="ペン"
+          aria-pressed={penOn}
+        >
+          <PenLine size={18} />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setEraser(true);
+            setTextTool(false);
+            setPaletteOpen(false);
+            setWidthOpen(false);
+          }}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+            eraser ? "bg-white text-black" : "bg-white/10 text-muted"
+          }`}
+          aria-label="消しゴム"
+          aria-pressed={eraser}
+        >
+          <Eraser size={18} />
+        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              setPaletteOpen((v) => !v);
+              setWidthOpen(false);
+              setEraser(false);
+              setTextTool(false);
+            }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10"
+            aria-label="色"
+            aria-expanded={paletteOpen}
+          >
+            <span
+              className="h-6 w-6 rounded-full border-2 border-white/80"
+              style={{ background: color, boxShadow: `0 0 10px ${color}` }}
+            />
+          </button>
+          {paletteOpen && (
+            <div className="absolute bottom-[calc(100%+6px)] left-1/2 z-20 -translate-x-1/2 rounded-2xl border border-gray-700 bg-[#15202b] p-2 shadow-xl">
+              <div className="flex gap-1.5">
+                {pens.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setColor(c.value);
+                      setEraser(false);
+                      setTextTool(false);
+                      setPaletteOpen(false);
+                    }}
+                    className="flex h-11 w-11 items-center justify-center"
+                    aria-label={c.label}
+                    title={c.label}
+                  >
+                    <span
+                      className="h-7 w-7 rounded-full border-2"
+                      style={{
+                        background: c.value,
+                        borderColor: color === c.value ? "#fff" : "transparent",
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              setWidthOpen((v) => !v);
+              setPaletteOpen(false);
+            }}
+            className="flex h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-white/10 text-[10px] font-bold text-muted"
+            aria-label="太さ"
+            aria-expanded={widthOpen}
+          >
+            <span
+              className="block rounded-full bg-white"
+              style={{ width: 18, height: Math.min(10, width * 1.1) }}
+            />
+          </button>
+          {widthOpen && (
+            <div className="absolute bottom-[calc(100%+6px)] left-1/2 z-20 -translate-x-1/2 rounded-2xl border border-gray-700 bg-[#15202b] p-2 shadow-xl">
+              <div className="flex gap-1">
+                {WIDTH_PRESETS.map((w) => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    onClick={() => {
+                      setWidth(w.value);
+                      setWidthOpen(false);
+                    }}
+                    className={`flex h-11 min-w-11 flex-col items-center justify-center rounded-xl px-2 text-[10px] font-bold ${
+                      width === w.value ? "bg-aha text-black" : "text-muted"
+                    }`}
+                  >
+                    <span
+                      className="mb-0.5 block rounded-full bg-current"
+                      style={{ width: 16, height: w.value }}
+                    />
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => {
             setTextTool(true);
             setEraser(false);
+            setPaletteOpen(false);
+            setWidthOpen(false);
           }}
-          className={`tap-target flex min-h-11 items-center gap-1 rounded-full px-3 text-xs font-bold ${
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
             textTool ? "bg-aha text-black" : "bg-white/10 text-muted"
           }`}
-          aria-label="テキスト追加"
+          aria-label="テキスト"
           aria-pressed={textTool}
         >
-          <Type size={14} /> テキスト
+          <Type size={18} />
         </button>
-        {pens.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => {
-              setColor(c.value);
-              setEraser(false);
-              setTextTool(false);
-            }}
-            className="tap-target flex shrink-0 items-center justify-center"
-            aria-label={c.label}
-            title={c.label}
-          >
-            <span
-              className="h-7 w-7 rounded-full border-2"
-              style={{
-                background: c.value,
-                borderColor: !eraser && color === c.value ? "#fff" : "transparent",
-                boxShadow: !eraser && color === c.value ? `0 0 12px ${c.value}` : "none",
-              }}
-            />
-          </button>
-        ))}
-        <button
-          onClick={() => {
-            setEraser(true);
-            setTextTool(false);
-          }}
-          className={`tap-target flex items-center justify-center rounded-full ${eraser ? "bg-white text-black" : "bg-white/10 text-muted"}`}
-          aria-label="消しゴム"
-          title="消しゴム"
-          aria-pressed={eraser}
-        >
-          <Eraser size={16} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setTextTool(false)}
-          className={`min-h-11 rounded-full px-3 text-xs font-bold ${
-            !textTool && !eraser ? "bg-white/20 text-white" : "text-muted"
-          }`}
-          aria-pressed={!textTool && !eraser}
-        >
-          ペン
-        </button>
-        <input
-          type="range"
-          min={1.5}
-          max={10}
-          step={0.5}
-          value={width}
-          onChange={(e) => setWidth(Number(e.target.value))}
-          className="w-20 accent-neon"
-        />
         <button
           type="button"
           onClick={undo}
-          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
+          disabled={!canUndo}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-muted disabled:opacity-30"
           aria-label="元に戻す"
-          title="元に戻す"
         >
-          <Undo2 size={16} />
+          <Undo2 size={18} />
         </button>
         <button
           type="button"
           onClick={redo}
-          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
+          disabled={!canRedo}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-muted disabled:opacity-30"
           aria-label="やり直す"
-          title="やり直す"
         >
-          <Redo2 size={16} />
-        </button>
-        <button
-          type="button"
-          onClick={clear}
-          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
-          aria-label="ページをクリア"
-        >
-          <RotateCcw size={16} />
+          <Redo2 size={18} />
         </button>
       </div>
     </div>

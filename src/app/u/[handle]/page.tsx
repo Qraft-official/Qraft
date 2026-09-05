@@ -4,6 +4,7 @@ import { PostCard } from "@/components/PostCard";
 import { ProfileRadar } from "@/components/ProfileRadar";
 import { UserAvatar, UserBanner } from "@/components/UserAvatar";
 import { UserListModal } from "@/components/UserListModal";
+import { SampleAccountHint } from "@/components/SampleAccountHint";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { PREMIUM_TITLES, SUBJECTS, TIER_NAMES } from "@/lib/constants";
 import { INITIAL_FOLLOWS } from "@/lib/mock-data";
@@ -79,7 +80,8 @@ export default function UserPage() {
               <VerifiedBadge show={authorVerified(user.id)} tone={verifiedBadgeTone(user)} />
             </h1>
             <p className="text-sm text-muted">@{user.handle}</p>
-            <p className="mt-1 text-xs text-aha">{user.school}</p>
+            <SampleAccountHint show={user.isSample} />
+            {user.school ? <p className="mt-1 text-xs text-aha">{user.school}</p> : null}
           </div>
           {user.id !== me.id && (
             <div className="flex items-center gap-2">

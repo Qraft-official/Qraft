@@ -34,6 +34,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "ログインしてください。" }, { status: 401 });
   }
+  const { requireAppAccess } = await import("@/lib/release-server");
+  const gate = await requireAppAccess(request);
+  if (gate.error) return NextResponse.json({ error: gate.error }, { status: 403 });
   const result = await recordXCampaignTap(user.id, type, deviceId);
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 400 });

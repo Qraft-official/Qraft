@@ -134,6 +134,8 @@ async function awardHalfPriceCoupon(userId: string) {
 export async function evaluateHalfPriceCampaign(userId: string) {
   const admin = adminSupabase();
   if (!admin) return;
+  const { data: sampleRow } = await admin.from("profiles").select("is_sample").eq("id", userId).maybeSingle();
+  if (sampleRow && (sampleRow as { is_sample?: boolean }).is_sample) return;
   const fields = await loadCampaignFields(userId);
   if (fields.inviteSuccessCount < CAMPAIGN_INVITE_TARGET) return;
   if (!fields.xFollowTapped || !fields.xPostTapped) return;
@@ -171,6 +173,10 @@ export async function recordInviteOpen(input: {
     .ilike("referral_code", code)
     .maybeSingle();
   if (!referrer?.id) return { error: "招待リンクが無効です。" };
+  const { data: sampleRow } = await admin.from("profiles").select("is_sample").eq("id", referrer.id).maybeSingle();
+  if (sampleRow && (sampleRow as { is_sample?: boolean }).is_sample) {
+    return { error: "招待リンクが無効です。" };
+  }
   if (input.userId && referrer.id === input.userId) return {};
 
   const { error } = await admin.from("campaign_events").insert({

@@ -8,6 +8,7 @@ import {
   preHtml,
   sendDeveloperMail,
 } from "@/lib/mail";
+import { requireAppAccess } from "@/lib/release-server";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "ログインしてください" }, { status: 401 });
   }
+  const gate = await requireAppAccess(request);
+  if (gate.error) return NextResponse.json({ error: gate.error }, { status: 403 });
 
   let body: Record<string, unknown>;
   try {

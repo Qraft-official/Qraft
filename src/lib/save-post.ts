@@ -3,7 +3,7 @@ import { isProblemUuid } from "./difficulty";
 import { asSaveCategory, type SaveCategory } from "./learn";
 import type { Post } from "./types";
 
-/** Problem-like posts the user can bookmark (own or others). */
+/** Problem-like posts the user can bookmark, including their own. */
 export function canSavePost(post: Pick<Post, "kind">) {
   return post.kind === "problem" || post.kind === "sprint";
 }

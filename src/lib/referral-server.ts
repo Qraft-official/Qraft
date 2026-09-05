@@ -69,9 +69,16 @@ function asClaimView(row: ReferralClaimRow): ReferralClaimView {
   };
 }
 
+async function profileIsSample(admin: NonNullable<ReturnType<typeof adminSupabase>>, userId: string) {
+  const { data, error } = await admin.from("profiles").select("is_sample").eq("id", userId).maybeSingle();
+  if (error) return false;
+  return Boolean((data as { is_sample?: boolean } | null)?.is_sample);
+}
+
 export async function ensureReferralCode(userId: string) {
   const admin = adminSupabase();
   if (!admin) return "";
+  if (await profileIsSample(admin, userId)) return "";
   const { data } = await admin.from("profiles").select("referral_code").eq("id", userId).maybeSingle();
   if (data?.referral_code) return String(data.referral_code);
   const { data: rpc } = await admin.rpc("random_referral_code");
@@ -222,6 +229,9 @@ export async function applyReferralCode(input: {
     .maybeSingle();
   if (!referrer?.id) return { error: "紹介コードが見つかりません。" };
   if (referrer.id === input.refereeId) return { error: "自分の紹介コードは使えません。" };
+  if ((await profileIsSample(admin, referrer.id)) || (await profileIsSample(admin, input.refereeId))) {
+    return { error: "この紹介コードは利用できません。" };
+  }
 
   const now = new Date();
   const trialUntil = new Date(now.getTime() + REFERRAL_TRIAL_HOURS * 3600000).toISOString();
@@ -273,6 +283,7 @@ export async function applyReferralCode(input: {
 async function awardReferrerDiscount(referrerId: string, refereeId: string) {
   const admin = adminSupabase();
   if (!admin) return;
+  if (await profileIsSample(admin, referrerId) || await profileIsSample(admin, refereeId)) return;
   const secret = process.env.STRIPE_SECRET_KEY;
   if (!secret) {
     await admin.from("profiles").update({ stripe_referral_coupon_id: "pending-local" }).eq("id", referrerId);

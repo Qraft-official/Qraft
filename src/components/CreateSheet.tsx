@@ -755,7 +755,9 @@ export function CreateSheet() {
             onClick={(e) => e.stopPropagation()}
             className={`composer-dialog relative mx-auto w-full max-w-lg rounded-2xl border border-gray-800 bg-black md:max-w-[640px] ${
               editorExpanded ? "composer-dialog-expanded" : ""
-            } ${openProblem && problemStep === 1 ? "composer-wizard-s1" : ""}`}
+            } ${openProblem && problemStep === 1 ? "composer-wizard-s1" : ""} ${
+              openProblem && problemStep === 1 && inputMode === "hand" ? "composer-hand-s1" : ""
+            }`}
           >
             {openProblem && (
               <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
@@ -788,11 +790,12 @@ export function CreateSheet() {
                   className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
+                  {problemStep === 1 && modeTabs}
                   {inputMode === "hand" && !editorExpanded && (
                     <div
                       className={
                         problemStep === 1
-                          ? "flex min-w-0 w-full max-w-full flex-col"
+                          ? "flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col"
                           : "pointer-events-none h-0 overflow-hidden opacity-0"
                       }
                       aria-hidden={problemStep !== 1}
@@ -812,7 +815,6 @@ export function CreateSheet() {
                   )}
                   {problemStep === 1 && (
                     <>
-                      {modeTabs}
                       {inputMode === "typed" &&
                         !editorExpanded && (
                           <TypedNotebook
@@ -841,7 +843,16 @@ export function CreateSheet() {
                             onTextSizeChange={setNotebookTextSize}
                           />
                         )}
-                      {step1Tools}
+                      {inputMode === "hand" ? (
+                        <details className="mx-3 mb-1 rounded-xl border border-gray-800 md:mx-4">
+                          <summary className="flex min-h-11 cursor-pointer list-none items-center px-3 text-xs font-bold text-muted">
+                            AI問題メーカー・画像添付
+                          </summary>
+                          {step1Tools}
+                        </details>
+                      ) : (
+                        step1Tools
+                      )}
                     </>
                   )}
                   {problemStep === 2 && (

@@ -2,6 +2,7 @@ import { adminSupabase } from "@/lib/admin-supabase";
 import { bearerTokenFromRequest, userFromRequest } from "@/lib/api-auth";
 import { PREMIUM_PRICE_JPY, PREMIUM_THANKS_MESSAGE, PREMIUM_THANKS_TITLE } from "@/lib/constants";
 import { isComplimentaryPremiumAccount } from "@/lib/premium";
+import { requireAppAccess } from "@/lib/release-server";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -33,6 +34,10 @@ export async function POST(request: Request) {
 
   try {
     const user = await userFromRequest(request);
+    if (user) {
+      const gate = await requireAppAccess(request);
+      if (gate.error) return NextResponse.json({ error: gate.error }, { status: 403 });
+    }
     let handle =
       typeof user?.user_metadata?.handle === "string" ? user.user_metadata.handle : undefined;
     let name =

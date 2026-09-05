@@ -8,6 +8,7 @@ import {
 import { DEVICE_ID_COOKIE, REFERRAL_APPLIED_COOKIE } from "@/lib/device-id";
 import { clientIpFromRequest, hashNetworkKey, referralFraudSecret } from "@/lib/referral-fraud";
 import { applyReferralCode, getReferralMe, getReferralMeWithToken } from "@/lib/referral-server";
+import { requireAppAccess } from "@/lib/release-server";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -15,6 +16,8 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const user = await userFromRequest(request);
   if (!user) return NextResponse.json({ error: "ログインしてください。" }, { status: 401 });
+  const gate = await requireAppAccess(request);
+  if (gate.error) return NextResponse.json({ error: gate.error }, { status: 403 });
   try {
     const token = bearerTokenFromRequest(request);
     const me = (await getReferralMeWithToken(user.id, token)) ?? (await getReferralMe(user.id));
@@ -32,6 +35,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await userFromRequest(request);
   if (!user) return NextResponse.json({ error: "ログインしてください。" }, { status: 401 });
+  const gate = await requireAppAccess(request);
+  if (gate.error) return NextResponse.json({ error: gate.error }, { status: 403 });
   const body = (await request.json().catch(() => ({}))) as {
     code?: string;
     deviceId?: string;

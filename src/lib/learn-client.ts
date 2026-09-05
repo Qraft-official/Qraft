@@ -115,6 +115,9 @@ export async function toggleSavedProblem(
     if (raw.error === "not_authenticated" || raw.error === "invalid_problem") {
       return { error: raw.error || "保存に失敗しました" };
     }
+    if (raw.error === "own_problem" || raw.error === "is_author" || raw.error === "cannot_save_own") {
+      return fallbackToggleSaved(problemId, wantSaved, category);
+    }
     return fallbackToggleSaved(problemId, wantSaved, category);
   }
   return {

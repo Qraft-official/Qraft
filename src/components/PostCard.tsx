@@ -5,8 +5,8 @@ import { PREMIUM_PRICE_JPY, PREMIUM_REACTIONS, SUBJECT_LABEL, TIER_NAMES } from 
 import { difficultyLabel } from "@/lib/difficulty";
 import { isActivePromotion } from "@/lib/recommend";
 import { referralFetch } from "@/lib/referral-client";
-import { sharePost } from "@/lib/share";
-import { renderShareCard, shareCardImage } from "@/lib/share-card";
+import { shareCardImage, problemShareUrl } from "@/lib/share";
+import { renderShareCard } from "@/lib/share-card";
 import { isDisplayImageSrc } from "@/lib/problem-images";
 import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
@@ -37,6 +37,7 @@ import { UserAvatar } from "./UserAvatar";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { SaveProblemButton } from "./SaveProblemButton";
 import { canSavePost, saveTargetId } from "@/lib/save-post";
+import { ShareFallbackSheet } from "./ShareFallbackSheet";
 import { SpoilerReveal } from "./SpoilerReveal";
 import { FeltDifficulty } from "./FeltDifficulty";
 import { AttemptTime } from "./RevengeBanner";
@@ -123,6 +124,13 @@ export function PostCard({
   const [threadOpen, setThreadOpen] = useState(false);
   const [repostOpen, setRepostOpen] = useState(false);
   const [shareToast, setShareToast] = useState("");
+  const [shareSheet, setShareSheet] = useState<{
+    open: boolean;
+    url: string;
+    imageFailed?: boolean;
+    blob?: Blob | null;
+  }>({ open: false, url: "" });
+  const [shareBusy, setShareBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [promoOpen, setPromoOpen] = useState(false);
@@ -147,6 +155,40 @@ export function PostCard({
   const showCaption = !typed && Boolean(meta.body.trim());
   const pulseLocked = post.kind === "sprint" && !sprintUnlocked && !isMe;
   const lastAttempt = lastAttempts[post.id];
+  const inviteCode = referralMe?.code;
+
+  const runShare = async () => {
+    if (shareBusy) return;
+    setShareBusy(true);
+    setShareToast("");
+    try {
+      const blob = await renderShareCard(post, author.handle, inviteCode);
+      if (!blob) {
+        setShareToast("共有画像を作成できませんでした");
+        setShareSheet({
+          open: true,
+          url: problemShareUrl(post.id, inviteCode),
+          imageFailed: true,
+        });
+        return;
+      }
+      const res = await shareCardImage(blob, post.id, inviteCode);
+      if (res.aborted) return;
+      if (res.ok) {
+        setShareToast("共有しました");
+        window.setTimeout(() => setShareToast(""), 2200);
+        return;
+      }
+      setShareSheet({
+        open: true,
+        url: res.url ?? problemShareUrl(post.id, inviteCode),
+        blob,
+        imageFailed: false,
+      });
+    } finally {
+      setShareBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -310,6 +352,12 @@ export function PostCard({
                               <Pencil size={16} /> 編集
                             </button>
                           )}
+                          {canSavePost(post) && (
+                            <div className="flex items-center gap-2 px-3 py-1">
+                              <span className="text-sm">保存</span>
+                              <SaveProblemButton problemId={saveTargetId(post) ?? post.id} />
+                            </div>
+                          )}
                           {post.kind === "problem" && (
                             <button
                               type="button"
@@ -411,21 +459,14 @@ export function PostCard({
                       {(post.kind === "problem" || post.kind === "sprint") && (
                         <button
                           type="button"
+                          disabled={shareBusy}
                           onClick={() => {
                             setMoreOpen(false);
-                            void (async () => {
-                              const blob = await renderShareCard(post, author.handle);
-                              if (!blob) return;
-                              const res = await shareCardImage(blob, post.id);
-                              if (res.ok && res.method === "download") {
-                                setShareToast("画像を保存し、リンクをコピーしました");
-                                window.setTimeout(() => setShareToast(""), 2200);
-                              }
-                            })();
+                            void runShare();
                           }}
-                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5 disabled:opacity-50"
                         >
-                          <Share2 size={16} /> 共有画像
+                          <Share2 size={16} /> {shareBusy ? "作成中…" : "共有"}
                         </button>
                       )}
                     </motion.div>
@@ -644,22 +685,18 @@ export function PostCard({
             )}
 
             {canSavePost(post) && (
-              <div className="flex min-w-0 flex-1 justify-center">
+              <div className="flex min-w-11 shrink-0 flex-1 justify-center">
                 <SaveProblemButton problemId={saveTargetId(post) ?? post.id} />
               </div>
             )}
 
             <button
               type="button"
+              disabled={shareBusy}
               onClick={() => {
-                void sharePost({ id: post.id, inviteCode: referralMe?.code }).then((res) => {
-                  if (res.ok && res.method === "copy") {
-                    setShareToast("リンクをコピーしました！");
-                    window.setTimeout(() => setShareToast(""), 2200);
-                  }
-                });
+                void runShare();
               }}
-              className="flex min-h-11 min-w-0 flex-1 items-center justify-center px-0.5 text-[11px] hover:text-aha"
+              className="flex min-h-11 min-w-11 shrink-0 flex-1 items-center justify-center px-0.5 text-[11px] hover:text-aha disabled:opacity-50"
               aria-label="共有"
             >
               <Share2 size={16} />
@@ -697,6 +734,30 @@ export function PostCard({
       </div>
       <EditProblemModal post={post} open={editOpen} onClose={() => setEditOpen(false)} />
       <SeriesAssignSheet post={post} open={seriesOpen} onClose={() => setSeriesOpen(false)} />
+      <ShareFallbackSheet
+        open={shareSheet.open}
+        url={shareSheet.url}
+        inviteCode={inviteCode}
+        imageFailed={shareSheet.imageFailed}
+        onClose={() => setShareSheet({ open: false, url: "" })}
+        onRetry={() => {
+          setShareSheet({ open: false, url: "" });
+          void runShare();
+        }}
+        onShareImage={
+          shareSheet.blob
+            ? () => {
+                void shareCardImage(shareSheet.blob as Blob, post.id, inviteCode).then((res) => {
+                  if (res.ok || res.aborted) setShareSheet({ open: false, url: "" });
+                  if (res.ok) {
+                    setShareToast("共有しました");
+                    window.setTimeout(() => setShareToast(""), 2200);
+                  }
+                });
+              }
+            : undefined
+        }
+      />
       {promoOpen && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"

@@ -2,6 +2,7 @@
 
 import { AuthScreen } from "@/components/AuthScreen";
 import { BottomNav } from "@/components/BottomNav";
+import { EarlyAccessGate } from "@/components/EarlyAccessGate";
 import { Fab } from "@/components/Fab";
 import { InviteCapture } from "@/components/InviteCapture";
 import { Onboarding } from "@/components/Onboarding";
@@ -69,6 +70,8 @@ export function AppShell({
     onboarded,
     profileHydrated,
     authenticated,
+    access,
+    accessReady,
     openComposer,
     composer,
     accentColor,
@@ -89,6 +92,7 @@ export function AppShell({
   const isAuthCallback = path.startsWith("/auth/callback");
   const isLegal = path === "/terms" || path === "/privacy";
   const isInvite = path.startsWith("/i/");
+  const isEarlyAccess = path.startsWith("/early-access");
   const crawlerSafe = adsensePreview || inAdFrame;
 
   useEffect(() => {
@@ -126,7 +130,7 @@ export function AppShell({
     </Suspense>
   );
 
-  if (isAuthCallback || isLegal || isInvite) {
+  if (isAuthCallback || isLegal || isInvite || isEarlyAccess) {
     return (
       <>
         {capture}
@@ -144,13 +148,33 @@ export function AppShell({
     );
   }
 
-  if (!mounted || !ready || (authenticated && !profileHydrated)) {
+  if (!mounted || !ready || !accessReady || (authenticated && !profileHydrated)) {
     return (
       <>
         {capture}
         <div className="mx-auto min-h-dvh w-full max-w-lg bg-black">
           <AppBootSkeleton />
         </div>
+      </>
+    );
+  }
+
+  if (accessReady && !access) {
+    return (
+      <>
+        {capture}
+        <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center px-8 text-sm text-muted">
+          公開状態を確認できません。時間をおいて再度お試しください。
+        </div>
+      </>
+    );
+  }
+
+  if (access && !access.canAccess) {
+    return (
+      <>
+        {capture}
+        <EarlyAccessGate access={access} />
       </>
     );
   }

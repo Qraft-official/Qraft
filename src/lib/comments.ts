@@ -51,16 +51,23 @@ export async function fetchComments(parentSubjectById: Record<string, Subject> =
   const authorIds = [...new Set(rows.map((r) => r.author_id))];
   const profiles: Record<string, User> = {};
   if (authorIds.length) {
-    const { data: profileRows } = await supabase
+    const first = await supabase
       .from("profiles")
-      .select("id, name, handle")
+      .select("id, name, handle, bio, is_sample")
       .in("id", authorIds);
+    const profileRows = first.error
+      ? (
+          await supabase.from("profiles").select("id, name, handle").in("id", authorIds)
+        ).data
+      : first.data;
     for (const p of profileRows ?? []) {
-      const row = p as { id: string; name?: string | null; handle?: string | null };
+      const row = p as { id: string; name?: string | null; handle?: string | null; bio?: string | null; is_sample?: boolean | null };
       profiles[row.id] = fallbackUser(row.id, {
         id: row.id,
         name: row.name ?? "",
         handle: row.handle ?? null,
+        bio: row.bio ?? "",
+        is_sample: !!row.is_sample,
       });
     }
   }

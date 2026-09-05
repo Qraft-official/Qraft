@@ -45,7 +45,6 @@ import {
   MOCK_REPLIES,
   POSTS,
   USER_MAP,
-  USERS,
 } from "./mock-data";
 import {
   fallbackUser,
@@ -111,6 +110,7 @@ import type {
 import { sendPulseProblemMail } from "./dev-mail-client";
 import { HANDWRITING_UPLOAD_ERROR } from "./handwriting-export";
 import { firstDrawingUrl, persistHandwritingPages } from "./problem-images";
+import { fetchAccessStatus, type ClientAccess } from "./release-client";
 import {
   ensureWelcomeNotification,
   fetchNotifications,
@@ -145,6 +145,9 @@ type Store = {
   }) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
   authViaSupabase: boolean;
+  refreshAccess: () => Promise<void>;
+  access: ClientAccess | null;
+  accessReady: boolean;
   me: User;
   users: User[];
   posts: Post[];
@@ -298,6 +301,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [onboarded, setOnboarded] = useState(false);
   const [profileHydrated, setProfileHydrated] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [access, setAccess] = useState<ClientAccess | null>(null);
+  const [accessReady, setAccessReady] = useState(false);
   const [tiers, setTiers] = useState<Tiers>(USER_MAP[ME_ID].tiers);
   const [age, setAge] = useState<number | null>(null);
   const [follows, setFollows] = useState<string[]>(INITIAL_FOLLOWS);
@@ -811,6 +816,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       handle?: string;
     }) => {
       try {
+        const gate = await fetchAccessStatus();
+        if (gate && !gate.signupOpen) {
+          return { error: "先行公開期間は招待コードから参加してください" };
+        }
         const nameErr = displayNameError(input.name ?? "");
         if (nameErr) return { error: nameErr };
         const handle = sanitizeHandleInput(input.handle ?? "");
@@ -939,7 +948,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRevengeDue([]);
     setCalendarDays([]);
     setLearnStreak({ current: 0, longest: 0 });
+    void (async () => {
+      const next = await fetchAccessStatus();
+      setAccess(next);
+      setAccessReady(true);
+    })();
   }, []);
+
+  const refreshAccess = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const next = await fetchAccessStatus(session?.access_token);
+    setAccess(next);
+    setAccessReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    void refreshAccess();
+  }, [ready, authenticated, supabaseUid, refreshAccess]);
 
   const toggleFollow = useCallback((userId: string) => {
     if (userId === me.id) return;
@@ -1771,15 +1799,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     signInWithEmail,
     logout,
     authViaSupabase: !!supabaseUid,
+    refreshAccess,
+    access,
+    accessReady,
     me,
     users: [
       me,
       ...Object.values(remoteUsers).filter((u) => u.id !== me.id),
-      ...USERS.filter((u) => u.id !== ME_ID && u.id !== me.id && !remoteUsers[u.id]).map((u) => ({
-        ...u,
-        verified: userIsVerified(u),
-        isVerified: userIsVerified(u),
-      })),
     ],
     posts,
     loungePosts: LOUNGE_POSTS,

@@ -92,7 +92,7 @@ export function computeWeeklyRankings(
   }
 
   const weeklyQrafters = [...byAuthor.entries()]
-    .filter(([, n]) => n > 0)
+    .filter(([id, n]) => n > 0 && !userOf(id).isSample)
     .sort((a, b) => b[1] - a[1])
     .map(([id, n]) => ({ user: userOf(id), weeklyReactions: Math.round(n) }));
 

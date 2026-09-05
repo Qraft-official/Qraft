@@ -20,7 +20,8 @@ import { useEffect, useState } from "react";
 type Mode = "login" | "signup";
 
 export function AuthScreen() {
-  const { signUpWithEmail, signInWithEmail } = useApp();
+  const { signUpWithEmail, signInWithEmail, access } = useApp();
+  const signupOpen = access?.signupOpen === true;
   const [mode, setMode] = useState<Mode>("login");
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
@@ -54,6 +55,10 @@ export function AuthScreen() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!signupOpen && mode === "signup") setMode("login");
+  }, [signupOpen, mode]);
+
   const onSubmit = async () => {
     setError("");
     setInfo("");
@@ -66,6 +71,10 @@ export function AuthScreen() {
       return;
     }
     if (mode === "signup") {
+      if (!signupOpen) {
+        setError("先行公開期間は招待コードから参加してください");
+        return;
+      }
       const nameErr = displayNameError(name);
       if (nameErr) {
         setError(nameErr);
@@ -268,20 +277,24 @@ export function AuthScreen() {
 
         <p className="mt-6 pb-8 text-center text-sm text-muted">
           {mode === "login" ? (
-            <>
-              初めての方は{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("signup");
-                  setError("");
-                  setInfo("");
-                }}
-                className="font-bold text-sky-400"
-              >
-                アカウント作成
-              </button>
-            </>
+            signupOpen ? (
+              <>
+                初めての方は{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signup");
+                    setError("");
+                    setInfo("");
+                  }}
+                  className="font-bold text-sky-400"
+                >
+                  アカウント作成
+                </button>
+              </>
+            ) : (
+              <>アカウント作成は先行公開の招待コードから行えます。</>
+            )
           ) : (
             <>
               すでにアカウントがある場合は{" "}

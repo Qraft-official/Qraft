@@ -30,6 +30,8 @@ export type User = {
   /** Official / creator verification. Prefer `userIsVerified()`. */
   verified?: boolean;
   isVerified?: boolean;
+  /** Qraft-managed fictional account. Shown on profile, excluded from user rankings. */
+  isSample?: boolean;
 };
 
 export type ProfilePatch = Partial<

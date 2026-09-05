@@ -7,6 +7,7 @@ import { sanitizeHints } from "./learn";
 import { HANDWRITING_UPLOAD_ERROR } from "./handwriting-export";
 import { persistHandwritingPages, firstDrawingUrl } from "./problem-images";
 import { supabase } from "./supabase";
+import { sampleAccent, sampleAvatar, sampleBanner } from "./sample-account";
 import { userIsVerified } from "./verified";
 import type { NotePage, Post, Subject, User } from "./types";
 
@@ -47,6 +48,8 @@ export type ProfileRow = {
   id: string;
   name: string;
   handle: string | null;
+  bio?: string | null;
+  is_sample?: boolean | null;
 };
 
 export type NewProblem = {
@@ -97,18 +100,27 @@ export function fallbackUser(id: string, profile?: ProfileRow | null): User {
     typeof rawHandle === "string" && rawHandle.replace(/^@/, "")
       ? rawHandle.replace(/^@/, "")
       : id.replace(/-/g, "").slice(0, 8);
+  const isSample = !!profile?.is_sample;
   const user: User = {
     ...base,
     id,
     name: typeof profile?.name === "string" && profile.name.trim() ? profile.name.trim() : "Qraft ユーザー",
     handle,
-    bio: "",
+    bio: typeof profile?.bio === "string" ? profile.bio : "",
     school: "",
     titles: [],
     activeTitles: [],
     age: null,
+    followerCount: 0,
+    followingCount: 0,
+    stats: { calc: 50, insight: 50, proof: 50 },
+    analytics: [],
     verified: false,
     isVerified: false,
+    isSample,
+    avatar: isSample ? sampleAvatar(id) : base.avatar,
+    banner: isSample ? sampleBanner(id) : base.banner,
+    accent: isSample ? sampleAccent(id) : base.accent,
   };
   const verified = userIsVerified(user);
   user.verified = verified;
@@ -241,11 +253,16 @@ export async function fetchProblems(): Promise<{
   const profiles: Record<string, User> = {};
 
   if (authorIds.length) {
-    const { data: profileRows } = await supabase
+    const first = await supabase
       .from("profiles")
-      .select("id, name, handle")
+      .select("id, name, handle, bio, is_sample")
       .in("id", authorIds);
-    for (const p of (profileRows ?? []) as ProfileRow[]) {
+    let rows = (first.error ? [] : (first.data ?? [])) as ProfileRow[];
+    if (first.error) {
+      const legacy = await supabase.from("profiles").select("id, name, handle").in("id", authorIds);
+      rows = (legacy.data ?? []) as ProfileRow[];
+    }
+    for (const p of rows) {
       profiles[p.id] = fallbackUser(p.id, p);
     }
   }

@@ -41,6 +41,11 @@ export async function GET(request: Request) {
       { status: 401 },
     );
   }
+  const { requireAppAccess } = await import("@/lib/release-server");
+  const gate = await requireAppAccess(request);
+  if (gate.error) {
+    return NextResponse.json({ error: gate.error }, { status: 403 });
+  }
 
   let handle =
     typeof user.user_metadata?.handle === "string" ? user.user_metadata.handle : undefined;

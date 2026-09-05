@@ -42,8 +42,12 @@ function stripSimpleTextCommands(src: string) {
     .replace(/\\text\s*\{([^{}]*)\}/g, "$1")
     .replace(/\\textrm\s*\{([^{}]*)\}/g, "$1")
     .replace(/\\mathrm\s*\{([^{}]*)\}/g, "$1")
+    .replace(/\\begin\{lines\}/g, "")
+    .replace(/\\end\{lines\}/g, "")
     .replace(/\\\\(?:\s*\[[^\]]*\])?/g, "\n")
     .replace(/\\newline\b/g, "\n")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
     .replace(/\\backslash\s?/g, "\\")
     .replace(/\\,/g, " ")
     .replace(/\\ /g, " ")
@@ -54,7 +58,8 @@ const MATH_HINT =
   /[\^_]|\\(frac|sum|int|sqrt|begin|alpha|beta|gamma|pi|cdot|times|leq|geq|neq|infty|partial|vec|hat|bar|left|right|dfrac|binom|over|to|in|cdot)/;
 
 export function latexLooksLikePlainText(src: string) {
-  const stripped = replaceNamedBrace(src, "displaylines", (inner) => inner);
+  const unlined = src.replace(/\\begin\{lines\}/g, "").replace(/\\end\{lines\}/g, "");
+  const stripped = replaceNamedBrace(unlined, "displaylines", (inner) => inner);
   const withoutText = stripped.replace(/\\text(?:rm|sf|it|tt|bf)?\s*\{[^{}]*\}/g, "");
   if (MATH_HINT.test(withoutText)) return false;
   const readable = stripSimpleTextCommands(stripped).replace(/\s/g, "");
@@ -63,12 +68,13 @@ export function latexLooksLikePlainText(src: string) {
 }
 
 export function latexToPlainText(src: string) {
-  const unwrapped = replaceNamedBrace(src, "displaylines", (inner) => inner);
+  const unlined = src.replace(/\\begin\{lines\}/g, "").replace(/\\end\{lines\}/g, "");
+  const unwrapped = replaceNamedBrace(unlined, "displaylines", (inner) => inner);
   return stripSimpleTextCommands(unwrapped);
 }
 
 export function capExcessBlankLines(src: string) {
-  return src.replace(/\n{5,}/g, "\n\n\n\n");
+  return src.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n{5,}/g, "\n\n\n\n");
 }
 
 /** Convert unsupported TeX (MathLive `\displaylines`) into KaTeX-friendly macros. */

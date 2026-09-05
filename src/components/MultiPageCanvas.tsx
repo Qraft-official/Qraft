@@ -622,7 +622,11 @@ export const MultiPageCanvas = forwardRef<
                       finishEdit();
                       return;
                     }
-                    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                    if (
+                      (e.key === "Enter" || e.key === "Return") &&
+                      !e.nativeEvent.isComposing &&
+                      e.keyCode !== 229
+                    ) {
                       e.preventDefault();
                       insertTextareaNewline(e.currentTarget);
                     }
@@ -634,7 +638,8 @@ export const MultiPageCanvas = forwardRef<
                     if (
                       ie.inputType === "insertLineBreak" ||
                       ie.inputType === "insertParagraph" ||
-                      (ie.inputType === "insertText" && ie.data === "\n")
+                      (ie.inputType === "insertText" &&
+                        (ie.data === "\n" || ie.data === "\r" || ie.data === "\r\n"))
                     ) {
                       e.preventDefault();
                       insertTextareaNewline(e.currentTarget);

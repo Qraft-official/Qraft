@@ -35,16 +35,18 @@ export function ProblemModePicker({
   onChange,
   correctAnswer,
   onCorrectAnswer,
+  large = false,
 }: {
   value: ProblemMode;
   onChange: (mode: ProblemMode) => void;
   correctAnswer: string;
   onCorrectAnswer: (value: string) => void;
+  large?: boolean;
 }) {
   const [modeHelp, setModeHelp] = useState<ProblemMode | null>(null);
 
   return (
-    <div className="relative border-b border-gray-800 px-3 py-1 md:px-4">
+    <div className={`relative ${large ? "py-0" : "border-b border-gray-800 px-3 py-1 md:px-4"}`}>
       {modeHelp && (
         <button
           type="button"
@@ -63,8 +65,8 @@ export function ProblemModePicker({
               type="button"
               onClick={() => onChange(id)}
               className={`min-h-11 min-w-0 flex-1 rounded-l-xl border border-r-0 px-1.5 py-1.5 text-left sm:px-2 ${
-                on ? meta.selected : "border-gray-800 bg-transparent text-white"
-              }`}
+                large ? "min-h-12 py-2.5" : ""
+              } ${on ? meta.selected : "border-gray-800 bg-transparent text-white"}`}
             >
               <p className="truncate text-xs font-bold">{meta.title}</p>
             </button>

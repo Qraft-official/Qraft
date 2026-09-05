@@ -1,7 +1,9 @@
+import type { ProblemMode } from "./challenge";
+
 export type Subject = "math" | "physics" | "chemistry";
 export type Tier = 1 | 2 | 3 | 4 | 5;
 export type PostKind = "problem" | "solution" | "sprint" | "reply";
-export type ProblemMode = "question" | "challenge" | "aha";
+export type { ProblemMode };
 export type ChallengeGrade = "correct" | "incorrect";
 export type FeedTab = "foryou" | "following" | "sprint" | "lounge";
 export type HallMode = "problems" | "solutions";

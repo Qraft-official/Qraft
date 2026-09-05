@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { SUBJECTS } from "@/lib/constants";
+import { SUBJECTS, SUBJECT_LABEL } from "@/lib/constants";
 import { emptyCanvasPage, sharedTypedHeight } from "@/lib/draw-canvas";
 import { confirmDialog, choiceDialog } from "@/lib/app-dialog";
 import { COMPOSER_KB_DOCK_ID, dismissComposerKeyboard } from "@/lib/composer-keyboard";
@@ -23,6 +23,7 @@ import { Keyboard, PenLine, Sparkles, X, ChevronDown } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
 import { ComposerModeTabs } from "./ComposerModeTabs";
+import { ComposerProblemWizardHeader } from "./ComposerProblemWizardHeader";
 import { HintEditor } from "./HintEditor";
 import { ImageUploadSection } from "./ImageUploadSection";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
@@ -41,6 +42,12 @@ const TypedNotebook = dynamic(
   () => import("./TypedNotebook").then((m) => m.TypedNotebook),
   { ssr: false, loading: () => <div className="h-40 rounded-xl bg-panel/80" /> },
 );
+
+const MODE_SUMMARY: Record<ProblemMode, string> = {
+  question: "教えてQrafter",
+  challenge: "Challenger",
+  aha: "Aha",
+};
 
 export function CreateSheet() {
   const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall, me } =
@@ -71,11 +78,16 @@ export function CreateSheet() {
   const [hints, setHints] = useState<string[]>([]);
   const [pulseToast, setPulseToast] = useState("");
   const [editorExpanded, setEditorExpanded] = useState(false);
+  const [problemStep, setProblemStep] = useState<1 | 2 | 3>(1);
+  const [stepHint, setStepHint] = useState("");
   const canvasRef = useRef<MultiPageCanvasHandle>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const postingRef = useRef(false);
   const touchYRef = useRef(0);
+  const problemStepRef = useRef(problemStep);
+  problemStepRef.current = problemStep;
+  const closingRef = useRef(false);
   const quotePost = quotePostId ? getPost(quotePostId) : undefined;
   const quotingChallenge = openSolution && quotePost?.problemMode === "challenge";
 
@@ -187,6 +199,9 @@ export function CreateSheet() {
       setPostMode("question");
       setCorrectAnswer("");
       setHints([]);
+      setProblemStep(1);
+      setStepHint("");
+      setNotebookTextSize("md");
       return;
     }
     setText("");
@@ -239,6 +254,9 @@ export function CreateSheet() {
     if (d.pages?.length) setPages(d.pages);
     if (d.photo) setPhoto(d.photo);
     if (d.solverAnswer) setSolverAnswer(d.solverAnswer);
+    if (d.notebookTextSize) setNotebookTextSize(d.notebookTextSize);
+    if (d.step === 1 || d.step === 2 || d.step === 3) setProblemStep(d.step);
+    setStepHint("");
   };
 
   useEffect(() => {
@@ -265,6 +283,8 @@ export function CreateSheet() {
         photo,
         text,
         solverAnswer,
+        notebookTextSize,
+        step: openProblem ? problemStep : undefined,
       };
       if (draftIsEmpty(draft)) return;
       writeComposerDraft(draft);
@@ -290,6 +310,8 @@ export function CreateSheet() {
     photo,
     text,
     solverAnswer,
+    notebookTextSize,
+    problemStep,
   ]);
 
   const attachPhoto = (file: File) => {
@@ -311,7 +333,13 @@ export function CreateSheet() {
     />
   );
 
-  const close = () => closeComposer();
+  const close = () => {
+    closingRef.current = true;
+    if (history.state && (history.state as { qraftComposer?: boolean }).qraftComposer) {
+      history.back();
+    }
+    closeComposer();
+  };
 
   const isDirty = () => {
     if (title.trim() || text.trim() || solutionDraft.trim() || photo || aiPrompt.trim() || correctAnswer.trim() || solverAnswer.trim()) {
@@ -351,6 +379,8 @@ export function CreateSheet() {
       photo,
       text,
       solverAnswer,
+      notebookTextSize,
+      step: openProblem ? problemStep : undefined,
     };
     if (!draftIsEmpty(draft)) writeComposerDraft(draft);
   };
@@ -401,6 +431,8 @@ export function CreateSheet() {
     postMode,
     difficultyLevel,
     inputMode,
+    notebookTextSize,
+    problemStep,
   ]);
 
   useEffect(() => {
@@ -408,24 +440,47 @@ export function CreateSheet() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
+      if (openProblem && problemStepRef.current > 1) {
+        setStepHint("");
+        setProblemStep((s) => (s === 3 ? 2 : 1));
+        return;
+      }
       requestClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, requestClose]);
+  }, [open, openProblem, requestClose]);
+
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+
+  useEffect(() => {
+    if (!openProblem) return;
+    closingRef.current = false;
+    const marker = { qraftComposer: true };
+    history.pushState(marker, "");
+    const onPop = () => {
+      if (closingRef.current) return;
+      if (problemStepRef.current > 1) {
+        setStepHint("");
+        setProblemStep((s) => (s === 3 ? 2 : 1));
+        history.pushState(marker, "");
+        return;
+      }
+      history.pushState(marker, "");
+      requestCloseRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+    };
+  }, [openProblem]);
 
   const modeTabs = <ComposerModeTabs value={inputMode} onChange={setInputMode} />;
 
-  const extras = (
-    <div className="min-w-0 space-y-2">
-      <textarea
-        value={solutionDraft}
-        onChange={(e) => setSolutionDraft(e.target.value)}
-        placeholder="解答メモ（任意・非公開でも可）"
-        rows={2}
-        className="w-full resize-none border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
-      />
-      <div className="border-b border-gray-800 pb-2">
+  const step1Tools = (
+    <div className="min-w-0 space-y-2 px-3 pb-2 md:px-4">
+      <div>
         <p className="mb-1 flex items-center gap-1 text-xs font-bold">
           <Sparkles size={12} className="text-aha" /> AI問題メーカー
         </p>
@@ -434,7 +489,7 @@ export function CreateSheet() {
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             placeholder="例: コーシー・シュワルツ"
-            className="min-w-0 flex-1 border-0 bg-transparent px-0 py-1.5 text-xs outline-none"
+            className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-800 bg-transparent px-3 text-xs outline-none"
           />
           <button
             type="button"
@@ -453,6 +508,7 @@ export function CreateSheet() {
               });
               setTypedIndex(0);
               setText(latex);
+              setStepHint("");
             }}
             className="min-h-11 shrink-0 rounded-full bg-neon/20 px-3 text-xs font-bold text-purple-200"
           >
@@ -461,9 +517,40 @@ export function CreateSheet() {
         </div>
       </div>
       {photoRow}
-      {!isSprintProblem && <HintEditor hints={hints} onChange={setHints} />}
     </div>
   );
+
+  const hasProblemBody = () => {
+    if (photo) return true;
+    if (inputMode === "typed") return typedPages.some((p) => p.latex.trim());
+    return pages.some(
+      (p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0 || Boolean(p.backgroundImage),
+    );
+  };
+
+  const goProblemNext = () => {
+    if (problemStep === 1) {
+      dismissComposerKeyboard();
+      if (!hasProblemBody()) {
+        setStepHint("問題を入力してください");
+        return;
+      }
+      setStepHint("");
+      setProblemStep(2);
+      return;
+    }
+    if (!isSprintProblem && postMode === "challenge" && !correctAnswer.trim()) {
+      setStepHint("Challenger モードでは正解の入力が必須です");
+      return;
+    }
+    setStepHint("");
+    setProblemStep(3);
+  };
+
+  const goProblemBack = () => {
+    setStepHint("");
+    setProblemStep((s) => (s === 3 ? 2 : 1));
+  };
 
   const submitProblem = () => {
     if (postingRef.current) return;
@@ -480,7 +567,8 @@ export function CreateSheet() {
         if (!joined) {
           postingRef.current = false;
           setPosting(false);
-          setPostError("本文を入力してください");
+          setPostError("問題を入力してください");
+          setProblemStep(1);
           return;
         }
         payload = {
@@ -508,10 +596,11 @@ export function CreateSheet() {
         const hasInk =
           images.some(Boolean) ||
           pages.some((p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0);
-        if (!hasInk && !title.trim()) {
+        if (!hasInk && !photo) {
           postingRef.current = false;
           setPosting(false);
-          setPostError("キャンバスに書くか、タイトルを入力してください");
+          setPostError("問題を入力してください");
+          setProblemStep(1);
           return;
         }
         payload = {
@@ -540,12 +629,15 @@ export function CreateSheet() {
         postingRef.current = false;
         setPosting(false);
         setPostError("Challenger モードでは正解の入力が必須です");
+        setStepHint("Challenger モードでは正解の入力が必須です");
+        setProblemStep(2);
         return;
       }
       try {
         const res = await addProblem(payload);
         if (res.error) {
           setPostError(res.error);
+          setProblemStep(3);
           return;
         }
         clearDraft();
@@ -596,14 +688,15 @@ export function CreateSheet() {
             onClick={(e) => e.stopPropagation()}
             className={`composer-dialog relative mx-auto w-full max-w-lg rounded-2xl border border-gray-800 bg-black md:max-w-[640px] ${
               editorExpanded ? "composer-dialog-expanded" : ""
-            }`}
+            } ${openProblem && problemStep === 1 ? "composer-wizard-s1" : ""}`}
           >
             {openProblem && (
               <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
                 <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 md:px-4">
-                  <p className="text-sm font-bold">
-                    {isSprintProblem ? "21時問題を応募" : "問題を投稿"}
-                  </p>
+                  <ComposerProblemWizardHeader
+                    step={problemStep}
+                    heading={isSprintProblem ? "21時問題を応募" : "問題を投稿"}
+                  />
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
@@ -614,13 +707,13 @@ export function CreateSheet() {
                       <ChevronDown size={22} />
                     </button>
                     <button
-                    type="button"
-                    onClick={requestClose}
-                    className="tap-target flex items-center justify-center rounded-full text-muted"
-                    aria-label="閉じる"
-                  >
-                    <X size={20} />
-                  </button>
+                      type="button"
+                      onClick={requestClose}
+                      className="tap-target flex items-center justify-center rounded-full text-muted"
+                      aria-label="閉じる"
+                    >
+                      <X size={20} />
+                    </button>
                   </div>
                 </div>
                 <div
@@ -628,122 +721,191 @@ export function CreateSheet() {
                   className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
-                <label className="sr-only" htmlFor="composer-subject">
-                  教科
-                </label>
-                <select
-                  id="composer-subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value as Subject)}
-                  className="w-full border-0 border-b border-gray-800 bg-transparent px-3 py-1.5 text-sm outline-none md:px-4"
-                >
-                  {SUBJECTS.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.emoji} {s.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="タイトル（任意）"
-                  className="w-full border-0 border-b border-gray-800 bg-transparent px-3 py-1.5 text-base font-semibold outline-none placeholder:text-muted md:px-4 md:text-lg"
-                />
-                <div className="border-b border-gray-800 px-3 py-1 md:px-4">
-                  <p className="mb-1 text-xs font-bold text-muted">難易度</p>
-                  <div className="aha-scroll flex flex-nowrap gap-1 overflow-x-auto pb-0.5">
-                    {DIFFICULTY_LEVELS.map((d) => (
+                  {problemStep === 1 && (
+                    <>
+                      {modeTabs}
+                      {inputMode === "hand" ? (
+                        <div className="flex min-w-0 w-full max-w-full flex-col">
+                          {!editorExpanded && (
+                            <div className="notebook-stage mx-3 min-h-0 md:mx-4">
+                              <MultiPageCanvas
+                                ref={canvasRef}
+                                pages={pages}
+                                onChange={setPages}
+                                premium={hasPremium}
+                                textSize={notebookTextSize}
+                                onTextSizeChange={setNotebookTextSize}
+                                onToggleExpand={() => setEditorExpanded(true)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        !editorExpanded && (
+                          <TypedNotebook
+                            pages={typedPages}
+                            index={typedIndex}
+                            onIndex={setTypedIndex}
+                            onChangeLatex={(latex, i = typedIndex) =>
+                              setTypedPages((prev) =>
+                                prev.map((p, j) => (j === i ? { ...p, latex } : p)),
+                              )
+                            }
+                            onAddPage={() => {
+                              const id = `t-${Date.now()}`;
+                              setTypedPages((prev) => [...prev, { id, latex: "" }]);
+                              setTypedIndex(typedPages.length);
+                            }}
+                            onDeletePage={() => {
+                              if (typedPages.length <= 1) return;
+                              const next = typedPages.filter((_, i) => i !== typedIndex);
+                              setTypedPages(next);
+                              setTypedIndex(Math.min(typedIndex, next.length - 1));
+                            }}
+                            expanded={editorExpanded}
+                            onToggleExpand={() => setEditorExpanded((v) => !v)}
+                            textSize={notebookTextSize}
+                            onTextSizeChange={setNotebookTextSize}
+                          />
+                        )
+                      )}
+                      {step1Tools}
+                    </>
+                  )}
+                  {problemStep === 2 && (
+                    <div className="flex flex-col gap-3 px-3 py-2 md:px-4">
+                      {isSprintProblem && (
+                        <p className="text-xs text-muted">
+                          応募内容は運営メールへ送られ、選別のうえ PULSE として配信されます。タイムラインにはすぐには載りません。
+                        </p>
+                      )}
+                      <div>
+                        <p className="mb-1.5 text-xs font-bold text-muted">教科</p>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {SUBJECTS.map((s) => {
+                            const on = subject === s.id;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => setSubject(s.id)}
+                                className={`min-h-12 rounded-xl border px-1 text-sm font-bold ${
+                                  on
+                                    ? "border-aha bg-aha/15 text-aha"
+                                    : "border-gray-800 bg-transparent text-white"
+                                }`}
+                              >
+                                {s.emoji} {s.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-xs font-bold text-muted">難易度</p>
+                        <div className="grid grid-cols-5 gap-1">
+                          {DIFFICULTY_LEVELS.map((d) => (
+                            <button
+                              key={d.id}
+                              type="button"
+                              onClick={() => setDifficultyLevel(d.id)}
+                              className={`flex min-h-12 flex-col items-center justify-center rounded-xl text-xs font-bold ${
+                                difficultyLevel === d.id
+                                  ? "bg-aha text-black"
+                                  : "border border-gray-700 text-muted"
+                              }`}
+                            >
+                              <span>{d.label}</span>
+                              <span className="text-[10px] font-semibold opacity-80">{d.hint}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {!isSprintProblem && (
+                        <div>
+                          <p className="mb-1.5 text-xs font-bold text-muted">モード</p>
+                          <ProblemModePicker
+                            large
+                            value={postMode}
+                            onChange={(mode) => {
+                              setPostMode(mode);
+                              setStepHint("");
+                            }}
+                            correctAnswer={correctAnswer}
+                            onCorrectAnswer={setCorrectAnswer}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {problemStep === 3 && (
+                    <div className="flex flex-col gap-3 px-3 py-2 md:px-4">
                       <button
-                        key={d.id}
                         type="button"
-                        onClick={() => setDifficultyLevel(d.id)}
-                      className={`min-h-11 shrink-0 rounded-full px-3 text-xs font-bold ${
-                          difficultyLevel === d.id
-                            ? "bg-aha text-black"
-                            : "border border-gray-700 text-muted"
+                        onClick={() => setProblemStep(2)}
+                        className="min-h-11 rounded-xl border border-gray-800 bg-white/5 px-3 text-left text-sm font-bold text-white"
+                      >
+                        {SUBJECT_LABEL[subject]}
+                        {" · "}
+                        Lv{difficultyLevel}
+                        {" · "}
+                        {isSprintProblem ? "Aha" : MODE_SUMMARY[postMode]}
+                      </button>
+                      <input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="タイトル（任意）"
+                        className="w-full border-0 border-b border-gray-800 bg-transparent py-2 text-base font-semibold outline-none placeholder:text-muted"
+                      />
+                      <textarea
+                        value={solutionDraft}
+                        onChange={(e) => setSolutionDraft(e.target.value)}
+                        placeholder="解答メモ（任意・非公開でも可）"
+                        rows={3}
+                        className="w-full resize-none border-0 border-b border-gray-800 bg-transparent py-2 text-sm outline-none"
+                      />
+                      {!isSprintProblem && <HintEditor hints={hints} onChange={setHints} />}
+                    </div>
+                  )}
+                </div>
+                {problemStep === 1 ? <div id={COMPOSER_KB_DOCK_ID} className="shrink-0" /> : null}
+                <div className="composer-footer flex flex-col gap-1.5 border-t border-gray-800 px-3 py-1.5 md:px-4">
+                  {(stepHint || (problemStep === 3 && postError)) && (
+                    <p className="text-xs text-red-400">
+                      {problemStep === 3 && postError ? postError : stepHint}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {problemStep > 1 && (
+                      <button
+                        type="button"
+                        onClick={goProblemBack}
+                        className="inline-flex min-h-11 items-center rounded-full border border-gray-700 px-4 text-sm font-bold text-white"
+                      >
+                        戻る
+                      </button>
+                    )}
+                    {problemStep < 3 ? (
+                      <button
+                        type="button"
+                        onClick={goProblemNext}
+                        className={`inline-flex min-h-11 min-w-[5.5rem] items-center justify-center rounded-full bg-aha px-5 text-sm font-bold text-black ${
+                          problemStep === 1 ? "w-full" : "ml-auto"
                         }`}
                       >
-                        {d.label}
-                        <span className="hidden sm:inline"> {d.hint}</span>
+                        次へ
                       </button>
-                    ))}
-                  </div>
-                </div>
-                {isSprintProblem && (
-                  <p className="border-b border-gray-800 px-4 py-2 text-xs text-muted">
-                    応募内容は運営メールへ送られ、選別のうえ PULSE として配信されます。タイムラインにはすぐには載りません。
-                  </p>
-                )}
-                {!isSprintProblem && (
-                  <ProblemModePicker
-                    value={postMode}
-                    onChange={setPostMode}
-                    correctAnswer={correctAnswer}
-                    onCorrectAnswer={setCorrectAnswer}
-                  />
-                )}
-                {modeTabs}
-                {inputMode === "hand" ? (
-                  <div className="flex min-w-0 w-full max-w-full flex-col">
-                    {!editorExpanded && (
-                    <div className="notebook-stage mx-4 min-h-0">
-                      <MultiPageCanvas
-                        ref={canvasRef}
-                        pages={pages}
-                        onChange={setPages}
-                        premium={hasPremium}
-                        textSize={notebookTextSize}
-                        onTextSizeChange={setNotebookTextSize}
-                        onToggleExpand={() => setEditorExpanded(true)}
-                      />
-                    </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={posting}
+                        onClick={submitProblem}
+                        className="ml-auto inline-flex min-h-11 items-center rounded-full bg-neon px-5 text-sm font-bold text-white disabled:opacity-40"
+                      >
+                        {posting ? "送信中…" : isSprintProblem ? "応募する" : "投稿する"}
+                      </button>
                     )}
-                    <div className="border-t border-gray-800 px-4 py-2">
-                      <p className="mb-1 text-xs font-bold text-muted">解答メモ・画像・AI</p>
-                      {extras}
-                    </div>
                   </div>
-                ) : (
-                  !editorExpanded && (
-                  <TypedNotebook
-                    pages={typedPages}
-                    index={typedIndex}
-                    onIndex={setTypedIndex}
-                    onChangeLatex={(latex, i = typedIndex) =>
-                      setTypedPages((prev) =>
-                        prev.map((p, j) => (j === i ? { ...p, latex } : p)),
-                      )
-                    }
-                    onAddPage={() => {
-                      const id = `t-${Date.now()}`;
-                      setTypedPages((prev) => [...prev, { id, latex: "" }]);
-                      setTypedIndex(typedPages.length);
-                    }}
-                    onDeletePage={() => {
-                      if (typedPages.length <= 1) return;
-                      const next = typedPages.filter((_, i) => i !== typedIndex);
-                      setTypedPages(next);
-                      setTypedIndex(Math.min(typedIndex, next.length - 1));
-                    }}
-                    footer={extras}
-                    expanded={editorExpanded}
-                    onToggleExpand={() => setEditorExpanded((v) => !v)}
-                    textSize={notebookTextSize}
-                    onTextSizeChange={setNotebookTextSize}
-                  />
-                  )
-                )}
-                </div>
-                <div id={COMPOSER_KB_DOCK_ID} className="shrink-0" />
-                <div className="composer-footer flex items-center justify-end gap-3 border-t border-gray-800 px-3 py-1.5 md:px-4">
-                  {postError && <p className="mr-auto text-xs text-red-400">{postError}</p>}
-                  <button
-                    disabled={posting}
-                    onClick={submitProblem}
-                    className="inline-flex min-h-11 items-center rounded-full bg-neon px-5 text-sm font-bold text-white disabled:opacity-40"
-                  >
-                    {posting ? "送信中…" : isSprintProblem ? "応募する" : "投稿する"}
-                  </button>
                 </div>
               </div>
             )}

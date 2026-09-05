@@ -156,6 +156,10 @@ html.qraft-scroll-lock body {
   background: #000;
 }
 
+.composer-dialog.composer-wizard-s1 {
+  --notebook-max-h: min(48dvh, calc(var(--composer-vvh, 100dvh) * 0.46));
+}
+
 .notebook-stage {
   flex: 0 0 auto;
   aspect-ratio: 19.5 / 9;

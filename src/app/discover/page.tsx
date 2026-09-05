@@ -262,10 +262,10 @@ function DiscoverInner() {
     sort !== "newest" || subject !== "all" || mode !== "all" || level !== "all";
 
   return (
-    <div className="mx-auto w-full max-w-[600px]">
-      <header className="sticky top-0 z-30 border-b border-gray-800 bg-black/80 backdrop-blur">
+    <div className="mx-auto w-full max-w-[600px] overflow-x-hidden">
+      <header className="sticky top-0 z-30 overflow-x-hidden border-b border-gray-800 bg-black/80 pt-[env(safe-area-inset-top,0px)] backdrop-blur">
         <div className="flex items-center gap-2 px-3 pt-3 sm:px-4">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-gray-800 bg-[#202327] px-4 py-2.5">
+          <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-full border border-gray-800 bg-[#202327] px-3 py-0 sm:px-4">
             <Search size={16} className="shrink-0 text-muted" />
             <input
               value={q}
@@ -414,7 +414,11 @@ function DiscoverInner() {
               document.body,
             )}
         </div>
-        <nav className="mt-1 flex">
+        <nav
+          className="mt-2 grid w-full min-w-0 grid-cols-3"
+          style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+          aria-label="Discover表示"
+        >
           {VIEW_TABS.map((t) => {
             const active = view === t.id;
             return (
@@ -426,14 +430,19 @@ function DiscoverInner() {
                     view: t.id === "posts" ? null : t.id,
                   })
                 }
-                className={`relative flex min-h-11 flex-1 py-3 text-[15px] font-bold ${
+                className={`relative flex min-h-11 min-w-0 items-center justify-center px-1 text-center text-[15px] font-bold ${
                   active ? "text-white" : "text-muted"
                 }`}
                 aria-current={active ? "page" : undefined}
               >
-                {t.label}
+                <span className="truncate">{t.label}</span>
                 {active && (
-                  <span className="absolute inset-x-6 bottom-0 h-1 rounded-full bg-aha sm:inset-x-8" />
+                  <span
+                    className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center"
+                    aria-hidden
+                  >
+                    <span className="h-1 w-10 rounded-full bg-aha" />
+                  </span>
                 )}
               </button>
             );

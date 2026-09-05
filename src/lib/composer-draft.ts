@@ -1,4 +1,5 @@
 import { DRAFT_MAX_CHARS } from "./learn";
+import type { TextSizeId } from "./text-size";
 import type { CanvasPage, ProblemMode, Subject, Tier } from "./types";
 
 type TypedPage = { id: string; latex: string };
@@ -24,6 +25,8 @@ export type ComposerDraft = {
   text?: string;
   solverAnswer?: string;
   hadHandwriting?: boolean;
+  notebookTextSize?: TextSizeId;
+  step?: 1 | 2 | 3;
 };
 
 function keyFor(userId: string, kind: "problem" | "solution", quotePostId?: string) {

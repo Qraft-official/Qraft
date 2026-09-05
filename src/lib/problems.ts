@@ -342,18 +342,26 @@ export async function updateProblem(
   const updates: Record<string, unknown> = {};
   if (patch.title !== undefined) updates.title = patch.title.trim();
   if (patch.text !== undefined) updates.problem_text = patch.text;
-  if (patch.mode === "question" || patch.mode === "aha") {
-    updates.mode = patch.mode;
-    updates.correct_answer = null;
-  } else {
-    if (patch.mode === "challenge") updates.mode = "challenge";
-    if (patch.correctAnswer !== undefined) {
-      const trimmed = (patch.correctAnswer ?? "").trim();
-      if ((patch.mode === "challenge" || patch.mode === undefined) && !trimmed) {
-        return { post: null, error: "Challenger モードでは正解の入力が必須です" };
+  if (patch.mode !== undefined) {
+    const nextMode = asProblemMode(patch.mode);
+    updates.mode = nextMode;
+    if (nextMode === "challenge") {
+      if (patch.correctAnswer !== undefined) {
+        const trimmed = (patch.correctAnswer ?? "").trim();
+        if (!trimmed) {
+          return { post: null, error: "Challenger モードでは正解の入力が必須です" };
+        }
+        updates.correct_answer = trimmed;
       }
-      updates.correct_answer = trimmed || null;
+    } else {
+      updates.correct_answer = null;
     }
+  } else if (patch.correctAnswer !== undefined) {
+    const trimmed = (patch.correctAnswer ?? "").trim();
+    if (!trimmed) {
+      return { post: null, error: "Challenger モードでは正解の入力が必須です" };
+    }
+    updates.correct_answer = trimmed;
   }
 
   if (patch.hints !== undefined) updates.hints = sanitizeHints(patch.hints);

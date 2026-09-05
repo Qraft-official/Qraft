@@ -5,7 +5,7 @@ import { unwrapTextSize, wrapWithTextSize, type TextSizeId } from "./text-size";
 
 /** Wrap MathLive LaTeX so the existing KaTeX feed renderer can display it. */
 export function wrapMathliveLatex(latex: string) {
-  const withCaps = capExcessBlankLines(latex);
+  const withCaps = capExcessBlankLines(latex.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
   if (!withCaps.replace(/\s/g, "") && !withCaps.includes("\n")) return "";
   if (latexLooksLikePlainText(withCaps)) {
     if (!/\\/.test(withCaps)) return withCaps;
@@ -73,13 +73,8 @@ export function applyTextSizeToMathfield(mf: MathfieldElement, size: TextSizeId)
 export function insertMathNewline(mf: MathfieldElement) {
   mf.focus();
   const before = mf.getValue("latex");
-  if (mf.mode === "text") {
-    mf.insert("\n", insertOpts("plain-text"));
-    if (mf.getValue("latex") !== before) {
-      emitMathfieldInput(mf);
-      return;
-    }
-  }
+  // MathLive text-mode parseLatex treats raw `\n`/`\r` as a space. Always use a
+  // row break (`addRowAfter` / `\\`) so saved content keeps real line breaks.
   mf.executeCommand("addRowAfter");
   if (mf.getValue("latex") !== before) {
     emitMathfieldInput(mf);
@@ -188,10 +183,15 @@ function isDeleteInputType(type: string) {
   );
 }
 
+function isEnterKey(ke: KeyboardEvent) {
+  if (ke.isComposing || ke.key === "Process" || ke.keyCode === 229) return false;
+  return ke.key === "Enter" || ke.key === "Return" || ke.keyCode === 13;
+}
+
 function isNewlineInput(ie: InputEvent) {
   if (ie.inputType === "insertLineBreak" || ie.inputType === "insertParagraph") return true;
-  if (ie.inputType === "insertText" && (ie.data === "\n" || ie.data === "\r\n")) return true;
-  return false;
+  if (ie.inputType !== "insertText" || ie.data == null) return false;
+  return ie.data === "\n" || ie.data === "\r" || ie.data === "\r\n";
 }
 
 function deleteBackwardOrForward(mf: MathfieldElement, forward: boolean) {
@@ -231,16 +231,24 @@ export function attachMultilineMathfield(mf: MathfieldElement) {
   mf.setAttribute("default-mode", "math");
 
   const handledEvents = new WeakSet<Event>();
+  let lastNewlineAt = 0;
+
+  const applyNewline = () => {
+    const now = performance.now();
+    if (now - lastNewlineAt < 40) return;
+    lastNewlineAt = now;
+    insertMathNewline(mf);
+  };
 
   const onKeyDown = (e: Event) => {
     if (handledEvents.has(e)) return;
     handledEvents.add(e);
     const ke = e as KeyboardEvent;
     if (ke.isComposing || ke.key === "Process" || ke.keyCode === 229) return;
-    if (ke.key === "Enter") {
+    if (isEnterKey(ke)) {
       ke.preventDefault();
       ke.stopPropagation();
-      insertMathNewline(mf);
+      applyNewline();
       return;
     }
     if (ke.key === "Backspace" || ke.key === "Delete") {
@@ -258,7 +266,7 @@ export function attachMultilineMathfield(mf: MathfieldElement) {
     if (isNewlineInput(ie)) {
       ie.preventDefault();
       ie.stopPropagation();
-      insertMathNewline(mf);
+      applyNewline();
       return;
     }
     if (isDeleteInputType(ie.inputType)) {

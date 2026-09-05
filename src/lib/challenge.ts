@@ -1,9 +1,12 @@
-export type ProblemMode = "question" | "challenge" | "aha";
+export const PROBLEM_MODES = ["question", "challenge", "aha"] as const;
+export type ProblemMode = (typeof PROBLEM_MODES)[number];
 export type ChallengeGrade = "correct" | "incorrect";
 
 export function asProblemMode(value: unknown): ProblemMode {
-  if (value === "challenge") return "challenge";
-  if (value === "aha") return "aha";
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "challenge" || raw === "challenger") return "challenge";
+  if (raw === "aha" || raw === "aha!") return "aha";
+  if (raw === "question") return "question";
   return "question";
 }
 

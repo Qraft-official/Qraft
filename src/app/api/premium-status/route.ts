@@ -6,21 +6,6 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-async function isAdminUser(request: Request) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const token = bearerTokenFromRequest(request);
-  if (url && anon && token) {
-    const sb = createClient(url, anon, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data } = await sb.rpc("is_admin");
-    if (data === true) return true;
-  }
-  return false;
-}
-
 export async function GET(request: Request) {
   const user = await userFromRequest(request);
   if (!user) {
@@ -82,7 +67,7 @@ export async function GET(request: Request) {
     name,
   });
   const developer =
-    isDeveloperAccount(user.id, handle) || (await isAdminUser(request));
+    isDeveloperAccount(user.id, handle) || gate.access.isAdmin;
 
   const payload = evaluatePremiumAccess({
     complimentary,

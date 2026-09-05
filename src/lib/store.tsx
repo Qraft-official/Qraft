@@ -142,10 +142,10 @@ type Store = {
   signInWithEmail: (input: {
     email: string;
     password: string;
-  }) => Promise<{ error?: string }>;
+  }) => Promise<{ error?: string; accessToken?: string }>;
   logout: () => Promise<void>;
   authViaSupabase: boolean;
-  refreshAccess: () => Promise<void>;
+  refreshAccess: (accessToken?: string | null) => Promise<ClientAccess | null>;
   access: ClientAccess | null;
   accessReady: boolean;
   me: User;
@@ -811,10 +811,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       handle?: string;
     }) => {
       try {
-        const gate = await fetchAccessStatus();
-        if (gate && !gate.signupOpen) {
-          return { error: "先行公開期間は招待コードから参加してください" };
-        }
         const nameErr = displayNameError(input.name ?? "");
         if (nameErr) return { error: nameErr };
         const handle = sanitizeHandleInput(input.handle ?? "");
@@ -884,38 +880,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         email: input.email.trim(),
         password: input.password,
       });
-      if (error) return { error: formatAuthError(error.message) };
-      if (data.user) {
-        const fields = sessionUserFields(data.user);
-        setSupabaseUid(data.user.id);
-        setSessionEmail(fields.email);
-        setAuthenticated(true);
-        setProfile((p) => ({
-          ...p,
-          ...(fields.name ? { name: fields.name } : {}),
-          ...(fields.handle ? { handle: fields.handle } : {}),
-        }));
-        window.setTimeout(() => {
-          setProfileHydrated(false);
-          void (async () => {
-            await ensureProfile(data.user);
-            await ensureWelcomeNotification();
-            const inbox = await fetchNotifications();
-            setNotifications(inbox);
-            const { data: row } = await fetchLearningProfile(data.user.id);
-            if (row) {
-              setOnboarded(!!row.onboarded);
-              setTiers(tiersFromProfile(row));
-              setAge(typeof row.age === "number" ? row.age : null);
-            } else {
-              setOnboarded(false);
-            }
-            setProfileHydrated(true);
-            setIsAdmin(await checkIsAdmin());
-          })();
-        }, 0);
+      if (error) return { error: formatAuthError(error.message, error.code) };
+      if (!data.session?.access_token || !data.user) {
+        return {
+          error:
+            "ログインできませんでした。メール確認が未完了の場合は、確認メールのリンクを開いてから再試行してください。",
+        };
       }
-      return {};
+      const fields = sessionUserFields(data.user);
+      setSupabaseUid(data.user.id);
+      setSessionEmail(fields.email);
+      setAuthenticated(true);
+      setProfile((p) => ({
+        ...p,
+        ...(fields.name ? { name: fields.name } : {}),
+        ...(fields.handle ? { handle: fields.handle } : {}),
+      }));
+      window.setTimeout(() => {
+        setProfileHydrated(false);
+        void (async () => {
+          await ensureProfile(data.user);
+          await ensureWelcomeNotification();
+          const inbox = await fetchNotifications();
+          setNotifications(inbox);
+          const { data: row } = await fetchLearningProfile(data.user.id);
+          if (row) {
+            setOnboarded(!!row.onboarded);
+            setTiers(tiersFromProfile(row));
+            setAge(typeof row.age === "number" ? row.age : null);
+          } else {
+            setOnboarded(false);
+          }
+          setProfileHydrated(true);
+          setIsAdmin(await checkIsAdmin());
+        })();
+      }, 0);
+      return { accessToken: data.session.access_token };
     } catch (err) {
       return { error: formatAuthError(err instanceof Error ? err.message : "ログインに失敗しました") };
     }
@@ -944,24 +944,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCalendarDays([]);
     setLearnStreak({ current: 0, longest: 0 });
     void (async () => {
-      const next = await fetchAccessStatus();
-      setAccess(next);
-      setAccessReady(true);
+      try {
+        const next = await fetchAccessStatus();
+        setAccess(next);
+      } catch (err) {
+        console.error("[access]", err);
+        setAccess(null);
+      } finally {
+        setAccessReady(true);
+      }
     })();
   }, []);
 
-  const refreshAccess = useCallback(async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const next = await fetchAccessStatus(session?.access_token);
-    setAccess(next);
-    setAccessReady(true);
+  const refreshAccess = useCallback(async (accessToken?: string | null) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = accessToken || session?.access_token;
+      const next = await fetchAccessStatus(token);
+      setAccess(next);
+      return next;
+    } catch (err) {
+      console.error("[access]", err);
+      setAccess(null);
+      throw err;
+    } finally {
+      setAccessReady(true);
+    }
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    void refreshAccess();
+    void refreshAccess().catch(() => {
+      /* refreshAccess logs the error */
+    });
   }, [ready, authenticated, supabaseUid, refreshAccess]);
 
   const toggleFollow = useCallback((userId: string) => {

@@ -88,12 +88,12 @@ export async function checkIsAdmin() {
   try {
     const { data, error } = await supabase.rpc("is_admin");
     if (error) {
-      console.warn("is_admin rpc failed:", error.message);
+      console.error("is_admin rpc failed:", error.message);
       return false;
     }
     return data === true;
   } catch (err) {
-    console.warn("is_admin rpc failed:", err);
+    console.error("is_admin rpc failed:", err);
     return false;
   }
 }

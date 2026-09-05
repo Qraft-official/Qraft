@@ -82,18 +82,23 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
-  select exists (
-    select 1
-    from public.admin_allowlist a
-    where lower(a.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
-  )
-  or coalesce((select auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin';
+  select
+    exists (
+      select 1
+      from public.admin_allowlist a
+      where lower(a.email) = lower(coalesce(
+        (select u.email from auth.users u where u.id = auth.uid()),
+        (select auth.jwt() ->> 'email'),
+        ''
+      ))
+    )
+    or coalesce((select auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin';
 $$;
 
 revoke all on function public.is_admin() from public, anon;
-grant execute on function public.is_admin() to authenticated;
+grant execute on function public.is_admin() to authenticated, service_role;
 
 alter table public.profiles enable row level security;
 alter table public.problems enable row level security;

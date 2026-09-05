@@ -11,6 +11,7 @@ import {
 } from "@/lib/handle";
 import type { ClientAccess } from "@/lib/release-client";
 import { useApp } from "@/lib/store";
+import { LogoWithSecretAuthHotspot } from "@/components/LogoWithSecretAuthHotspot";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -31,9 +32,7 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
   if (access.phase === "public") {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-8">
-        <p className="text-4xl font-black">
-          Qraft<span className="ml-1 text-aha">クラフト</span>
-        </p>
+        <LogoWithSecretAuthHotspot />
         <h1 className="mt-6 text-2xl font-black">Qraftは正式公開されました</h1>
         <p className="mt-3 text-sm text-muted">招待コードは不要です。そのまま登録・ログインできます。</p>
         <Link
@@ -49,9 +48,7 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
   if (access.phase === "prelaunch") {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col px-8 py-12">
-        <p className="text-4xl font-black">
-          Qraft<span className="ml-1 text-aha">クラフト</span>
-        </p>
+        <LogoWithSecretAuthHotspot />
         <h1 className="mt-8 text-2xl font-black">Qraftは9月12日から30名限定で先行公開します</h1>
         <p className="mt-3 text-sm text-muted">公開までしばらくお待ちください。</p>
         <AdminLogin />
@@ -96,7 +93,7 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
         setError(formatAuthError(signed.error));
         return;
       }
-      await refreshAccess();
+      await refreshAccess(signed.accessToken);
     } catch (err) {
       setError(formatAuthError(err instanceof Error ? err.message : "参加に失敗しました"));
     } finally {
@@ -114,7 +111,12 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
         setError(formatAuthError(signed.error));
         return;
       }
-      await refreshAccess();
+      const next = await refreshAccess(signed.accessToken);
+      if (!next?.canAccess) {
+        setError(accessDeniedMessage(next));
+      }
+    } catch (err) {
+      setError(formatAuthError(err instanceof Error ? err.message : "ログインに失敗しました"));
     } finally {
       setBusy(false);
     }
@@ -147,6 +149,8 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
         return;
       }
       await refreshAccess();
+    } catch (err) {
+      setError(formatAuthError(err instanceof Error ? err.message : "参加に失敗しました"));
     } finally {
       setBusy(false);
     }
@@ -154,9 +158,7 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col px-8 py-12">
-      <p className="text-4xl font-black">
-        Qraft<span className="ml-1 text-aha">クラフト</span>
-      </p>
+      <LogoWithSecretAuthHotspot />
       <h1 className="mt-8 text-2xl font-black">先行公開</h1>
       {access.remaining <= 0 ? (
         <p className="mt-3 text-sm text-muted">
@@ -296,6 +298,15 @@ export function EarlyAccessGate({ access }: { access: ClientAccess }) {
   );
 }
 
+function accessDeniedMessage(access: ClientAccess | null) {
+  if (!access) return "公開状態を確認できません。時間をおいて再度お試しください。";
+  if (access.adminCheckError) return access.adminCheckError;
+  if (access.phase === "prelaunch") {
+    return "このアカウントは公開前の管理者アクセス対象ではありません。";
+  }
+  return "このアカウントは先行公開の参加対象ではありません。";
+}
+
 function AdminLogin() {
   const { signInWithEmail, refreshAccess } = useApp();
   const [email, setEmail] = useState("");
@@ -309,13 +320,28 @@ function AdminLogin() {
       onSubmit={(e) => {
         e.preventDefault();
         setError("");
+        if (!email.trim() || !password) {
+          setError("メールアドレスとパスワードを入力してください");
+          return;
+        }
         setBusy(true);
-        void signInWithEmail({ email: email.trim(), password })
-          .then(async (res) => {
-            if (res.error) setError(formatAuthError(res.error));
-            else await refreshAccess();
-          })
-          .finally(() => setBusy(false));
+        void (async () => {
+          try {
+            const res = await signInWithEmail({ email: email.trim(), password });
+            if (res.error) {
+              setError(formatAuthError(res.error));
+              return;
+            }
+            const next = await refreshAccess(res.accessToken);
+            if (!next?.canAccess) {
+              setError(accessDeniedMessage(next));
+            }
+          } catch (err) {
+            setError(formatAuthError(err instanceof Error ? err.message : "ログインに失敗しました"));
+          } finally {
+            setBusy(false);
+          }
+        })();
       }}
     >
       <p className="text-xs text-muted">管理者ログイン</p>
@@ -325,6 +351,7 @@ function AdminLogin() {
         onChange={(e) => setEmail(e.target.value)}
         className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-3 text-sm text-white outline-none"
         placeholder="メール"
+        autoComplete="email"
       />
       <input
         type="password"
@@ -332,6 +359,7 @@ function AdminLogin() {
         onChange={(e) => setPassword(e.target.value)}
         className="w-full rounded-xl border border-gray-800 bg-panel px-3 py-3 text-sm text-white outline-none"
         placeholder="パスワード"
+        autoComplete="current-password"
       />
       {error && <p className="text-sm font-bold text-red-500">{error}</p>}
       <button

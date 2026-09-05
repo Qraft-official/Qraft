@@ -7,10 +7,11 @@ import { Fab } from "@/components/Fab";
 import { InviteCapture } from "@/components/InviteCapture";
 import { Onboarding } from "@/components/Onboarding";
 import { useApp } from "@/lib/store";
+import { isAuthEntryPath } from "@/lib/auth-entry";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { AppBootSkeleton } from "@/components/UiStates";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 const CreateSheet = dynamic(
@@ -81,6 +82,7 @@ export function AppShell({
     paywallOpen,
   } = useApp();
   const path = usePathname();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [inAdFrame, setInAdFrame] = useState(false);
   const [loadCreate, setLoadCreate] = useState(false);
@@ -90,6 +92,7 @@ export function AppShell({
   const [loadFeedback, setLoadFeedback] = useState(false);
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
+  const isAuthEntry = isAuthEntryPath(path);
   const isLegal = path === "/terms" || path === "/privacy";
   const isInvite = path.startsWith("/i/");
   const isEarlyAccess = path.startsWith("/early-access");
@@ -107,6 +110,12 @@ export function AppShell({
   useEffect(() => {
     rememberPremiumReturnPath(path);
   }, [path]);
+
+  useEffect(() => {
+    if (isAuthEntry && access?.canAccess && authenticated) {
+      router.replace("/");
+    }
+  }, [isAuthEntry, access?.canAccess, authenticated, router]);
 
   useEffect(() => {
     if (!composer.open) return;
@@ -166,6 +175,15 @@ export function AppShell({
         <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center px-8 text-sm text-muted">
           公開状態を確認できません。時間をおいて再度お試しください。
         </div>
+      </>
+    );
+  }
+
+  if (isAuthEntry && !(access?.canAccess && authenticated)) {
+    return (
+      <>
+        {capture}
+        {children}
       </>
     );
   }

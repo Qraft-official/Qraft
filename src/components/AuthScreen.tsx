@@ -12,16 +12,20 @@ import {
   sanitizeHandleInput,
 } from "@/lib/handle";
 import { useApp } from "@/lib/store";
+import { AUTH_ENTRY_PATH } from "@/lib/auth-entry";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type Mode = "login" | "signup";
 
-export function AuthScreen() {
-  const { signUpWithEmail, signInWithEmail, access } = useApp();
-  const signupOpen = access?.signupOpen === true;
+export function AuthScreen({ accountCreationOpen = false }: { accountCreationOpen?: boolean }) {
+  const { signUpWithEmail, signInWithEmail, access, authenticated, logout, refreshAccess } = useApp();
+  const path = usePathname();
+  const router = useRouter();
+  const signupOpen = accountCreationOpen || path === AUTH_ENTRY_PATH || access?.signupOpen === true;
   const [mode, setMode] = useState<Mode>("login");
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
@@ -56,8 +60,10 @@ export function AuthScreen() {
   }, []);
 
   useEffect(() => {
-    if (!signupOpen && mode === "signup") setMode("login");
-  }, [signupOpen, mode]);
+    if (authenticated && access?.canAccess) {
+      router.replace("/");
+    }
+  }, [authenticated, access?.canAccess, router]);
 
   const onSubmit = async () => {
     setError("");
@@ -104,10 +110,38 @@ export function AuthScreen() {
         if (res.needsConfirm) {
           setInfo("確認メールを送りました。メール内のリンクを開いてからログインしてください。");
           setMode("login");
+        } else {
+          try {
+            const next = await refreshAccess();
+            if (next && !next.canAccess) {
+              setInfo("アカウントは作成されましたが、公開前のQraft本体へは入れません。");
+            }
+          } catch (accessErr) {
+            setError(
+              formatAuthError(
+                accessErr instanceof Error ? accessErr.message : "公開状態の確認に失敗しました",
+              ),
+            );
+          }
         }
       } else {
         const res = (await signInWithEmail({ email, password })) ?? {};
-        if (res.error) setError(formatAuthError(res.error));
+        if (res.error) {
+          setError(formatAuthError(res.error));
+          return;
+        }
+        try {
+          const next = await refreshAccess(res.accessToken);
+          if (next && !next.canAccess) {
+            setInfo("アカウントは確認できましたが、公開前のQraft本体へは入れません。");
+          }
+        } catch (accessErr) {
+          setError(
+            formatAuthError(
+              accessErr instanceof Error ? accessErr.message : "公開状態の確認に失敗しました",
+            ),
+          );
+        }
       }
     } catch (err) {
       setError(
@@ -117,6 +151,29 @@ export function AuthScreen() {
       setBusy(false);
     }
   };
+
+  if (authenticated && access && !access.canAccess) {
+    return (
+      <div className="fixed inset-0 z-[90] overflow-y-auto bg-black">
+        <div className="mx-auto flex min-h-dvh max-w-md flex-col px-8 py-10">
+          <h1 className="mt-8 text-2xl font-black">公開前です</h1>
+          <p className="mt-4 text-sm text-muted">
+            アカウントは確認できましたが、公開前のQraft本体には入れません。9月12日の先行公開または9月19日の一般公開までお待ちください。
+          </p>
+          <button
+            type="button"
+            className="mt-8 rounded-full border border-gray-700 py-3 text-sm font-bold"
+            onClick={() => void logout()}
+          >
+            ログアウト
+          </button>
+          <Link href="/" className="mt-4 text-center text-sm font-bold text-sky-400">
+            戻る
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[90] overflow-y-auto bg-black">

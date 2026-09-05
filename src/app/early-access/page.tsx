@@ -14,7 +14,12 @@ export default function EarlyAccessPage() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      setAccess(await fetchAccessStatus(session?.access_token));
+      try {
+        setAccess(await fetchAccessStatus(session?.access_token));
+      } catch (err) {
+        console.error("[access]", err);
+        setAccess(null);
+      }
     })();
   }, []);
 

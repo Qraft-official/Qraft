@@ -12,6 +12,7 @@ import {
   releasePhaseAt,
   remainingEarlyAccessSlots,
 } from "./release-gate";
+import { isTrustedDeveloperEmail, normalizeEmail } from "./trusted-developer-emails";
 
 export type AccessSnapshot = {
   phase: "prelaunch" | "early" | "public";
@@ -25,6 +26,7 @@ export type AccessSnapshot = {
   joinOpen: boolean;
   isAdmin: boolean;
   isMember: boolean;
+  adminCheckError?: string | null;
 };
 
 export async function loadReleaseSchedule(): Promise<ReleaseSchedule> {
@@ -47,17 +49,66 @@ export async function loadReleaseSchedule(): Promise<ReleaseSchedule> {
   };
 }
 
-export async function isAdminRequest(request: Request) {
+export async function isTrustedDeveloperUser(user: { id: string; email?: string | null }) {
+  if (isTrustedDeveloperEmail(user.email)) return true;
+
+  const admin = adminSupabase();
+  if (!admin) return false;
+
+  const { data: rpcData, error: rpcError } = await admin.rpc("user_is_trusted_developer", {
+    p_user_id: user.id,
+  });
+  if (!rpcError && rpcData === true) return true;
+  if (rpcError) {
+    console.error("[user_is_trusted_developer]", rpcError.message);
+  }
+
+  const email = normalizeEmail(user.email);
+  if (!email) return false;
+  const { data: row, error } = await admin
+    .from("admin_allowlist")
+    .select("email")
+    .ilike("email", email)
+    .maybeSingle();
+  if (error) {
+    console.error("[admin_allowlist]", error.message);
+    return false;
+  }
+  return Boolean(row?.email);
+}
+
+export async function isAdminRequest(request: Request): Promise<{
+  isAdmin: boolean;
+  error: string | null;
+}> {
+  const token = bearerTokenFromRequest(request);
+  if (!token) return { isAdmin: false, error: null };
+
+  const user = await userFromRequest(request);
+  if (!user) {
+    return { isAdmin: false, error: "セッションを確認できませんでした" };
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const token = bearerTokenFromRequest(request);
-  if (!url || !anon || !token) return false;
-  const sb = createClient(url, anon, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-  const { data } = await sb.rpc("is_admin");
-  return data === true;
+  if (url && anon) {
+    const sb = createClient(url, anon, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data, error } = await sb.rpc("is_admin");
+    if (error) {
+      console.error("[is_admin]", error.message);
+    } else if (data === true) {
+      return { isAdmin: true, error: null };
+    }
+  }
+
+  if (await isTrustedDeveloperUser(user)) {
+    return { isAdmin: true, error: null };
+  }
+
+  return { isAdmin: false, error: null };
 }
 
 export async function isEarlyAccessMember(userId: string) {
@@ -87,7 +138,10 @@ export async function getAccessSnapshot(request: Request, nowMs = Date.now()): P
   const schedule = await loadReleaseSchedule();
   const phase = releasePhaseAt(nowMs, schedule);
   const user = await userFromRequest(request);
-  const isAdmin = user ? await isAdminRequest(request) : false;
+  const adminResult = user
+    ? await isAdminRequest(request)
+    : { isAdmin: false, error: null as string | null };
+  const isAdmin = adminResult.isAdmin;
   const isMember = user ? await isEarlyAccessMember(user.id) : false;
   const memberCount = await countEarlyAccessMembers();
   const canAccess = canAccessApp({ phase, isAdmin, isMember });
@@ -103,6 +157,7 @@ export async function getAccessSnapshot(request: Request, nowMs = Date.now()): P
     joinOpen: earlyAccessJoinOpen(phase),
     isAdmin,
     isMember,
+    adminCheckError: adminResult.error,
   };
 }
 

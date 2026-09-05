@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   EARLY_ACCESS_START_ISO,
   PUBLIC_RELEASE_AT_ISO,
@@ -10,6 +11,8 @@ import {
   publicSignupAllowed,
   releasePhaseAt,
 } from "../src/lib/release-gate";
+import { AUTH_ENTRY_PATH, isAuthEntryPath } from "../src/lib/auth-entry";
+import { isTrustedDeveloperEmail, TRUSTED_DEVELOPER_EMAILS } from "../src/lib/trusted-developer-emails";
 
 const schedule = defaultReleaseSchedule();
 assert.equal(schedule.earlyAccessStart, EARLY_ACCESS_START_ISO);
@@ -96,6 +99,34 @@ assert.equal(
 assert.equal(releasePhaseAt(t("2026-09-18T23:59:59+09:00"), schedule) === "early", true);
 assert.equal(releasePhaseAt(t("2026-09-19T00:00:00+09:00"), schedule) === "public", true);
 
+assert.equal(AUTH_ENTRY_PATH, "/auth");
+assert.equal(isAuthEntryPath("/auth"), true);
+assert.equal(isAuthEntryPath("/auth/callback"), false);
+assert.equal(isAuthEntryPath("/"), false);
+assert.equal(TRUSTED_DEVELOPER_EMAILS.length, 4);
+assert.equal(isTrustedDeveloperEmail("Shougay1919@gmail.com"), true);
+assert.equal(isTrustedDeveloperEmail("sentaiyi590@gmail.com"), true);
+assert.equal(isTrustedDeveloperEmail("qraft.study@gmail.com"), true);
+assert.equal(isTrustedDeveloperEmail("njbk1rktdn@sute.jp"), true);
+assert.equal(isTrustedDeveloperEmail("random@example.com"), false);
+assert.equal(isTrustedDeveloperEmail(""), false);
+
+const logo = fs.readFileSync("src/components/LogoWithSecretAuthHotspot.tsx", "utf8");
+assert.equal(logo.includes("AUTH_ENTRY_PATH"), true);
+assert.equal(logo.includes("admin=true"), false);
+assert.equal(logo.includes("developer=true"), false);
+assert.equal(logo.includes("aria-hidden"), true);
+assert.equal(logo.includes("管理者"), false);
+const gate = fs.readFileSync("src/components/EarlyAccessGate.tsx", "utf8");
+assert.equal(gate.includes("LogoWithSecretAuthHotspot"), true);
+assert.equal(gate.includes("?admin="), false);
+const appShell = fs.readFileSync("src/components/AppShell.tsx", "utf8");
+assert.equal(appShell.includes("isAuthEntry"), true);
+const authPage = fs.readFileSync("src/app/auth/page.tsx", "utf8");
+assert.equal(authPage.includes("AuthScreen"), true);
+assert.equal(authPage.includes("accountCreationOpen"), true);
+
 console.log("ok release-gate");
 console.log(`EARLY_ACCESS_START ${EARLY_ACCESS_START_ISO}`);
 console.log(`PUBLIC_RELEASE_AT ${PUBLIC_RELEASE_AT_ISO}`);
+console.log(`AUTH_ENTRY_PATH ${AUTH_ENTRY_PATH}`);

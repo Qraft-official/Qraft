@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "seed:launch": "tsx scripts/seed-launch-content.ts",
-    "test:release": "tsx scripts/verify-release-gate.ts"
+    "seed:x-promo": "tsx scripts/seed-x-promo.ts",
+    "test:release": "tsx scripts/verify-release-gate.ts",
+    "test:publish": "tsx scripts/verify-publish-at.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

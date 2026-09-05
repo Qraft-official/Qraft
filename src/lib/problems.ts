@@ -31,6 +31,7 @@ export type ProblemRow = {
   is_hard_spotlight?: boolean | null;
   promoted?: boolean | null;
   promoted_at?: string | null;
+  publish_at?: string | null;
   hints?: unknown;
   felt_easy?: number | null;
   felt_normal?: number | null;
@@ -84,10 +85,13 @@ export type ProblemPatch = {
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
 
 const PROBLEM_COLUMNS =
-  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, hints, felt_easy, felt_normal, felt_hard, duration_sum, duration_n, grade_correct, grade_n, series_id, series_ord";
+  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, publish_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, hints, felt_easy, felt_normal, felt_hard, duration_sum, duration_n, grade_correct, grade_n, series_id, series_ord";
 
 const PROBLEM_COLUMNS_LEGACY =
   "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at";
+
+const PROBLEM_COLUMNS_WITH_PUBLISH =
+  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, publish_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at";
 
 export function asSubject(value: string): Subject {
   return SUBJECTS.includes(value as Subject) ? (value as Subject) : "math";
@@ -173,7 +177,7 @@ export function problemToPost(
     pages: asNotePages(row.pages),
     solutionFormat: format,
     isSprint: row.is_sprint,
-    createdAt: row.created_at,
+    createdAt: row.publish_at ?? row.created_at,
     replyCount: 0,
     repostCount: 0,
     likeCount: 0,
@@ -217,12 +221,24 @@ export async function fetchProblems(): Promise<{
   let problemsTask = await supabase
     .from("problems")
     .select(PROBLEM_COLUMNS)
-    .order("created_at", { ascending: false });
+    .order("publish_at", { ascending: false });
+  if (problemsTask.error && /publish_at/i.test(problemsTask.error.message)) {
+    problemsTask = (await supabase
+      .from("problems")
+      .select(PROBLEM_COLUMNS.replace(", publish_at", ""))
+      .order("created_at", { ascending: false })) as typeof problemsTask;
+  }
   if (problemsTask.error && /hints|felt_easy|series_id|duration_sum|grade_correct/i.test(problemsTask.error.message)) {
     problemsTask = (await supabase
       .from("problems")
-      .select(PROBLEM_COLUMNS_LEGACY)
-      .order("created_at", { ascending: false })) as typeof problemsTask;
+      .select(PROBLEM_COLUMNS_WITH_PUBLISH)
+      .order("publish_at", { ascending: false })) as typeof problemsTask;
+    if (problemsTask.error && /publish_at/i.test(problemsTask.error.message)) {
+      problemsTask = (await supabase
+        .from("problems")
+        .select(PROBLEM_COLUMNS_LEGACY)
+        .order("created_at", { ascending: false })) as typeof problemsTask;
+    }
   }
 
   const [{ data: sessionWrap }, { data, error }] = await Promise.all([

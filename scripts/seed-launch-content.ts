@@ -7,9 +7,9 @@ import { assignProblems } from "./launch-content/assign";
 import { loadLaunchProblems, type LaunchProblem } from "./launch-content/load-problems";
 import { SAMPLE_USERS } from "./launch-content/sample-users";
 import {
-  LAUNCH_DATE,
-  uniqueIsoTimes,
-  writeBlockedReason,
+  LAUNCH_PUBLISH_END_ISO,
+  LAUNCH_PUBLISH_START_ISO,
+  staggeredPublishTimes,
 } from "./launch-content/timestamps";
 
 type SeedMapRow = { seed_key: string; kind: string; entity_id: string };
@@ -87,7 +87,12 @@ async function identifiedSampleProblemIds(admin: SupabaseClient | null) {
   return [...ids];
 }
 
-function problemRow(authorId: string, problem: LaunchProblem, createdAt: string, includeHints: boolean) {
+function problemRow(
+  authorId: string,
+  problem: LaunchProblem,
+  publishedAt: string,
+  includeHints: boolean,
+) {
   const row: Record<string, unknown> = {
     author_id: authorId,
     title: problem.title,
@@ -102,7 +107,8 @@ function problemRow(authorId: string, problem: LaunchProblem, createdAt: string,
     mode: "aha",
     correct_answer: problem.answer,
     difficulty_level: problem.level,
-    created_at: createdAt,
+    created_at: publishedAt,
+    publish_at: publishedAt,
   };
   if (includeHints) row.hints = problem.hint ? [problem.hint] : [];
   return row;
@@ -111,12 +117,10 @@ function problemRow(authorId: string, problem: LaunchProblem, createdAt: string,
 async function main() {
   loadDotEnv();
   const dryRun = process.argv.includes("--dry-run");
-  const now = new Date();
   const loaded = loadLaunchProblems();
   const assigned = assignProblems(SAMPLE_USERS, loaded.valid);
-  const times = uniqueIsoTimes(
-    assigned.map((row) => row.problem.seedKey),
-    now,
+  const times = staggeredPublishTimes(
+    assigned.map((row) => ({ seedKey: row.problem.seedKey, authorKey: row.user.seedKey })),
   );
 
   const admin = adminClient();
@@ -160,10 +164,12 @@ async function main() {
     `Invalid problems: ${loaded.invalid.length}`,
     ``,
     `Posts to create: ${postsToCreate.length}`,
-    `Posts to skip: ${postsToSkip.length}`,
+    `Posts to reschedule: ${postsToSkip.length}`,
     ``,
-    `Target launch date:`,
-    LAUNCH_DATE,
+    `Publish window (JST):`,
+    `${LAUNCH_PUBLISH_START_ISO} .. ${LAUNCH_PUBLISH_END_ISO}`,
+    `First planned: ${times[0] ?? "(none)"}`,
+    `Last planned: ${times[times.length - 1] ?? "(none)"}`,
     ``,
     `JSON files: ${loaded.files.join(", ") || "(none)"}`,
     `DB connected: ${admin ? "yes" : "no (missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)"}`,
@@ -186,9 +192,8 @@ async function main() {
   if (!(await tableExists(admin, "launch_seed_map")) || !(await hasColumn(admin, "profiles", "is_sample"))) {
     throw new Error("Cannot seed: apply migration 20260905140000_launch_sample_accounts.sql first.");
   }
-  const blocked = writeBlockedReason(now);
-  if (blocked) {
-    throw new Error(blocked);
+  if (!(await hasColumn(admin, "problems", "publish_at"))) {
+    throw new Error("Cannot seed: apply migration 20260905200000_problem_publish_at.sql first.");
   }
 
   const includeHints = await hasColumn(admin, "problems", "hints");
@@ -267,14 +272,31 @@ async function main() {
 
   for (let i = 0; i < assigned.length; i++) {
     const row = assigned[i];
-    if (existingProblemKeys.has(row.problem.seedKey)) continue;
     const authorId = userIds.get(row.user.seedKey);
     if (!authorId) throw new Error(`Missing author for ${row.user.seedKey}`);
-    const createdAt = times[i];
-    if (Date.parse(createdAt) > Date.now()) {
-      throw new Error(`Refusing future created_at for ${row.problem.seedKey}`);
+    const publishedAt = times[i];
+    const payload = problemRow(authorId, row.problem, publishedAt, includeHints);
+    const mapped = mapByKey.get(row.problem.seedKey);
+    if (mapped?.kind === "problem") {
+      const { error } = await admin
+        .from("problems")
+        .update({
+          title: payload.title,
+          problem_text: payload.problem_text,
+          solution: payload.solution,
+          subject: payload.subject,
+          pages: payload.pages,
+          correct_answer: payload.correct_answer,
+          difficulty_level: payload.difficulty_level,
+          created_at: publishedAt,
+          publish_at: publishedAt,
+          ...(includeHints ? { hints: payload.hints } : {}),
+        })
+        .eq("id", mapped.entity_id)
+        .eq("author_id", authorId);
+      if (error) throw new Error(`Failed updating ${row.problem.seedKey}: ${error.message}`);
+      continue;
     }
-    const payload = problemRow(authorId, row.problem, createdAt, includeHints);
     const inserted = await admin.from("problems").insert(payload).select("id").single();
     if (inserted.error || !inserted.data) {
       throw new Error(`Failed inserting ${row.problem.seedKey}: ${inserted.error?.message ?? "no row"}`);

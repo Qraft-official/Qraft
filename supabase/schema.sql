@@ -47,6 +47,7 @@ create table if not exists public.problems (
   pages jsonb,
   problem_format text,
   created_at timestamptz not null default now(),
+  publish_at timestamptz not null default now(),
   mode text not null default 'question'
     check (mode in ('question', 'challenge', 'aha')),
   correct_answer text
@@ -54,6 +55,9 @@ create table if not exists public.problems (
 
 create index if not exists problems_created_at_idx
   on public.problems (created_at desc);
+
+create index if not exists problems_publish_at_idx
+  on public.problems (publish_at desc);
 
 create index if not exists problems_author_id_idx
   on public.problems (author_id);
@@ -144,7 +148,11 @@ drop policy if exists "problems are readable" on public.problems;
 create policy "problems are readable"
   on public.problems for select
   to anon, authenticated
-  using (true);
+  using (
+    publish_at <= now()
+    or author_id = (select auth.uid())
+    or public.is_admin()
+  );
 
 drop policy if exists "users can insert own problems" on public.problems;
 drop policy if exists "admins can insert problems" on public.problems;
@@ -709,8 +717,12 @@ as $$
   rx as (
     select r.problem_id, count(*)::int as n
     from public.problem_reactions r
+    join public.problems p on p.id = r.problem_id
+    join public.profiles pr on pr.id = p.author_id
     cross join since
     where r.created_at >= since.t
+      and p.publish_at <= now()
+      and not coalesce(pr.is_sample, false)
     group by r.problem_id
   ),
   by_author as (
@@ -740,11 +752,14 @@ as $$
       p.confused_count,
       (coalesce(rx.n, 0) + coalesce(p.confused_count, 0))::int as score
     from public.problems p
+    join public.profiles pr on pr.id = p.author_id
     left join rx on rx.problem_id = p.id
     cross join since
-    where p.created_at >= since.t
+    where p.publish_at >= since.t
+      and p.publish_at <= now()
       and not coalesce(p.is_sprint, false)
-    order by score desc, p.created_at desc
+      and not coalesce(pr.is_sample, false)
+    order by score desc, p.publish_at desc
     limit 1
   )
   select jsonb_build_object(

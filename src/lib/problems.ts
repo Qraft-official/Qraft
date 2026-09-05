@@ -427,12 +427,35 @@ export async function updateProblem(
 
 export async function deleteProblem(id: string): Promise<{ error: string | null }> {
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const viewerId = session?.user?.id;
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) return { error: userError.message };
+  const viewerId = user?.id;
   if (!viewerId) return { error: "ログインしてください" };
-  const { error } = await supabase.from("problems").delete().eq("id", id).eq("author_id", viewerId);
+
+  const { data: rpcId, error: rpcError } = await supabase.rpc("delete_own_problem", {
+    p_problem_id: id,
+  });
+  if (!rpcError && rpcId) return { error: null };
+  if (rpcError && !/could not find|does not exist|schema cache/i.test(rpcError.message)) {
+    if (/NOT_AUTHENTICATED/i.test(rpcError.message)) return { error: "ログインしてください" };
+    if (/NOT_OWNER_OR_MISSING/i.test(rpcError.message)) {
+      return { error: "この投稿は削除できません。自分の投稿のみ削除できます。" };
+    }
+    return { error: rpcError.message };
+  }
+
+  const { data, error } = await supabase
+    .from("problems")
+    .delete()
+    .eq("id", id)
+    .eq("author_id", viewerId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data?.length) {
+    return { error: "この投稿は削除できません。自分の投稿のみ削除できます。" };
+  }
   return { error: null };
 }
 

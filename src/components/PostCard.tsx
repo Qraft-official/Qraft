@@ -340,7 +340,7 @@ export function PostCard({
                               <Megaphone size={16} className="text-amber-300" /> プロモーション設定
                             </button>
                           )}
-                          {(post.kind === "problem" || post.kind === "sprint") && (
+                          {(post.kind === "problem" || post.kind === "sprint" || post.kind === "solution") && (
                           <button
                             type="button"
                             disabled={menuBusy}
@@ -355,6 +355,7 @@ export function PostCard({
                               }).then((ok) => {
                                 if (!ok) return;
                                 setMenuBusy(true);
+                                setMenuMsg("");
                                 void deleteProblem(post.id).then((res) => {
                                   setMenuBusy(false);
                                   if (res.error) setMenuMsg(res.error);

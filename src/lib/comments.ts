@@ -97,10 +97,15 @@ export async function insertComment(input: {
 export async function deleteComment(id: string): Promise<{ error: string | null }> {
   if (!isProblemUuid(id)) return { error: null };
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user?.id) return { error: "ログインしてください" };
-  const { error } = await supabase.from("comments").delete().eq("id", id);
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) return { error: userError.message };
+  if (!user?.id) return { error: "ログインしてください" };
+  const { data, error } = await supabase.from("comments").delete().eq("id", id).select("id");
   if (error) return { error: error.message };
+  if (!data?.length) {
+    return { error: "このコメントは削除できません。" };
+  }
   return { error: null };
 }

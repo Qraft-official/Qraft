@@ -1067,12 +1067,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteProblem = useCallback(async (id: string) => {
+    const drop = (p: Post[]) =>
+      p.filter((x) => x.id !== id && x.replyToId !== id && x.problemId !== id);
     if (isProblemUuid(id)) {
       const { error } = await persistDeleteProblem(id);
       if (error) return { error };
-      setRemotePosts((p) => p.filter((x) => x.id !== id));
+      setRemotePosts(drop);
+      setExtra(drop);
+      return {};
     }
-    setExtra((p) => p.filter((x) => x.id !== id));
+    setExtra(drop);
     return {};
   }, []);
 

@@ -71,8 +71,8 @@ export function readComposerDraft(
   }
 }
 
-export function writeComposerDraft(draft: ComposerDraft) {
-  if (typeof window === "undefined") return;
+export function writeComposerDraft(draft: ComposerDraft): boolean {
+  if (typeof window === "undefined") return false;
   const slim = slimPages(draft.pages ?? []);
   const photo =
     draft.photo && draft.photo.startsWith("data:") && draft.photo.length > DRAFT_MAX_CHARS
@@ -87,14 +87,16 @@ export function writeComposerDraft(draft: ComposerDraft) {
   };
   try {
     localStorage.setItem(keyFor(draft.userId, draft.kind, draft.quotePostId), JSON.stringify(payload));
+    return true;
   } catch {
     try {
       localStorage.setItem(
         keyFor(draft.userId, draft.kind, draft.quotePostId),
         JSON.stringify({ ...payload, pages: undefined, photo: undefined }),
       );
+      return true;
     } catch {
-      /* quota */
+      return false;
     }
   }
 }

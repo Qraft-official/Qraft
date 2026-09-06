@@ -152,15 +152,11 @@ function repostScore(post: Post, ctx: DiscoverSortContext) {
   return (post.repostCount ?? 0) + local;
 }
 
-/** 解法の星評価。件数があるときは平均を優先。 */
-export function solutionRatingStats(post: Post, ctx: DiscoverSortContext) {
+/** 解法の星評価。件数があるときは全体平均。自分の評価は平均に使わない。 */
+export function solutionRatingStats(post: Post, _ctx: DiscoverSortContext) {
   const count = post.eleganceCount ?? 0;
   if (count > 0) {
     return { avg: avgStars(post.eleganceSum, count), count };
-  }
-  const local = ctx.ratings[post.id]?.elegance;
-  if (typeof local === "number" && local > 0) {
-    return { avg: local, count: 1 };
   }
   return { avg: 0, count: 0 };
 }

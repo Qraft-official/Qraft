@@ -8,13 +8,18 @@ export function StarRating({
   onChange,
   label,
   accent = "purple",
+  average,
+  count,
 }: {
   value: number;
   onChange?: (n: number) => void;
   label?: string;
   accent?: "purple" | "lime";
+  average?: number;
+  count?: number;
 }) {
   const fill = accent === "lime" ? "#CCFF00" : "#A855F7";
+  const ratingCount = count ?? 0;
   return (
     <div className="flex flex-col gap-1">
       {label && (
@@ -38,9 +43,13 @@ export function StarRating({
             />
           </motion.button>
         ))}
-        {value > 0 && (
-          <span className="ml-1 text-xs text-muted">{value.toFixed(1)}</span>
-        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted">
+        <span>あなた: {value > 0 ? value : "未評価"}</span>
+        <span>
+          平均 {ratingCount > 0 && typeof average === "number" ? average.toFixed(1) : "—"}
+          {ratingCount > 0 ? `（${ratingCount}）` : ""}
+        </span>
       </div>
     </div>
   );

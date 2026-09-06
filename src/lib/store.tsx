@@ -58,6 +58,11 @@ import {
   type ProblemPatch,
 } from "./problems";
 import {
+  fetchPostRatingStats,
+  optimisticRatingAggregate,
+  upsertPostRating,
+} from "./post-ratings";
+import {
   fetchMyConfusedProblemIds,
   notifyConfusedReactors,
   spotlightFromCount,
@@ -162,7 +167,7 @@ type Store = {
   toggleFollow: (userId: string) => void;
   toggleLike: (postId: string) => void;
   toggleRepost: (postId: string) => void;
-  rate: (postId: string, kind: RatingKind, stars: number) => void;
+  rate: (postId: string, kind: RatingKind, stars: number) => void | Promise<void>;
   addProblem: (input: NewProblem) => Promise<{
     error?: string;
     mailError?: string;
@@ -304,6 +309,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [likes, setLikes] = useState<string[]>([]);
   const [reposts, setReposts] = useState<string[]>([]);
   const [ratings, setRatings] = useState<Ratings>({});
+  const ratingsRef = useRef(ratings);
+  ratingsRef.current = ratings;
   const [extra, setExtra] = useState<Post[]>([]);
   const [hiddenReplyIds, setHiddenReplyIds] = useState<string[]>([]);
   const [remotePosts, setRemotePosts] = useState<Post[]>([]);
@@ -327,6 +334,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reactions, setReactions] = useState<Record<string, string>>({});
   const [confusedMine, setConfusedMine] = useState<Record<string, boolean>>({});
   const [confusedCounts, setConfusedCounts] = useState<Record<string, number>>({});
+  const [ratingAgg, setRatingAgg] = useState<Record<string, { sum: number; count: number }>>({});
+  const ratingAggRef = useRef(ratingAgg);
+  ratingAggRef.current = ratingAgg;
   const [saved, setSaved] = useState<Record<string, SaveCategory>>({});
   const savedRef = useRef(saved);
   savedRef.current = saved;
@@ -749,6 +759,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...p,
         difficultyLevel: asDifficulty(level),
         confusedCount: baseCount,
+        eleganceSum: ratingAgg[p.id]?.sum ?? p.eleganceSum,
+        eleganceCount: ratingAgg[p.id]?.count ?? p.eleganceCount,
         isHardSpotlight: p.isHardSpotlight || spotlightFromCount(baseCount),
         replyCount:
           p.kind === "reply"
@@ -758,13 +770,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               MOCK_REPLIES.filter((e) => e.replyToId === p.id && !hidden.has(e.id)).length,
       };
     });
-  }, [extra, mockOfficial, remotePosts, confusedCounts, hiddenReplyIds]);
+  }, [extra, mockOfficial, remotePosts, confusedCounts, ratingAgg, hiddenReplyIds]);
 
   const getPost = useCallback(
     (id: string) =>
       posts.find((p) => p.id === id) || catalog.find((p) => p.id === id),
     [posts, catalog],
   );
+
+  const ratingTargetKey = useMemo(() => {
+    const ids: string[] = [];
+    for (const p of remotePosts) if (p.kind === "solution") ids.push(p.id);
+    for (const p of extra) if (p.kind === "solution") ids.push(p.id);
+    for (const p of POSTS) if (p.kind === "solution") ids.push(p.id);
+    return [...new Set(ids)].sort().join(",");
+  }, [remotePosts, extra]);
+
+  useEffect(() => {
+    if (!ready || !authenticated) return;
+    const ids = ratingTargetKey ? ratingTargetKey.split(",") : [];
+    if (!ids.length) return;
+    let cancelled = false;
+    void fetchPostRatingStats(ids).then(({ stats, error }) => {
+      if (cancelled || error) return;
+      setRatingAgg((prev) => {
+        const next = { ...prev };
+        for (const s of stats) {
+          if (s.kind !== "elegance") continue;
+          next[s.postId] = { sum: s.ratingSum, count: s.ratingCount };
+        }
+        return next;
+      });
+      setRatings((prev) => {
+        const next = { ...prev };
+        for (const s of stats) {
+          if (s.kind !== "elegance") continue;
+          const cur = { ...next[s.postId] };
+          if (s.myStars > 0) cur.elegance = s.myStars;
+          else delete cur.elegance;
+          if (Object.keys(cur).length) next[s.postId] = cur;
+          else delete next[s.postId];
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, authenticated, ratingTargetKey]);
 
   const repliesTo = useCallback(
     (postId: string) =>
@@ -992,12 +1045,70 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const rate = useCallback((postId: string, kind: RatingKind, stars: number) => {
-    setRatings((prev) => ({
-      ...prev,
-      [postId]: { ...prev[postId], [kind]: stars },
-    }));
-  }, []);
+  const rate = useCallback(async (postId: string, kind: RatingKind, stars: number) => {
+    const prevMy = ratingsRef.current[postId]?.[kind] ?? 0;
+    const post = getPost(postId);
+    const prevCount =
+      kind === "elegance"
+        ? (ratingAggRef.current[postId]?.count ?? post?.eleganceCount ?? 0)
+        : (post?.ahaCount ?? 0);
+    const prevSum =
+      kind === "elegance"
+        ? (ratingAggRef.current[postId]?.sum ?? post?.eleganceSum ?? 0)
+        : (post?.ahaSum ?? 0);
+    const nextAgg = optimisticRatingAggregate({
+      average: avgStars(prevSum, prevCount),
+      count: prevCount,
+      myRating: prevMy,
+      nextRating: stars,
+    });
+
+    setRatings((prev) => {
+      const nextKind = { ...prev[postId] };
+      if (stars > 0) nextKind[kind] = stars;
+      else delete nextKind[kind];
+      const next = { ...prev };
+      if (Object.keys(nextKind).length) next[postId] = nextKind;
+      else delete next[postId];
+      return next;
+    });
+    if (kind === "elegance") {
+      setRatingAgg((prev) => ({ ...prev, [postId]: { sum: nextAgg.sum, count: nextAgg.count } }));
+    }
+
+    const res = await upsertPostRating(postId, kind, stars);
+    if (res.error || !res.stat) {
+      setRatings((prev) => {
+        const nextKind = { ...prev[postId] };
+        if (prevMy > 0) nextKind[kind] = prevMy;
+        else delete nextKind[kind];
+        const next = { ...prev };
+        if (Object.keys(nextKind).length) next[postId] = nextKind;
+        else delete next[postId];
+        return next;
+      });
+      if (kind === "elegance") {
+        setRatingAgg((prev) => ({ ...prev, [postId]: { sum: prevSum, count: prevCount } }));
+      }
+      console.warn("rate:", res.error);
+      return;
+    }
+    if (res.stat.kind === "elegance") {
+      setRatingAgg((prev) => ({
+        ...prev,
+        [postId]: { sum: res.stat!.ratingSum, count: res.stat!.ratingCount },
+      }));
+    }
+    setRatings((prev) => {
+      const nextKind = { ...prev[postId] };
+      if (res.stat!.myStars > 0) nextKind[res.stat!.kind] = res.stat!.myStars;
+      else delete nextKind[res.stat!.kind];
+      const next = { ...prev };
+      if (Object.keys(nextKind).length) next[postId] = nextKind;
+      else delete next[postId];
+      return next;
+    });
+  }, [getPost]);
 
   const addProblem = useCallback(async (input: NewProblem) => {
     const {

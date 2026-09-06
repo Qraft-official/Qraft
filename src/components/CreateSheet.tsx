@@ -7,7 +7,7 @@ import {
   HANDWRITING_EXPORT_ERROR,
   packHandwritingExport,
 } from "@/lib/handwriting-export";
-import { confirmDialog, choiceDialog } from "@/lib/app-dialog";
+import { choiceDialog } from "@/lib/app-dialog";
 import { COMPOSER_KB_DOCK_ID, dismissComposerKeyboard } from "@/lib/composer-keyboard";
 import { generateAiProblem } from "@/lib/premium";
 import { toMathliveLatex, wrapMathliveLatex } from "@/lib/mathlive";
@@ -188,8 +188,13 @@ export function CreateSheet() {
       ? `solution:${quotePostId ?? ""}`
       : "";
 
+  const askedRestore = useRef("");
+
   useEffect(() => {
-    if (!composerSession) return;
+    if (!composerSession) {
+      askedRestore.current = "";
+      return;
+    }
     if (composerSession.startsWith("problem")) {
       setText("");
       setTitle("");
@@ -226,7 +231,6 @@ export function CreateSheet() {
     if (q) setSubject(q.subject);
   }, [composerSession, getPost, quotePostId]);
 
-  const askedRestore = useRef("");
   useEffect(() => {
     if (!open || !composerSession || !me.id) return;
     if (askedRestore.current === composerSession) return;
@@ -234,18 +238,7 @@ export function CreateSheet() {
     const kind = openProblem ? "problem" : "solution";
     const draft = readComposerDraft(me.id, kind, quotePostId);
     if (!draft || draftIsEmpty(draft)) return;
-    void confirmDialog({
-      title: "前回の下書きを復元しますか？",
-      message: "前回入力した内容を戻せます。破棄すると下書きは消えます。",
-      confirmLabel: "復元する",
-      cancelLabel: "破棄",
-    }).then((ok) => {
-      if (!ok) {
-        clearComposerDraft(me.id, kind, quotePostId);
-        return;
-      }
-      applyDraft(draft);
-    });
+    applyDraft(draft);
   }, [composerSession, open, me.id, openProblem, quotePostId]);
 
   const applyDraft = (d: ComposerDraft) => {
@@ -296,7 +289,9 @@ export function CreateSheet() {
         step: openProblem ? problemStep : undefined,
       };
       if (draftIsEmpty(draft)) return;
-      writeComposerDraft(draft);
+      if (!writeComposerDraft(draft)) {
+        setPostError("下書きを自動保存できませんでした。容量を減らしてもう一度お試しください。");
+      }
     }, 900);
     return () => window.clearTimeout(t);
   }, [
@@ -365,8 +360,8 @@ export function CreateSheet() {
     clearComposerDraft(me.id, openProblem ? "problem" : "solution", quotePostId);
   };
 
-  const persistDraftNow = () => {
-    if (!me.id) return;
+  const persistDraftNow = (): boolean => {
+    if (!me.id) return false;
     const kind = openProblem ? "problem" : "solution";
     const draft: ComposerDraft = {
       v: 1,
@@ -391,7 +386,14 @@ export function CreateSheet() {
       notebookTextSize,
       step: openProblem ? problemStep : undefined,
     };
-    if (!draftIsEmpty(draft)) writeComposerDraft(draft);
+    if (draftIsEmpty(draft)) return true;
+    const ok = writeComposerDraft(draft);
+    if (!ok) {
+      setPostError("下書きを保存できませんでした。容量を減らしてもう一度お試しください。");
+      return false;
+    }
+    setPostError("");
+    return true;
   };
 
   const requestClose = useCallback(() => {
@@ -401,7 +403,6 @@ export function CreateSheet() {
         close();
         return;
       }
-      persistDraftNow();
       const pick = await choiceDialog({
         title: "投稿を閉じますか？",
         message: "入力内容は下書きに残せます。破棄するとこの下書きは消えます。",
@@ -412,7 +413,7 @@ export function CreateSheet() {
         ],
       });
       if (pick === "save") {
-        persistDraftNow();
+        if (!persistDraftNow()) return;
         close();
       } else if (pick === "discard") {
         clearDraft();

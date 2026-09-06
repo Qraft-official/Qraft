@@ -1,7 +1,7 @@
 "use client";
 
 import { confirmDialog, promptDialog } from "@/lib/app-dialog";
-import { PREMIUM_PRICE_JPY, PREMIUM_REACTIONS, SUBJECT_LABEL, TIER_NAMES } from "@/lib/constants";
+import { PREMIUM_PRICE_JPY, SUBJECT_LABEL, TIER_NAMES } from "@/lib/constants";
 import { difficultyLabel } from "@/lib/difficulty";
 import { isActivePromotion } from "@/lib/recommend";
 import { referralFetch } from "@/lib/referral-client";
@@ -32,6 +32,7 @@ import { EditProblemModal } from "./EditProblemModal";
 import { NotePages } from "./NotePages";
 import { QuoteActionMenu } from "./QuoteActionMenu";
 import { QuoteEmbed } from "./QuoteEmbed";
+import { ReactionAction } from "./ReactionAction";
 import { StarRating } from "./StarRating";
 import { UserAvatar } from "./UserAvatar";
 import { VerifiedBadge } from "./VerifiedBadge";
@@ -136,8 +137,9 @@ export function PostCard({
   const liked = likes.includes(post.id);
   const reposted = reposts.includes(post.id);
   const isMe = author.id === me.id;
-  const elegance =
-    ratings[post.id]?.elegance ?? avgStars(post.eleganceSum, post.eleganceCount);
+  const myElegance = ratings[post.id]?.elegance ?? 0;
+  const eleganceAvg = avgStars(post.eleganceSum, post.eleganceCount);
+  const eleganceCount = post.eleganceCount ?? 0;
   const tier = author.tiers[post.subject];
   const quoted = post.kind === "solution" && post.problemId;
   const comments = repliesTo(post.id).filter((p) => p.kind === "reply");
@@ -540,7 +542,7 @@ export function PostCard({
             </div>
           )}
 
-          <div className="mt-1 flex max-w-md items-center justify-between gap-0.5 text-muted">
+          <div className="mt-1 flex max-w-md min-w-0 items-center justify-between gap-0.5 overflow-hidden text-muted">
             <button
               type="button"
               onClick={openComments}
@@ -605,31 +607,15 @@ export function PostCard({
               {post.likeCount + (liked ? 1 : 0)}
             </motion.button>
 
-            {hasPremium ? (
-              <span className="flex min-w-0 shrink items-center justify-center gap-0">
-                {PREMIUM_REACTIONS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => react(post.id, emoji)}
-                    className={`flex h-11 w-8 items-center justify-center text-sm ${reactions[post.id] === emoji ? "scale-125" : "opacity-70"}`}
-                    aria-label={`リアクション ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  openPaywall("特別リアクションは Qraft Premium（月額¥400）限定です。")
-                }
-                className="flex min-h-11 min-w-0 flex-1 items-center justify-center px-0.5 text-[11px] text-muted"
-              >
-                😂+
-              </button>
-            )}
+            <ReactionAction
+              postId={post.id}
+              hasPremium={hasPremium}
+              selected={reactions[post.id]}
+              onReact={react}
+              onPaywall={() =>
+                openPaywall(`特別リアクションは Qraft Premium（月額¥${PREMIUM_PRICE_JPY}）限定です。`)
+              }
+            />
 
             {post.kind === "solution" && (
               <button
@@ -639,7 +625,7 @@ export function PostCard({
                 aria-label="エレガント度"
               >
                 <Star size={16} />
-                {elegance || "—"}
+                {eleganceCount > 0 ? eleganceAvg : "—"}
               </button>
             )}
 
@@ -680,8 +666,10 @@ export function PostCard({
             >
               <StarRating
                 label="エレガント度 (Elegance Level)"
-                value={ratings[post.id]?.elegance ?? 0}
-                onChange={(n) => rate(post.id, "elegance", n)}
+                value={myElegance}
+                average={eleganceAvg}
+                count={eleganceCount}
+                onChange={(n) => void rate(post.id, "elegance", n)}
                 accent="lime"
               />
             </motion.div>

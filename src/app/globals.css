@@ -157,7 +157,7 @@ html.qraft-scroll-lock body {
 }
 
 .composer-dialog.composer-wizard-s1 {
-  --notebook-max-h: min(48dvh, calc(var(--composer-vvh, 100dvh) * 0.46));
+  --notebook-max-h: min(52dvh, calc(var(--composer-vvh, 100dvh) * 0.52));
 }
 
 .notebook-stage {
@@ -172,6 +172,23 @@ html.qraft-scroll-lock body {
   flex-direction: column;
   margin-inline: auto;
   touch-action: pan-y;
+}
+
+@media (max-width: 767px) {
+  .composer-dialog.composer-wizard-s1 .composer-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .composer-dialog.composer-wizard-s1 .notebook-stage {
+    aspect-ratio: auto;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 220px;
+    max-height: none;
+    flex: 1 1 auto;
+  }
 }
 
 .composer-dialog:has(.qraft-math-kb) {

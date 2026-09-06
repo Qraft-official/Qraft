@@ -17,8 +17,21 @@ import {
   type ResizeCorner,
 } from "@/lib/draw-canvas";
 import type { CanvasPage, CanvasText, Stroke } from "@/lib/types";
+import { confirmDialog } from "@/lib/app-dialog";
 import { motion } from "framer-motion";
-import { Eraser, Plus, Redo2, RotateCcw, Trash2, Type, Undo2, Minimize2 } from "lucide-react";
+import {
+  Circle,
+  Eraser,
+  MoreHorizontal,
+  PenLine,
+  Plus,
+  Redo2,
+  RotateCcw,
+  Trash2,
+  Type,
+  Undo2,
+  Minimize2,
+} from "lucide-react";
 import type { TextSizeId } from "@/lib/text-size";
 import { NotebookExpandButton } from "./NotebookExpandControls";
 import { TextSizeBar } from "./TextSizeBar";
@@ -32,6 +45,7 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 
 function uid() {
@@ -65,6 +79,75 @@ function applyResize(
     y = r.y + (r.h - h);
   }
   return { x, y, w, h };
+}
+
+const WIDTH_PRESETS = [
+  { id: "thin", label: "細い", value: 1.5 },
+  { id: "mid", label: "普通", value: 3.2 },
+  { id: "thick", label: "太い", value: 6.5 },
+] as const;
+
+type ChromePanel = "color" | "width" | "pages" | "more" | null;
+
+function ToolBtn({
+  active,
+  label,
+  onClick,
+  children,
+  className = "",
+}: {
+  active?: boolean;
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg md:h-11 md:w-11 ${
+        active ? "bg-aha text-black" : "text-muted hover:bg-white/10 hover:text-white"
+      } ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ToolSheet({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[96] flex items-end justify-center sm:items-center">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50"
+        aria-label="閉じる"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-label={title}
+        className="relative mx-2 mb-[max(0.5rem,env(safe-area-inset-bottom))] w-full max-w-sm overflow-hidden rounded-2xl border border-gray-700 bg-[#15202b] p-3 shadow-2xl sm:mb-0"
+      >
+        <p className="px-1 pb-2 text-sm font-black">{title}</p>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export type MultiPageCanvasHandle = {
@@ -126,6 +209,7 @@ export const MultiPageCanvas = forwardRef<
   const [editValue, setEditValue] = useState("");
   const redoPageRef = useRef<CanvasPage | null>(null);
   const [editSize, setEditSize] = useState({ w: 180, h: 48 });
+  const [panel, setPanel] = useState<ChromePanel>(null);
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
   const lastKind = useRef<"stroke" | "text">("stroke");
@@ -310,7 +394,14 @@ export const MultiPageCanvas = forwardRef<
     return () => ro.disconnect();
   }, [redraw, pages.length, flush]);
 
-  useEffect(() => () => stopTrack.current?.(), []);
+  useEffect(() => {
+    if (!panel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPanel(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panel]);
 
   useEffect(() => {
     if (!editingId) return;
@@ -706,187 +797,451 @@ export const MultiPageCanvas = forwardRef<
     );
   };
 
+  const goToPage = (i: number) => {
+    finishEdit();
+    indexRef.current = i;
+    setIndex(i);
+    setSelectedId(null);
+    setPanel(null);
+    requestAnimationFrame(() => {
+      wrapEls.current[i]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  };
+
+  const removeCurrentPage = async () => {
+    if (pagesRef.current.length <= 1) return;
+    const ok = await confirmDialog({
+      title: "このページを削除しますか？",
+      message: "このページの手書きは元に戻せません。",
+      confirmLabel: "削除する",
+      cancelLabel: "キャンセル",
+      destructive: true,
+    });
+    if (!ok) return;
+    const next = pagesRef.current.filter((_, i) => i !== indexRef.current);
+    commit(next);
+    const nextIndex = Math.min(indexRef.current, next.length - 1);
+    indexRef.current = nextIndex;
+    setIndex(nextIndex);
+    setPanel(null);
+  };
+
+  const togglePanel = (next: ChromePanel) => {
+    setPanel((cur) => (cur === next ? null : next));
+  };
+
+  const closestWidth = WIDTH_PRESETS.reduce((best, p) =>
+    Math.abs(p.value - width) < Math.abs(best.value - width) ? p : best,
+  );
+
+  const pageChromeMobile = (
+    <div className="flex h-10 shrink-0 items-center gap-1 px-2 md:hidden">
+      <button
+        type="button"
+        onClick={() => togglePanel("pages")}
+        className="flex h-8 min-w-[3.25rem] items-center justify-center rounded-lg bg-white/10 px-2 text-[12px] font-bold text-white"
+        aria-label={`ページ ${index + 1} / ${pages.length}`}
+        aria-expanded={panel === "pages"}
+      >
+        {index + 1} / {pages.length}
+      </button>
+      <button
+        type="button"
+        onClick={addPage}
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-700 text-aha hover:bg-white/10"
+        aria-label="ページ追加"
+      >
+        <Plus size={14} />
+      </button>
+      <span className="min-w-0 flex-1" />
+      {onToggleExpand &&
+        (expanded ? (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white"
+            aria-label="縮小"
+          >
+            <Minimize2 size={15} />
+          </button>
+        ) : (
+          <NotebookExpandButton onClick={onToggleExpand} className="!h-8 !w-8" />
+        ))}
+      <button
+        type="button"
+        onClick={() => togglePanel("more")}
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white"
+        aria-label="その他"
+        aria-expanded={panel === "more"}
+      >
+        <MoreHorizontal size={16} />
+      </button>
+    </div>
+  );
+
+  const pageChromeDesktop = (
+    <div className="hidden items-center gap-1.5 overflow-x-auto px-3 py-1 md:flex">
+      <div className="flex gap-1">
+        {pages.map((p, i) => (
+          <button
+            key={p.id}
+            onClick={() => goToPage(i)}
+            className={`h-11 min-w-11 rounded-lg text-sm font-bold ${
+              i === index ? "bg-neon text-white glow-purple" : "bg-white/10 text-muted"
+            }`}
+            aria-label={`${i + 1}ページ`}
+          >
+            {i + 1}
+          </button>
+        ))}
+      </div>
+      <motion.button
+        whileTap={{ scale: 0.92 }}
+        onClick={addPage}
+        className="flex h-9 items-center gap-1 rounded-full border border-gray-700 px-2.5 text-xs font-bold text-white hover:bg-white/10"
+        aria-label="ページ追加"
+      >
+        <Plus size={14} /> ページ
+      </motion.button>
+      <TextSizeBar
+        compact
+        active={textSize}
+        onPick={(size) => {
+          onTextSizeChange?.(size);
+          if (!selectedId) return;
+          patchPage((p) => ({
+            ...p,
+            texts: pageTexts(p).map((t) =>
+              t.id === selectedId ? { ...t, fontSize: CANVAS_TEXT_PX[size] } : t,
+            ),
+          }));
+        }}
+      />
+      {onToggleExpand &&
+        (expanded ? (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white"
+            aria-label="縮小"
+            title="縮小"
+          >
+            <Minimize2 size={16} />
+          </button>
+        ) : (
+          <NotebookExpandButton onClick={onToggleExpand} />
+        ))}
+      <button
+        onClick={() => void removeCurrentPage()}
+        className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 disabled:opacity-30"
+        disabled={pages.length <= 1}
+        aria-label="このページを削除"
+      >
+        <Trash2 size={16} />
+      </button>
+      <span className="ml-auto shrink-0 text-[11px] text-muted">{pages.length}ページ</span>
+    </div>
+  );
+
+  const applyTextSize = (size: typeof textSize) => {
+    onTextSizeChange?.(size);
+    if (!selectedId) return;
+    patchPage((p) => ({
+      ...p,
+      texts: pageTexts(p).map((t) =>
+        t.id === selectedId ? { ...t, fontSize: CANVAS_TEXT_PX[size] } : t,
+      ),
+    }));
+  };
+
+  const mobileToolbar = (
+    <div className="flex h-11 shrink-0 items-center justify-between gap-0.5 px-1 md:hidden">
+      <ToolBtn
+        active={!textTool && !eraser}
+        label="ペン"
+        onClick={() => {
+          setTextTool(false);
+          setEraser(false);
+        }}
+      >
+        <PenLine size={16} />
+      </ToolBtn>
+      <ToolBtn
+        active={eraser}
+        label="消しゴム"
+        onClick={() => {
+          setEraser(true);
+          setTextTool(false);
+        }}
+      >
+        <Eraser size={16} />
+      </ToolBtn>
+      <button
+        type="button"
+        onClick={() => togglePanel("color")}
+        className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white/10"
+        aria-label="色"
+        aria-expanded={panel === "color"}
+      >
+        <span
+          className="h-5 w-5 rounded-full border-2 border-white/80"
+          style={{ background: color, boxShadow: `0 0 8px ${color}` }}
+        />
+      </button>
+      <ToolBtn active={panel === "width"} label="太さ" onClick={() => togglePanel("width")}>
+        <Circle size={closestWidth.id === "thin" ? 10 : closestWidth.id === "mid" ? 14 : 18} />
+      </ToolBtn>
+      {textTool ? (
+        <TextSizeBar compact active={textSize} onPick={applyTextSize} />
+      ) : (
+        <ToolBtn
+          active={textTool}
+          label="テキスト"
+          onClick={() => {
+            setTextTool(true);
+            setEraser(false);
+          }}
+        >
+          <Type size={16} />
+        </ToolBtn>
+      )}
+      <ToolBtn label="元に戻す" onClick={undo}>
+        <Undo2 size={16} />
+      </ToolBtn>
+      <ToolBtn label="やり直す" onClick={redo}>
+        <Redo2 size={16} />
+      </ToolBtn>
+    </div>
+  );
+
+  const desktopToolbar = (
+    <div className="hidden shrink-0 items-center gap-2 overflow-x-auto px-3 py-2 md:flex">
+      <button
+        type="button"
+        onClick={() => {
+          setTextTool(true);
+          setEraser(false);
+        }}
+        className={`flex h-9 items-center gap-1 rounded-full px-3 text-xs font-bold ${
+          textTool ? "bg-aha text-black" : "bg-white/10 text-muted"
+        }`}
+        aria-label="テキスト追加"
+        aria-pressed={textTool}
+      >
+        <Type size={14} /> テキスト
+      </button>
+      {pens.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          onClick={() => {
+            setColor(c.value);
+            setEraser(false);
+            setTextTool(false);
+          }}
+          className="flex h-9 w-9 shrink-0 items-center justify-center"
+          aria-label={c.label}
+          title={c.label}
+        >
+          <span
+            className="h-6 w-6 rounded-full border-2"
+            style={{
+              background: c.value,
+              borderColor: !eraser && color === c.value ? "#fff" : "transparent",
+              boxShadow: !eraser && color === c.value ? `0 0 12px ${c.value}` : "none",
+            }}
+          />
+        </button>
+      ))}
+      <button
+        onClick={() => {
+          setEraser(true);
+          setTextTool(false);
+        }}
+        className={`flex h-9 w-9 items-center justify-center rounded-full ${eraser ? "bg-white text-black" : "bg-white/10 text-muted"}`}
+        aria-label="消しゴム"
+        title="消しゴム"
+        aria-pressed={eraser}
+      >
+        <Eraser size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => setTextTool(false)}
+        className={`h-9 rounded-full px-3 text-xs font-bold ${
+          !textTool && !eraser ? "bg-white/20 text-white" : "text-muted"
+        }`}
+        aria-pressed={!textTool && !eraser}
+      >
+        ペン
+      </button>
+      <input
+        type="range"
+        min={1.5}
+        max={10}
+        step={0.5}
+        value={width}
+        onChange={(e) => setWidth(Number(e.target.value))}
+        className="w-20 accent-neon"
+        aria-label="ペンの太さ"
+      />
+      <button
+        type="button"
+        onClick={undo}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-muted"
+        aria-label="元に戻す"
+      >
+        <Undo2 size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={redo}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-muted"
+        aria-label="やり直す"
+      >
+        <Redo2 size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={clear}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-muted"
+        aria-label="ページをクリア"
+      >
+        <RotateCcw size={16} />
+      </button>
+    </div>
+  );
+
   return (
     <div className={`flex h-full min-h-0 flex-col ${className}`}>
-      <div className="flex items-center gap-1 overflow-x-auto px-2 py-1 sm:gap-1.5 sm:px-3">
-        <div className="flex gap-1">
-          {pages.map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => {
-                finishEdit();
-                indexRef.current = i;
-                setIndex(i);
-                setSelectedId(null);
-                requestAnimationFrame(() => {
-                  wrapEls.current[i]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                });
-              }}
-              className={`h-11 min-w-11 rounded-lg text-sm font-bold ${
-                i === index ? "bg-neon text-white glow-purple" : "bg-white/10 text-muted"
-              }`}
-              aria-label={`${i + 1}ページ`}
-            >
-              {i + 1}
-            </button>
-          ))}
-        </div>
-        <motion.button
-          whileTap={{ scale: 0.92 }}
-          onClick={addPage}
-          className="flex h-11 items-center gap-1 rounded-full bg-aha px-3 text-xs font-bold text-black"
-          aria-label="ページ追加"
-        >
-          <Plus size={14} /> ページ追加
-        </motion.button>
-        <TextSizeBar
-          compact
-          active={textSize}
-          onPick={(size) => {
-            onTextSizeChange?.(size);
-            if (!selectedId) return;
-            patchPage((p) => ({
-              ...p,
-              texts: pageTexts(p).map((t) =>
-                t.id === selectedId ? { ...t, fontSize: CANVAS_TEXT_PX[size] } : t,
-              ),
-            }));
-          }}
-        />
-        {onToggleExpand &&
-          (expanded ? (
-            <button
-              type="button"
-              onClick={onToggleExpand}
-              className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white"
-              aria-label="縮小"
-              title="縮小"
-            >
-              <Minimize2 size={16} />
-            </button>
-          ) : (
-            <NotebookExpandButton onClick={onToggleExpand} />
-          ))}
-        <button
-          onClick={() => {
-            if (pagesRef.current.length <= 1) return;
-            const next = pagesRef.current.filter((_, i) => i !== index);
-            commit(next);
-            setIndex(Math.min(index, next.length - 1));
-          }}
-          className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 disabled:opacity-30"
-          disabled={pages.length <= 1}
-          aria-label="このページを削除"
-        >
-          <Trash2 size={16} />
-        </button>
-        <span className="ml-auto shrink-0 text-[11px] text-muted">{pages.length}ページ</span>
-      </div>
+      {pageChromeMobile}
+      {pageChromeDesktop}
 
       <div
-        className={`relative min-h-0 flex-1 ${flush ? "overflow-y-auto px-0" : "overflow-hidden px-2"}`}
+        className={`relative min-h-0 flex-1 ${flush ? "overflow-y-auto px-0" : "overflow-hidden px-0 md:px-2"}`}
       >
         <div className={`relative h-full min-h-0 ${flush ? "" : "overflow-hidden"}`}>
           {pages[index] ? renderPageSurface(index, true) : null}
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1.5 sm:gap-2 sm:px-3 sm:py-3">
-        <button
-          type="button"
-          onClick={() => {
-            setTextTool(true);
-            setEraser(false);
-          }}
-          className={`tap-target flex min-h-11 items-center gap-1 rounded-full px-3 text-xs font-bold ${
-            textTool ? "bg-aha text-black" : "bg-white/10 text-muted"
-          }`}
-          aria-label="テキスト追加"
-          aria-pressed={textTool}
-        >
-          <Type size={14} /> テキスト
-        </button>
-        {pens.map((c) => (
+      {mobileToolbar}
+      {desktopToolbar}
+
+      <ToolSheet open={panel === "color"} title="色" onClose={() => setPanel(null)}>
+        <div className="flex flex-wrap gap-2 px-1 pb-1">
+          {pens.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                setColor(c.value);
+                setEraser(false);
+                setTextTool(false);
+                setPanel(null);
+              }}
+              className="flex h-11 w-11 items-center justify-center"
+              aria-label={c.label}
+            >
+              <span
+                className="h-8 w-8 rounded-full border-2"
+                style={{
+                  background: c.value,
+                  borderColor: color === c.value ? "#fff" : "transparent",
+                  boxShadow: color === c.value ? `0 0 12px ${c.value}` : "none",
+                }}
+              />
+            </button>
+          ))}
+        </div>
+      </ToolSheet>
+
+      <ToolSheet open={panel === "width"} title="太さ" onClose={() => setPanel(null)}>
+        <div className="space-y-1">
+          {WIDTH_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                setWidth(p.value);
+                setPanel(null);
+              }}
+              className={`flex min-h-11 w-full items-center justify-between rounded-xl px-3 text-sm font-bold ${
+                closestWidth.id === p.id ? "bg-aha/15 text-aha" : "text-white hover:bg-white/5"
+              }`}
+            >
+              <span>{p.label}</span>
+              <span
+                className="rounded-full bg-white"
+                style={{ width: 8 + p.value * 2, height: p.value + 2 }}
+              />
+            </button>
+          ))}
+          <label className="mt-2 flex items-center gap-2 px-1 text-[11px] text-muted">
+            スライダー
+            <input
+              type="range"
+              min={1.5}
+              max={10}
+              step={0.5}
+              value={width}
+              onChange={(e) => setWidth(Number(e.target.value))}
+              className="min-w-0 flex-1 accent-neon"
+            />
+          </label>
+        </div>
+      </ToolSheet>
+
+      <ToolSheet open={panel === "pages"} title="ページ" onClose={() => setPanel(null)}>
+        <div className="flex flex-wrap gap-1.5">
+          {pages.map((p, i) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => goToPage(i)}
+              className={`h-10 min-w-10 rounded-lg text-sm font-bold ${
+                i === index ? "bg-aha text-black" : "bg-white/10 text-muted"
+              }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
+      </ToolSheet>
+
+      <ToolSheet open={panel === "more"} title="ページ操作" onClose={() => setPanel(null)}>
+        <div className="flex flex-col">
           <button
-            key={c.id}
             type="button"
             onClick={() => {
-              setColor(c.value);
+              setTextTool(true);
               setEraser(false);
-              setTextTool(false);
+              setPanel(null);
             }}
-            className="tap-target flex shrink-0 items-center justify-center"
-            aria-label={c.label}
-            title={c.label}
+            className="flex min-h-11 items-center gap-2 rounded-xl px-2 text-left text-sm font-bold hover:bg-white/5"
           >
-            <span
-              className="h-7 w-7 rounded-full border-2"
-              style={{
-                background: c.value,
-                borderColor: !eraser && color === c.value ? "#fff" : "transparent",
-                boxShadow: !eraser && color === c.value ? `0 0 12px ${c.value}` : "none",
-              }}
-            />
+            <Type size={16} /> テキストを置く
           </button>
-        ))}
-        <button
-          onClick={() => {
-            setEraser(true);
-            setTextTool(false);
-          }}
-          className={`tap-target flex items-center justify-center rounded-full ${eraser ? "bg-white text-black" : "bg-white/10 text-muted"}`}
-          aria-label="消しゴム"
-          title="消しゴム"
-          aria-pressed={eraser}
-        >
-          <Eraser size={16} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setTextTool(false)}
-          className={`min-h-11 rounded-full px-3 text-xs font-bold ${
-            !textTool && !eraser ? "bg-white/20 text-white" : "text-muted"
-          }`}
-          aria-pressed={!textTool && !eraser}
-        >
-          ペン
-        </button>
-        <input
-          type="range"
-          min={1.5}
-          max={10}
-          step={0.5}
-          value={width}
-          onChange={(e) => setWidth(Number(e.target.value))}
-          className="w-20 accent-neon"
-        />
-        <button
-          type="button"
-          onClick={undo}
-          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
-          aria-label="元に戻す"
-          title="元に戻す"
-        >
-          <Undo2 size={16} />
-        </button>
-        <button
-          type="button"
-          onClick={redo}
-          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
-          aria-label="やり直す"
-          title="やり直す"
-        >
-          <Redo2 size={16} />
-        </button>
-        <button
-          type="button"
-          onClick={clear}
-          className="tap-target flex items-center justify-center rounded-full bg-white/10 text-muted"
-          aria-label="ページをクリア"
-        >
-          <RotateCcw size={16} />
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => {
+              clear();
+              setPanel(null);
+            }}
+            className="flex min-h-11 items-center gap-2 rounded-xl px-2 text-left text-sm font-bold hover:bg-white/5"
+          >
+            <RotateCcw size={16} /> このページをクリア
+          </button>
+          <button
+            type="button"
+            disabled={pages.length <= 1}
+            onClick={() => void removeCurrentPage()}
+            className="flex min-h-11 items-center gap-2 rounded-xl px-2 text-left text-sm font-bold text-red-400 hover:bg-white/5 disabled:opacity-30"
+          >
+            <Trash2 size={16} /> このページを削除
+          </button>
+        </div>
+      </ToolSheet>
     </div>
   );
 });

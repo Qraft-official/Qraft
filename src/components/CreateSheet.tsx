@@ -496,17 +496,17 @@ export function CreateSheet() {
   );
 
   const step1Tools = (
-    <div className="min-w-0 space-y-2 px-3 pb-2 md:px-4">
+    <div className="min-w-0 shrink-0 space-y-1.5 px-3 pb-1 md:space-y-2 md:px-4 md:pb-2">
       <div>
-        <p className="mb-1 flex items-center gap-1 text-xs font-bold">
+        <p className="mb-0.5 flex items-center gap-1 text-[11px] font-bold md:mb-1 md:text-xs">
           <Sparkles size={12} className="text-aha" /> AI問題メーカー
         </p>
-        <div className="flex min-w-0 gap-2">
+        <div className="flex min-w-0 gap-1.5">
           <input
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             placeholder="例: コーシー・シュワルツ"
-            className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-800 bg-transparent px-3 text-xs outline-none"
+            className="h-9 min-w-0 flex-1 rounded-lg border border-gray-800 bg-transparent px-2.5 text-xs outline-none md:min-h-11 md:rounded-xl md:px-3"
           />
           <button
             type="button"
@@ -528,7 +528,7 @@ export function CreateSheet() {
               setText(latex);
               setStepHint("");
             }}
-            className="min-h-11 shrink-0 rounded-full bg-neon/20 px-3 text-xs font-bold text-purple-200"
+            className="h-9 shrink-0 rounded-full bg-neon/20 px-3 text-xs font-bold text-purple-200 md:min-h-11"
           >
             生成
           </button>
@@ -792,12 +792,12 @@ export function CreateSheet() {
                     <div
                       className={
                         problemStep === 1
-                          ? "flex min-w-0 w-full max-w-full flex-col"
+                          ? "flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col"
                           : "pointer-events-none h-0 overflow-hidden opacity-0"
                       }
                       aria-hidden={problemStep !== 1}
                     >
-                      <div className="notebook-stage mx-3 min-h-0 md:mx-4">
+                      <div className="notebook-stage mx-3 min-h-0 flex-1 md:mx-4 md:flex-none">
                         <MultiPageCanvas
                           ref={canvasRef}
                           pages={pages}
@@ -815,6 +815,7 @@ export function CreateSheet() {
                       {modeTabs}
                       {inputMode === "typed" &&
                         !editorExpanded && (
+                          <div className="flex min-h-0 w-full flex-1 flex-col">
                           <TypedNotebook
                             pages={typedPages}
                             index={typedIndex}
@@ -840,6 +841,7 @@ export function CreateSheet() {
                             textSize={notebookTextSize}
                             onTextSizeChange={setNotebookTextSize}
                           />
+                          </div>
                         )}
                       {step1Tools}
                     </>
@@ -959,7 +961,7 @@ export function CreateSheet() {
                   )}
                 </div>
                 {problemStep === 1 ? <div id={COMPOSER_KB_DOCK_ID} className="shrink-0" /> : null}
-                <div className="composer-footer flex flex-col gap-1.5 border-t border-gray-800 px-3 py-1.5 md:px-4">
+                <div className="composer-footer flex flex-col gap-1.5 border-t border-gray-800 px-3 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-4">
                   {(stepHint || (problemStep === 3 && postError)) && (
                     <p className="text-xs text-red-400">
                       {problemStep === 3 && postError ? postError : stepHint}

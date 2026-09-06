@@ -48,7 +48,7 @@ export function ImageUploadSection({
       <button
         type="button"
         onClick={handleImageClick}
-        className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl border border-gray-800 bg-white/5 px-3 py-2 text-left text-sm text-gray-200 hover:bg-white/10"
+        className="flex h-9 w-full min-w-0 items-center gap-2 rounded-lg border border-gray-800 bg-white/5 px-3 text-left text-xs text-gray-200 hover:bg-white/10 md:h-11 md:rounded-xl md:text-sm"
       >
         {!isPremium ? (
           <Lock size={14} className="shrink-0 text-amber-400" aria-hidden />

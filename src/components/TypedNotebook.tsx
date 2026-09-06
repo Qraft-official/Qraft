@@ -43,14 +43,14 @@ export function TypedNotebook({
 
   return (
     <div className={`flex min-w-0 w-full flex-col ${expanded ? "min-h-0 flex-1" : ""}`}>
-      <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-2 py-1 sm:gap-1.5 sm:px-3">
-        <div className="flex gap-1">
+      <div className="flex h-10 shrink-0 items-center gap-1 px-2 md:h-auto md:gap-1.5 md:px-3 md:py-1">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {pages.map((p, i) => (
             <button
               key={p.id}
               type="button"
               onClick={() => onIndex(i)}
-              className={`h-11 min-w-11 rounded-lg text-sm font-bold ${
+              className={`h-8 min-w-8 rounded-md text-xs font-bold md:h-11 md:min-w-11 md:rounded-lg md:text-sm ${
                 i === index ? "bg-neon text-white glow-purple" : "bg-white/10 text-muted"
               }`}
               aria-label={`${i + 1}ページ`}
@@ -60,14 +60,22 @@ export function TypedNotebook({
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={onAddPage}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-700 text-aha md:hidden"
+          aria-label="ページ追加"
+        >
+          <Plus size={14} />
+        </button>
         <motion.button
           type="button"
           whileTap={{ scale: 0.92 }}
           onClick={onAddPage}
-          className="flex h-11 items-center gap-1 rounded-full bg-aha px-3 text-xs font-bold text-black"
+          className="hidden h-9 items-center gap-1 rounded-full border border-gray-700 px-2.5 text-xs font-bold text-white hover:bg-white/10 md:flex"
           aria-label="ページ追加"
         >
-          <Plus size={14} /> ページ追加
+          <Plus size={14} /> ページ
         </motion.button>
         <TextSizeBar
           compact
@@ -82,26 +90,25 @@ export function TypedNotebook({
             <button
               type="button"
               onClick={onToggleExpand}
-              className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white md:h-11 md:w-11"
               aria-label="縮小"
               title="縮小"
             >
               <Minimize2 size={16} />
             </button>
           ) : (
-            <NotebookExpandButton onClick={onToggleExpand} />
+            <NotebookExpandButton onClick={onToggleExpand} className="h-8 w-8 md:h-11 md:w-11" />
           ))}
         <button
           type="button"
           onClick={onDeletePage}
           disabled={pages.length <= 1}
-          className="flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-white/10 disabled:opacity-30"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-white/10 disabled:opacity-30 md:h-11 md:w-11"
           aria-label="このページを削除"
           title="このページを削除"
         >
           <Trash2 size={16} />
         </button>
-        <span className="ml-auto shrink-0 pr-1 text-[11px] text-muted">{pages.length}ページ</span>
       </div>
       {header}
       {page && (

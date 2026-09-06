@@ -233,7 +233,7 @@ export function TextSizeBar({
           }
           setOpen((v) => !v);
         }}
-        className="relative z-10 flex h-11 w-11 items-center justify-center rounded-lg border border-gray-700 bg-white/5 text-white hover:border-aha"
+        className="relative z-10 flex h-9 w-9 items-center justify-center rounded-lg border border-gray-700 bg-white/5 text-white hover:border-aha md:h-11 md:w-11"
         aria-label={`文字サイズ ${current.label}。選択中の文字、またはこれから入力する文字に適用`}
         aria-haspopup="dialog"
         aria-expanded={open}

@@ -51,7 +51,11 @@ alter table public.admin_allowlist enable row level security;
 revoke all on public.admin_allowlist from anon, authenticated;
 
 insert into public.admin_allowlist (email)
-values ('shougay1919@gmail.com')
+values
+  ('shougay1919@gmail.com'),
+  ('sentaiyi590@gmail.com'),
+  ('qraft.study@gmail.com'),
+  ('njbk1rktdn@sute.jp')
 on conflict (email) do nothing;
 
 create or replace function public.is_admin()
@@ -59,12 +63,16 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
   select exists (
     select 1
     from public.admin_allowlist a
-    where lower(a.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
+    where lower(a.email) = lower(coalesce(
+      (select u.email from auth.users u where u.id = auth.uid()),
+      (select auth.jwt() ->> 'email'),
+      ''
+    ))
   )
   or coalesce((select auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin';
 $$;

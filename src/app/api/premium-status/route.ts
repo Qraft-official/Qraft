@@ -3,6 +3,7 @@ import { adminSupabase } from "@/lib/admin-supabase";
 import { isComplimentaryPremiumAccount, isDeveloperAccount, evaluatePremiumAccess } from "@/lib/premium";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { jsonIfNoAppAccess } from "@/lib/require-app-access";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,8 @@ async function isAdminUser(request: Request, email?: string | null) {
 }
 
 export async function GET(request: Request) {
+  const blocked = await jsonIfNoAppAccess(request);
+  if (blocked) return blocked;
   const user = await userFromRequest(request);
   if (!user) {
     return NextResponse.json(

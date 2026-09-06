@@ -8,11 +8,14 @@ import {
 import { DEVICE_ID_COOKIE, REFERRAL_APPLIED_COOKIE } from "@/lib/device-id";
 import { clientIpFromRequest, hashNetworkKey, referralFraudSecret } from "@/lib/referral-fraud";
 import { applyReferralCode, getReferralMe, getReferralMeWithToken } from "@/lib/referral-server";
+import { jsonIfNoAppAccess } from "@/lib/require-app-access";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  const blocked = await jsonIfNoAppAccess(request);
+  if (blocked) return blocked;
   const user = await userFromRequest(request);
   if (!user) return NextResponse.json({ error: "ログインしてください。" }, { status: 401 });
   try {
@@ -30,6 +33,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const blocked = await jsonIfNoAppAccess(request);
+  if (blocked) return blocked;
   const user = await userFromRequest(request);
   if (!user) return NextResponse.json({ error: "ログインしてください。" }, { status: 401 });
   const body = (await request.json().catch(() => ({}))) as {

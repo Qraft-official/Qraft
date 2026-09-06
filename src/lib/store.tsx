@@ -30,6 +30,7 @@ import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./consta
 import { getDeviceIdentity, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
 import { referralFetch } from "./referral-client";
+import { clearAccessCookie, deniedClientAccess, fetchAccessStatus, type ClientAccess } from "./release-client";
 import {
   isVerifiedCreator,
   isComplimentaryPremiumAccount,
@@ -144,6 +145,9 @@ type Store = {
     password: string;
   }) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
+  refreshAccess: (accessToken?: string | null) => Promise<ClientAccess>;
+  access: ClientAccess | null;
+  accessReady: boolean;
   authViaSupabase: boolean;
   me: User;
   users: User[];
@@ -298,6 +302,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [onboarded, setOnboarded] = useState(false);
   const [profileHydrated, setProfileHydrated] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [access, setAccess] = useState<ClientAccess | null>(null);
+  const [accessReady, setAccessReady] = useState(false);
   const [tiers, setTiers] = useState<Tiers>(USER_MAP[ME_ID].tiers);
   const [age, setAge] = useState<number | null>(null);
   const [follows, setFollows] = useState<string[]>(INITIAL_FOLLOWS);
@@ -874,6 +880,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const refreshAccess = useCallback(async (accessToken?: string | null) => {
+    try {
+      const token =
+        accessToken ||
+        (await supabase.auth.getSession()).data.session?.access_token ||
+        null;
+      const next = await fetchAccessStatus(token);
+      setAccess(next);
+      setAccessReady(true);
+      return next;
+    } catch (err) {
+      console.error("[access]", err);
+      const denied = deniedClientAccess();
+      setAccess(denied);
+      setAccessReady(true);
+      return denied;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    void refreshAccess();
+  }, [ready, authenticated, supabaseUid, refreshAccess]);
+
   const signInWithEmail = useCallback(async (input: { email: string; password: string }) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -886,6 +916,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSupabaseUid(data.user.id);
         setSessionEmail(fields.email);
         setAuthenticated(true);
+        void refreshAccess(data.session?.access_token);
         setProfile((p) => ({
           ...p,
           ...(fields.name ? { name: fields.name } : {}),
@@ -915,7 +946,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       return { error: formatAuthError(err instanceof Error ? err.message : "ログインに失敗しました") };
     }
-  }, []);
+  }, [refreshAccess]);
 
   const logout = useCallback(async () => {
     try {
@@ -923,6 +954,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.warn("signOut failed:", err);
     }
+    await clearAccessCookie();
+    setAccess(deniedClientAccess());
+    setAccessReady(true);
     setSupabaseUid(null);
     setSessionEmail(null);
     setIsAdmin(false);
@@ -1770,6 +1804,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     signUpWithEmail,
     signInWithEmail,
     logout,
+    refreshAccess,
+    access,
+    accessReady,
     authViaSupabase: !!supabaseUid,
     me,
     users: [

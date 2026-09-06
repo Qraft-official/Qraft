@@ -6,9 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:release-gate": "npx tsx scripts/verify-release-gate.ts",
+    "verify:checkout-embedded": "npx tsx scripts/verify-checkout-embedded.ts"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.9.0",
+    "@stripe/stripe-js": "^9.15.0",
     "@supabase/supabase-js": "^2.112.4",
     "framer-motion": "^13.1.1",
     "html-to-image": "^1.11.13",

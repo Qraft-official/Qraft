@@ -37,6 +37,7 @@ function leavingStripeCheckout() {
   return (
     params.get("canceled") === "true" ||
     params.get("success") === "true" ||
+    Boolean(params.get("session_id")) ||
     referrerIsStripeCheckout()
   );
 }

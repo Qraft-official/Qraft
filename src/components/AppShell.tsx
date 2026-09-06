@@ -2,14 +2,16 @@
 
 import { AuthScreen } from "@/components/AuthScreen";
 import { BottomNav } from "@/components/BottomNav";
+import { EarlyAccessGate } from "@/components/EarlyAccessGate";
 import { Fab } from "@/components/Fab";
 import { InviteCapture } from "@/components/InviteCapture";
 import { Onboarding } from "@/components/Onboarding";
+import { isAuthEntryPath, isPublicReleasePath } from "@/lib/auth-entry";
 import { useApp } from "@/lib/store";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { AppBootSkeleton } from "@/components/UiStates";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 const CreateSheet = dynamic(
@@ -76,8 +78,11 @@ export function AppShell({
     closeFeedback,
     premiumOpen,
     paywallOpen,
+    access,
+    accessReady,
   } = useApp();
   const path = usePathname();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [inAdFrame, setInAdFrame] = useState(false);
   const [loadCreate, setLoadCreate] = useState(false);
@@ -87,8 +92,8 @@ export function AppShell({
   const [loadFeedback, setLoadFeedback] = useState(false);
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
-  const isLegal = path === "/terms" || path === "/privacy";
-  const isInvite = path.startsWith("/i/");
+  const isAuthEntry = isAuthEntryPath(path);
+  const isPublicPath = isPublicReleasePath(path);
   const crawlerSafe = adsensePreview || inAdFrame;
 
   useEffect(() => {
@@ -103,6 +108,15 @@ export function AppShell({
   useEffect(() => {
     rememberPremiumReturnPath(path);
   }, [path]);
+
+  useEffect(() => {
+    if (isAuthEntry && access?.canAccess && authenticated) {
+      router.replace("/");
+    }
+    if (path.startsWith("/early-access") && access?.canAccess && authenticated) {
+      router.replace("/");
+    }
+  }, [isAuthEntry, access?.canAccess, authenticated, router, path]);
 
   useEffect(() => {
     if (!composer.open) return;
@@ -126,7 +140,7 @@ export function AppShell({
     </Suspense>
   );
 
-  if (isAuthCallback || isLegal || isInvite) {
+  if (isAuthCallback || (isPublicPath && !isAuthEntry)) {
     return (
       <>
         {capture}
@@ -139,18 +153,46 @@ export function AppShell({
     return (
       <>
         {capture}
-        <SsrFallbackChrome>{children}</SsrFallbackChrome>
+        <SsrFallbackChrome>
+          <EarlyAccessGate />
+        </SsrFallbackChrome>
       </>
     );
   }
 
-  if (!mounted || !ready || (authenticated && !profileHydrated)) {
+  if (!mounted || !ready || !accessReady || (authenticated && !profileHydrated)) {
     return (
       <>
         {capture}
         <div className="mx-auto min-h-dvh w-full max-w-lg bg-black">
           <AppBootSkeleton />
         </div>
+      </>
+    );
+  }
+
+  if (!access || !access.canAccess) {
+    if (isAuthEntry) {
+      return (
+        <>
+          {capture}
+          {children}
+        </>
+      );
+    }
+    return (
+      <>
+        {capture}
+        <EarlyAccessGate access={access} />
+      </>
+    );
+  }
+
+  if (isAuthEntry) {
+    return (
+      <>
+        {capture}
+        {children}
       </>
     );
   }

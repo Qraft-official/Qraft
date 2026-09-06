@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:release-gate": "npx --yes tsx scripts/verify-release-gate.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.112.4",
     "framer-motion": "^13.1.1",
     "html-to-image": "^1.11.13",

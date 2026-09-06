@@ -45,6 +45,20 @@ export default function AuthCallbackPage() {
             }
           }
         }
+        const { data: latest } = await supabase.auth.getSession();
+        if (latest.session?.access_token && latest.session.refresh_token) {
+          await fetch("/api/auth/session", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              access_token: latest.session.access_token,
+              refresh_token: latest.session.refresh_token,
+            }),
+          }).catch(() => {
+            /* AppShell still uses the browser session */
+          });
+        }
         goHome();
       } catch (err) {
         if (cancelled) return;

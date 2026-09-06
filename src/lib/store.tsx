@@ -10,7 +10,6 @@ import {
   useState,
 } from "react";
 import {
-  checkIsAdmin,
   displayNameFromUser,
   emailRedirectTo,
   ensureProfile,
@@ -30,10 +29,11 @@ import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./consta
 import { getDeviceIdentity, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
 import { referralFetch } from "./referral-client";
+import { fetchAccessStatus, type ClientAccess } from "./release-client";
+import { persistSessionCookies, clearSessionCookies } from "./auth-session-client";
 import {
   isVerifiedCreator,
   isComplimentaryPremiumAccount,
-  isDeveloperAccount,
   LOUNGE_POSTS,
   type PremiumStatusPayload,
 } from "./premium";
@@ -142,9 +142,12 @@ type Store = {
   signInWithEmail: (input: {
     email: string;
     password: string;
-  }) => Promise<{ error?: string }>;
+  }) => Promise<{ error?: string; accessToken?: string }>;
   logout: () => Promise<void>;
   authViaSupabase: boolean;
+  refreshAccess: (accessToken?: string | null) => Promise<ClientAccess | null>;
+  access: ClientAccess | null;
+  accessReady: boolean;
   me: User;
   users: User[];
   posts: Post[];
@@ -298,6 +301,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [onboarded, setOnboarded] = useState(false);
   const [profileHydrated, setProfileHydrated] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [access, setAccess] = useState<ClientAccess | null>(null);
+  const [accessReady, setAccessReady] = useState(false);
   const [tiers, setTiers] = useState<Tiers>(USER_MAP[ME_ID].tiers);
   const [age, setAge] = useState<number | null>(null);
   const [follows, setFollows] = useState<string[]>(INITIAL_FOLLOWS);
@@ -417,10 +422,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           await ensureProfile(user);
           await ensureWelcomeNotification();
-          const [inbox, profileResult, admin, boot, savedMap] = await Promise.all([
+          const [inbox, profileResult, boot, savedMap] = await Promise.all([
             fetchNotifications(),
             fetchLearningProfile(user.id),
-            checkIsAdmin(),
             fetchLearningBootstrap(),
             fetchMySavedMap(),
           ]);
@@ -455,7 +459,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } else {
             setOnboarded(false);
           }
-          if (!cancelled) setIsAdmin(admin);
         } catch (err) {
           console.warn("Profile hydrate failed:", err);
         } finally {
@@ -524,6 +527,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setAuthenticated(false);
           setProfileHydrated(true);
         }
+        try {
+          if (data.session?.access_token && data.session.refresh_token) {
+            await persistSessionCookies({
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+            }).catch((err) => console.warn("persistSessionCookies:", err));
+          }
+          const next = await fetchAccessStatus(data.session?.access_token);
+          if (!cancelled) {
+            setAccess(next);
+            setIsAdmin(next.isDeveloper);
+          }
+        } catch (err) {
+          console.error("[access]", err);
+          if (!cancelled) setAccess(null);
+        } finally {
+          if (!cancelled) setAccessReady(true);
+        }
         const uid = data.session?.user?.id;
         const [remote, mine] = await Promise.all([
           loadRemoteFeed(),
@@ -541,6 +562,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) {
           setAuthenticated(false);
           setProfileHydrated(true);
+          setAccessReady(true);
         }
       } finally {
         if (!cancelled) setReady(true);
@@ -555,6 +577,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           applySession(user.id, sessionUserFields(user));
           if (event === "SIGNED_OUT") return;
           afterSignIn(user);
+          if (event === "SIGNED_IN" && session?.access_token && session.refresh_token) {
+            void persistSessionCookies({
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+            }).catch((err) => console.warn("persistSessionCookies:", err));
+          }
+          if (event !== "INITIAL_SESSION") {
+            void fetchAccessStatus(session?.access_token)
+              .then((next) => {
+                setAccess(next);
+                setIsAdmin(next.isDeveloper);
+                setAccessReady(true);
+              })
+              .catch((err) => {
+                console.error("[access]", err);
+                setAccess(null);
+                setAccessReady(true);
+              });
+          }
           if (event === "INITIAL_SESSION") return;
           void loadRemoteFeed().then((remote) => {
             setRemotePosts(remote.posts);
@@ -569,6 +610,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           applySession(null);
           setReferralReady(true);
           setConfusedMine({});
+          void clearSessionCookies();
+          void fetchAccessStatus()
+            .then((next) => {
+              setAccess(next);
+              setIsAdmin(false);
+            })
+            .catch((err) => {
+              console.error("[access]", err);
+              setAccess(null);
+            })
+            .finally(() => setAccessReady(true));
         }
       } catch (err) {
         console.warn("onAuthStateChange failed:", err);
@@ -631,17 +683,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     authenticated,
   ]);
 
-  const isDeveloper = useMemo(() => {
-    if (isAdmin) return true;
-    const emails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-    if (sessionEmail && emails.includes(sessionEmail.toLowerCase())) return true;
-    const handle = typeof profile.handle === "string" ? profile.handle : undefined;
-    if (supabaseUid && isDeveloperAccount(supabaseUid, handle)) return true;
-    return false;
-  }, [isAdmin, sessionEmail, supabaseUid, profile.handle]);
+  const isDeveloper = Boolean(access?.isDeveloper || isAdmin);
   const complimentaryPremium = useMemo(() => {
     const base = supabaseUid
       ? (remoteUsers[supabaseUid] ?? fallbackUser(supabaseUid))
@@ -845,6 +887,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return { needsConfirm: true };
         }
         if (data.user) {
+          if (data.session?.access_token && data.session.refresh_token) {
+            await persistSessionCookies({
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+            }).catch((err) => console.warn("persistSessionCookies:", err));
+          }
           await ensureProfile(data.user);
           await ensureWelcomeNotification();
           const inbox = await fetchNotifications();
@@ -859,6 +907,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ...(input.name ? { name: input.name.trim() } : {}),
             ...(handle ? { handle } : {}),
           }));
+          try {
+            const next = await fetchAccessStatus(data.session?.access_token);
+            setAccess(next);
+            setIsAdmin(next.isDeveloper);
+          } catch (err) {
+            console.error("[access]", err);
+            setAccess(null);
+          } finally {
+            setAccessReady(true);
+          }
         }
         return {};
       } catch (err) {
@@ -876,43 +934,71 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithEmail = useCallback(async (input: { email: string; password: string }) => {
     try {
+      setAccessReady(false);
       const { data, error } = await supabase.auth.signInWithPassword({
         email: input.email.trim(),
         password: input.password,
       });
-      if (error) return { error: formatAuthError(error.message) };
-      if (data.user) {
-        const fields = sessionUserFields(data.user);
-        setSupabaseUid(data.user.id);
-        setSessionEmail(fields.email);
-        setAuthenticated(true);
-        setProfile((p) => ({
-          ...p,
-          ...(fields.name ? { name: fields.name } : {}),
-          ...(fields.handle ? { handle: fields.handle } : {}),
-        }));
-        window.setTimeout(() => {
-          setProfileHydrated(false);
-          void (async () => {
-            await ensureProfile(data.user);
-            await ensureWelcomeNotification();
-            const inbox = await fetchNotifications();
-            setNotifications(inbox);
-            const { data: row } = await fetchLearningProfile(data.user.id);
-            if (row) {
-              setOnboarded(!!row.onboarded);
-              setTiers(tiersFromProfile(row));
-              setAge(typeof row.age === "number" ? row.age : null);
-            } else {
-              setOnboarded(false);
-            }
-            setProfileHydrated(true);
-            setIsAdmin(await checkIsAdmin());
-          })();
-        }, 0);
+      if (error) {
+        setAccessReady(true);
+        return { error: formatAuthError(error.message) };
       }
-      return {};
+      if (!data.session?.access_token || !data.user) {
+        setAccessReady(true);
+        return {
+          error:
+            "ログインできませんでした。メール確認が未完了の場合は、確認メールのリンクを開いてから再試行してください。",
+        };
+      }
+      await persistSessionCookies({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      }).catch((err) => console.warn("persistSessionCookies:", err));
+      const fields = sessionUserFields(data.user);
+      setSupabaseUid(data.user.id);
+      setSessionEmail(fields.email);
+      setProfile((p) => ({
+        ...p,
+        ...(fields.name ? { name: fields.name } : {}),
+        ...(fields.handle ? { handle: fields.handle } : {}),
+      }));
+      try {
+        const next = await fetchAccessStatus(data.session.access_token);
+        setAccess(next);
+        setIsAdmin(next.isDeveloper);
+      } catch (err) {
+        console.error("[access]", err);
+        setAccess(null);
+        setAuthenticated(true);
+        setAccessReady(true);
+        return { accessToken: data.session.access_token };
+      }
+      setAuthenticated(true);
+      setProfileHydrated(false);
+      void (async () => {
+        try {
+          await ensureProfile(data.user);
+          await ensureWelcomeNotification();
+          const inbox = await fetchNotifications();
+          setNotifications(inbox);
+          const { data: row } = await fetchLearningProfile(data.user.id);
+          if (row) {
+            setOnboarded(!!row.onboarded);
+            setTiers(tiersFromProfile(row));
+            setAge(typeof row.age === "number" ? row.age : null);
+          } else {
+            setOnboarded(false);
+          }
+        } catch (err) {
+          console.warn("Profile hydrate failed:", err);
+        } finally {
+          setProfileHydrated(true);
+        }
+      })();
+      setAccessReady(true);
+      return { accessToken: data.session.access_token };
     } catch (err) {
+      setAccessReady(true);
       return { error: formatAuthError(err instanceof Error ? err.message : "ログインに失敗しました") };
     }
   }, []);
@@ -939,6 +1025,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRevengeDue([]);
     setCalendarDays([]);
     setLearnStreak({ current: 0, longest: 0 });
+    void clearSessionCookies();
+    try {
+      const next = await fetchAccessStatus();
+      setAccess(next);
+    } catch (err) {
+      console.error("[access]", err);
+      setAccess(null);
+    } finally {
+      setAccessReady(true);
+    }
+  }, []);
+
+  const refreshAccess = useCallback(async (accessToken?: string | null) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = accessToken || session?.access_token;
+      const next = await fetchAccessStatus(token);
+      setAccess(next);
+      setIsAdmin(next.isDeveloper);
+      return next;
+    } catch (err) {
+      console.error("[access]", err);
+      setAccess(null);
+      throw err;
+    } finally {
+      setAccessReady(true);
+    }
   }, []);
 
   const toggleFollow = useCallback((userId: string) => {
@@ -1771,6 +1886,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     signInWithEmail,
     logout,
     authViaSupabase: !!supabaseUid,
+    refreshAccess,
+    access,
+    accessReady,
     me,
     users: [
       me,

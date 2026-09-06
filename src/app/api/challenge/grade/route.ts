@@ -1,6 +1,7 @@
 import { userFromRequest, clip } from "@/lib/api-auth";
 import { adminSupabase } from "@/lib/admin-supabase";
 import { answersMatch, asProblemMode } from "@/lib/challenge";
+import { requireAppAccess } from "@/lib/release-server";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -9,6 +10,10 @@ export async function POST(request: Request) {
   const user = await userFromRequest(request);
   if (!user) {
     return NextResponse.json({ error: "ログインしてください" }, { status: 401 });
+  }
+  const gate = await requireAppAccess(request);
+  if (gate.error) {
+    return NextResponse.json({ error: gate.error }, { status: 403 });
   }
 
   let body: Record<string, unknown>;

@@ -1,12 +1,12 @@
 import { bearerTokenFromRequest, userFromRequest } from "@/lib/api-auth";
 import { adminSupabase } from "@/lib/admin-supabase";
-import { isComplimentaryPremiumAccount, isDeveloperAccount, evaluatePremiumAccess } from "@/lib/premium";
+import { isComplimentaryPremiumAccount, evaluatePremiumAccess } from "@/lib/premium";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-async function isAdminUser(request: Request, email?: string | null) {
+async function isAdminUser(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const token = bearerTokenFromRequest(request);
@@ -15,14 +15,10 @@ async function isAdminUser(request: Request, email?: string | null) {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
-    const { data } = await sb.rpc("is_admin");
+    const { data, error } = await sb.rpc("is_admin");
+    if (error) return false;
     if (data === true) return true;
   }
-  const emails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (email && emails.includes(email.toLowerCase())) return true;
   return false;
 }
 
@@ -81,8 +77,7 @@ export async function GET(request: Request) {
     handle,
     name,
   });
-  const developer =
-    isDeveloperAccount(user.id, handle) || (await isAdminUser(request, user.email));
+  const developer = await isAdminUser(request);
 
   const payload = evaluatePremiumAccess({
     complimentary,

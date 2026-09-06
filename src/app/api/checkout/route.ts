@@ -1,5 +1,6 @@
 import { adminSupabase } from "@/lib/admin-supabase";
 import { bearerTokenFromRequest, userFromRequest } from "@/lib/api-auth";
+import { requireAppAccess } from "@/lib/release-server";
 import { PREMIUM_PRICE_JPY, PREMIUM_THANKS_MESSAGE, PREMIUM_THANKS_TITLE } from "@/lib/constants";
 import { isComplimentaryPremiumAccount } from "@/lib/premium";
 import { createClient } from "@supabase/supabase-js";
@@ -32,6 +33,10 @@ export async function POST(request: Request) {
     "http://localhost:3000";
 
   try {
+    const gate = await requireAppAccess(request);
+    if (gate.error) {
+      return NextResponse.json({ error: gate.error }, { status: 403 });
+    }
     const user = await userFromRequest(request);
     let handle =
       typeof user?.user_metadata?.handle === "string" ? user.user_metadata.handle : undefined;

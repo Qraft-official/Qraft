@@ -2,14 +2,16 @@
 
 import { AuthScreen } from "@/components/AuthScreen";
 import { BottomNav } from "@/components/BottomNav";
+import { EarlyAccessGate } from "@/components/EarlyAccessGate";
 import { Fab } from "@/components/Fab";
 import { InviteCapture } from "@/components/InviteCapture";
 import { Onboarding } from "@/components/Onboarding";
 import { useApp } from "@/lib/store";
+import { isAuthEntryPath } from "@/lib/auth-entry";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { AppBootSkeleton } from "@/components/UiStates";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 const CreateSheet = dynamic(
@@ -69,6 +71,8 @@ export function AppShell({
     onboarded,
     profileHydrated,
     authenticated,
+    access,
+    accessReady,
     openComposer,
     composer,
     accentColor,
@@ -78,6 +82,7 @@ export function AppShell({
     paywallOpen,
   } = useApp();
   const path = usePathname();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [inAdFrame, setInAdFrame] = useState(false);
   const [loadCreate, setLoadCreate] = useState(false);
@@ -87,6 +92,7 @@ export function AppShell({
   const [loadFeedback, setLoadFeedback] = useState(false);
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
+  const isAuthEntry = isAuthEntryPath(path);
   const isLegal = path === "/terms" || path === "/privacy";
   const isInvite = path.startsWith("/i/");
   const crawlerSafe = adsensePreview || inAdFrame;
@@ -103,6 +109,13 @@ export function AppShell({
   useEffect(() => {
     rememberPremiumReturnPath(path);
   }, [path]);
+
+  useEffect(() => {
+    if (!accessReady || !authenticated || !access?.canAccess) return;
+    if (isAuthEntry || path.startsWith("/early-access")) {
+      router.replace("/");
+    }
+  }, [accessReady, authenticated, access?.canAccess, isAuthEntry, path, router]);
 
   useEffect(() => {
     if (!composer.open) return;
@@ -144,13 +157,44 @@ export function AppShell({
     );
   }
 
-  if (!mounted || !ready || (authenticated && !profileHydrated)) {
+  const sessionLoading = !mounted || !ready || !accessReady;
+  const profileLoading = authenticated && access?.canAccess && !profileHydrated;
+  if (sessionLoading || profileLoading) {
     return (
       <>
         {capture}
         <div className="mx-auto min-h-dvh w-full max-w-lg bg-black">
           <AppBootSkeleton />
         </div>
+      </>
+    );
+  }
+
+  if (!access) {
+    return (
+      <>
+        {capture}
+        <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center px-8 text-sm text-muted">
+          公開状態を確認できません。時間をおいて再度お試しください。
+        </div>
+      </>
+    );
+  }
+
+  if (isAuthEntry && !(access.canAccess && authenticated)) {
+    return (
+      <>
+        {capture}
+        {children}
+      </>
+    );
+  }
+
+  if (!access.canAccess) {
+    return (
+      <>
+        {capture}
+        <EarlyAccessGate access={access} />
       </>
     );
   }

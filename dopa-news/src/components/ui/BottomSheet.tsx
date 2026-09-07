@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -11,8 +11,14 @@ interface BottomSheetProps {
   title?: ReactNode;
   subtitle?: ReactNode;
   children: ReactNode;
+  /** Pinned below the scroll area so primary actions stay reachable. */
+  footer?: ReactNode;
   /** Tall sheets scroll internally instead of growing past the viewport. */
   maxHeight?: string;
+}
+
+function subscribeNever(): () => void {
+  return () => {};
 }
 
 export default function BottomSheet({
@@ -21,8 +27,13 @@ export default function BottomSheet({
   title,
   subtitle,
   children,
+  footer,
   maxHeight = "86dvh",
 }: BottomSheetProps) {
+  // Server and the hydrating client both skip the portal; after hydration the
+  // store snapshot is `true` and we attach to `document.body`.
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
+
   useEffect(() => {
     if (!open) return;
     const previous = document.body.style.overflow;
@@ -37,10 +48,7 @@ export default function BottomSheet({
     };
   }, [open, onClose]);
 
-  // Screens like the Dopa Map are `position: fixed`, which creates a stacking
-  // context that would trap the sheet beneath the bottom nav and clip it
-  // against `overflow: hidden`. Portalling to the body avoids both.
-  if (typeof document === "undefined") return null;
+  if (!mounted) return null;
 
   return createPortal(
     <AnimatePresence>
@@ -68,14 +76,14 @@ export default function BottomSheet({
             onDragEnd={(_, info) => {
               if (info.offset.y > 110 || info.velocity.y > 700) onClose();
             }}
-            className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-[var(--app-max-width)] rounded-t-[26px] border-t border-line bg-ink-800 shadow-[0_-18px_50px_-20px_rgba(0,0,0,0.9)]"
+            className="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-[var(--app-max-width)] flex-col overflow-hidden rounded-t-[26px] border-t border-line bg-ink-800 shadow-[0_-18px_50px_-20px_rgba(0,0,0,0.9)]"
             style={{ maxHeight }}
           >
-            <div className="flex justify-center pt-2.5 pb-1">
+            <div className="flex shrink-0 justify-center pt-2.5 pb-1">
               <span className="h-1 w-10 rounded-full bg-white/18" />
             </div>
             {(title || subtitle) && (
-              <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-1">
+              <div className="flex shrink-0 items-start justify-between gap-3 px-5 pb-3 pt-1">
                 <div className="min-w-0">
                   {title && (
                     <h2 className="text-[17px] font-bold leading-tight text-fg">{title}</h2>
@@ -94,12 +102,16 @@ export default function BottomSheet({
                 </button>
               </div>
             )}
-            <div
-              className="no-scrollbar overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom,0px)+20px)]"
-              style={{ maxHeight: `calc(${maxHeight} - 68px)` }}
-            >
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5">
               {children}
             </div>
+            {footer ? (
+              <div className="shrink-0 px-5 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
+                {footer}
+              </div>
+            ) : (
+              <div className="shrink-0 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]" />
+            )}
           </motion.div>
         </div>
       )}

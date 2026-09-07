@@ -25,23 +25,20 @@ interface ComposeSheetProps {
 
 const MAX_COMMENT = 100;
 
-export default function ComposeSheet({ open, onClose, ...rest }: ComposeSheetProps) {
-  return (
-    <BottomSheet open={open} onClose={onClose} title="現在地の状況を投稿">
-      {/* Mounted only while the sheet is open, so every session starts blank. */}
-      <ComposeForm onClose={onClose} {...rest} />
-    </BottomSheet>
-  );
+export default function ComposeSheet(props: ComposeSheetProps) {
+  // Remounting with the open flag resets the form without a useEffect.
+  return <ComposeForm key={props.open ? "open" : "closed"} {...props} />;
 }
 
 function ComposeForm({
+  open,
   onClose,
   defaultType,
   coords,
   locating,
   onRequestLocation,
   onCreated,
-}: Omit<ComposeSheetProps, "open">) {
+}: ComposeSheetProps) {
   const { user } = useSession();
   const { toast } = useToast();
   const [type, setType] = useState<MapPostType>(defaultType);
@@ -82,7 +79,32 @@ function ComposeForm({
   }
 
   return (
-    <>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="現在地の状況を投稿"
+      maxHeight="92dvh"
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!canSubmit}
+            className={`grad-cta flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-black text-[#07121a] transition-opacity ${
+              canSubmit ? "active:opacity-90" : "opacity-40"
+            }`}
+          >
+            {submitting && <Loader2 size={16} className="animate-spin" />}
+            現在地に投稿
+          </button>
+          {!category && (
+            <p className="mt-2 text-center text-[11px] text-fg-faint">
+              {type === "weather" ? "天気" : "できごと"}を1つ選んでください
+            </p>
+          )}
+        </>
+      }
+    >
       <div className="flex rounded-2xl border border-line bg-ink-900 p-1">
         {MAP_SEGMENTS.map((segment) => {
           const active = segment.type === type;
@@ -198,24 +220,6 @@ function ComposeForm({
           </button>
         )}
       </div>
-
-      <button
-        type="button"
-        onClick={() => void submit()}
-        disabled={!canSubmit}
-        className={`grad-cta mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-black text-[#07121a] transition-opacity ${
-          canSubmit ? "active:opacity-90" : "opacity-40"
-        }`}
-      >
-        {submitting && <Loader2 size={16} className="animate-spin" />}
-        現在地に投稿
-      </button>
-
-      {!category && (
-        <p className="mt-2 text-center text-[11px] text-fg-faint">
-          {type === "weather" ? "天気" : "できごと"}を1つ選んでください
-        </p>
-      )}
-    </>
+    </BottomSheet>
   );
 }

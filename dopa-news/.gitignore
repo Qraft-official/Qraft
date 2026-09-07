@@ -24,6 +24,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# copied from node_modules by scripts/copy-maplibre-worker.mjs
+/public/maplibre
+
 # vercel
 .vercel
 

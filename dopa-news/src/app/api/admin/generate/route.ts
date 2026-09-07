@@ -46,10 +46,11 @@ async function callModel(input: DraftInput): Promise<NewsDraft | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
+  const baseUrl = (process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

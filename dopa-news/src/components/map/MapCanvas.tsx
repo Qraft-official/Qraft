@@ -4,6 +4,7 @@ import {
   MapLibreMap,
   Marker,
   NavigationControl,
+  setWorkerUrl,
   type GeoJSONSource,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -13,6 +14,10 @@ import { mapCategory } from "@/lib/map-categories";
 import type { MapPostWithAuthor } from "@/types/database";
 
 const STYLE_URL = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
+// Bundled builds resolve the worker next to a hashed chunk, where it does not
+// exist. `scripts/copy-maplibre-worker.mjs` publishes it here instead.
+setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 const SOURCE_ID = "dopa-posts";
 const PROBE_LAYER = "dopa-posts-probe";

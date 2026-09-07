@@ -72,12 +72,16 @@ export default function NewsDetail({
 
   useEffect(() => {
     if (!user || !isSupabaseConfigured) return;
+    // PostgREST builders are lazy, so the request only leaves once it is awaited.
     void getSupabase()
       .from("news_views")
       .upsert(
         { user_id: user.id, news_id: article.id, viewed_at: new Date().toISOString() },
         { onConflict: "user_id,news_id" },
-      );
+      )
+      .then(() => {
+        // Reading history is best-effort and never blocks the article.
+      });
   }, [user, article.id]);
 
   return (

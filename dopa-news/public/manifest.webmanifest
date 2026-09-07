@@ -1,0 +1,48 @@
+{
+  "name": "ドパニュース | Dopa News",
+  "short_name": "ドパニュース",
+  "description": "何が起きた? なんで話題? このあとどうなる? を30秒で。街のリアルタイム情報が集まるドパマップも。",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080c14",
+  "theme_color": "#080c14",
+  "categories": ["news", "magazines", "social"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "ドパモード",
+      "short_name": "ドパモード",
+      "description": "スワイプでニュースを一気読み",
+      "url": "/dopa"
+    },
+    {
+      "name": "ドパマップ",
+      "short_name": "マップ",
+      "description": "近くのリアルタイム情報",
+      "url": "/map"
+    }
+  ]
+}

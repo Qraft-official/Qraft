@@ -29,6 +29,9 @@ const MapCanvas = dynamic(() => import("./MapCanvas"), {
 
 const REFRESH_MS = 60_000;
 
+/** Signed-out visitors have no reactions of their own. */
+const EMPTY_HELPFUL: ReadonlySet<string> = new Set<string>();
+
 export default function MapScreen() {
   const { user } = useSession();
   const gate = useAuthGate();
@@ -42,15 +45,11 @@ export default function MapScreen() {
   const [selected, setSelected] = useState<MapPostWithAuthor | null>(null);
   const [composing, setComposing] = useState(false);
   const [showTrends, setShowTrends] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [failed, setFailed] = useState(!isSupabaseConfigured);
 
   const load = useCallback(async () => {
-    if (!isSupabaseConfigured) {
-      setFailed(true);
-      setLoading(false);
-      return;
-    }
+    if (!isSupabaseConfigured) return;
     try {
       const rows = await fetchLivePosts(getSupabase());
       setPosts(rows);
@@ -63,17 +62,26 @@ export default function MapScreen() {
   }, []);
 
   useEffect(() => {
-    void load();
+    if (!isSupabaseConfigured) return;
+    // Kick off outside the effect body so the first paint is not blocked by a
+    // synchronous state update.
+    const first = setTimeout(() => void load(), 0);
     const timer = setInterval(() => void load(), REFRESH_MS);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
   }, [load]);
 
   useEffect(() => {
-    if (!user || !isSupabaseConfigured) {
-      setHelpfulIds(new Set());
-      return;
-    }
-    void fetchMyHelpfulIds(getSupabase(), user.id).then(setHelpfulIds);
+    if (!user || !isSupabaseConfigured) return;
+    let active = true;
+    void fetchMyHelpfulIds(getSupabase(), user.id).then((ids) => {
+      if (active) setHelpfulIds(ids);
+    });
+    return () => {
+      active = false;
+    };
   }, [user]);
 
   const visiblePosts = useMemo(
@@ -291,7 +299,7 @@ export default function MapScreen() {
         post={selected}
         onClose={() => setSelected(null)}
         userCoords={geo.coords}
-        helpfulIds={helpfulIds}
+        helpfulIds={user ? helpfulIds : EMPTY_HELPFUL}
         onHelpfulChange={handleHelpfulChange}
       />
 

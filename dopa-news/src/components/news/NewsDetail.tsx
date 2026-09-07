@@ -133,6 +133,19 @@ export default function NewsDetail({
           </div>
         </header>
 
+        {article.is_sample && (
+          <Link
+            href="/about"
+            className="flex items-center gap-2 rounded-2xl border border-[#ffc44d]/35 bg-[#ffc44d]/[0.08] px-3.5 py-2.5 text-[11.5px] leading-relaxed text-[#ffc44d]"
+          >
+            <Info size={13} className="shrink-0" />
+            <span className="flex-1">
+              これは動作確認用の架空サンプルニュースです。実在の出来事とは関係ありません。
+            </span>
+            <ExternalLink size={12} className="shrink-0 opacity-70" />
+          </Link>
+        )}
+
         <Section step="1" title="何が起きた？" accent="#4ef5a3">
           <Paragraphs text={article.what_happened} />
         </Section>

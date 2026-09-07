@@ -38,14 +38,12 @@ export default function ProfileScreen() {
   const [posts, setPosts] = useState<MapPostWithAuthor[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [editing, setEditing] = useState(false);
+  /** Freshness of map posts is judged as of the moment they were fetched. */
+  const [loadedAt, setLoadedAt] = useState(0);
 
   useEffect(() => {
-    if (!user || !isSupabaseConfigured) {
-      setStats(null);
-      setPosts([]);
-      setLoadingPosts(false);
-      return;
-    }
+    // Signed-out visitors get the login gate instead of this data.
+    if (!user || !isSupabaseConfigured) return;
     let active = true;
 
     async function load() {
@@ -61,6 +59,7 @@ export default function ProfileScreen() {
         ]);
         if (!active) return;
         setPosts(myPosts);
+        setLoadedAt(Date.now());
         setStats({
           posts: myPosts.length,
           votes: voteCount.count ?? 0,
@@ -213,7 +212,7 @@ export default function ProfileScreen() {
             <ul className="space-y-2">
               {posts.slice(0, 6).map((post) => {
                 const meta = mapCategory(post.category);
-                const expired = new Date(post.expires_at).getTime() < Date.now();
+                const expired = new Date(post.expires_at).getTime() < loadedAt;
                 return (
                   <li key={post.id} className="card flex items-center gap-3 px-3.5 py-3">
                     <span

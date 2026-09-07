@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { AlertTriangle, Loader2, MapPin, ShieldAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import BottomSheet from "@/components/ui/BottomSheet";
 import Toggle from "@/components/ui/Toggle";
 import { useSession } from "@/hooks/use-session";
@@ -25,15 +25,23 @@ interface ComposeSheetProps {
 
 const MAX_COMMENT = 100;
 
-export default function ComposeSheet({
-  open,
+export default function ComposeSheet({ open, onClose, ...rest }: ComposeSheetProps) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title="現在地の状況を投稿">
+      {/* Mounted only while the sheet is open, so every session starts blank. */}
+      <ComposeForm onClose={onClose} {...rest} />
+    </BottomSheet>
+  );
+}
+
+function ComposeForm({
   onClose,
   defaultType,
   coords,
   locating,
   onRequestLocation,
   onCreated,
-}: ComposeSheetProps) {
+}: Omit<ComposeSheetProps, "open">) {
   const { user } = useSession();
   const { toast } = useToast();
   const [type, setType] = useState<MapPostType>(defaultType);
@@ -41,15 +49,6 @@ export default function ComposeSheet({
   const [comment, setComment] = useState("");
   const [urgency, setUrgency] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setType(defaultType);
-      setCategory(null);
-      setComment("");
-      setUrgency(false);
-    }
-  }, [open, defaultType]);
 
   const options = useMemo(() => categoriesFor(type), [type]);
   const area = coords ? areaLabel(coords) : null;
@@ -83,7 +82,7 @@ export default function ComposeSheet({
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="現在地の状況を投稿">
+    <>
       <div className="flex rounded-2xl border border-line bg-ink-900 p-1">
         {MAP_SEGMENTS.map((segment) => {
           const active = segment.type === type;
@@ -217,6 +216,6 @@ export default function ComposeSheet({
           {type === "weather" ? "天気" : "できごと"}を1つ選んでください
         </p>
       )}
-    </BottomSheet>
+    </>
   );
 }

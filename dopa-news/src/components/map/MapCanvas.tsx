@@ -141,10 +141,14 @@ export default function MapCanvas({
   const modeRef = useRef(mode);
   const readyRef = useRef(false);
 
-  postsRef.current = posts;
-  selectedRef.current = selectedId;
-  onSelectRef.current = onSelect;
-  modeRef.current = mode;
+  // Map event handlers live outside React, so they read the latest props from
+  // refs. Effects declared here run before the map lifecycle effects below.
+  useEffect(() => {
+    postsRef.current = posts;
+    selectedRef.current = selectedId;
+    onSelectRef.current = onSelect;
+    modeRef.current = mode;
+  });
 
   const syncMarkers = useCallback(() => {
     const map = mapRef.current;
@@ -213,6 +217,7 @@ export default function MapCanvas({
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
 
+    const markers = markersRef.current;
     const map = new MapLibreMap({
       container: containerRef.current,
       style: STYLE_URL,
@@ -290,8 +295,8 @@ export default function MapCanvas({
     });
 
     return () => {
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current.clear();
+      markers.forEach((m) => m.remove());
+      markers.clear();
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
       readyRef.current = false;

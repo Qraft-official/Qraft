@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Bookmark, History, Search, Vote } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import NewsRow from "@/components/news/NewsRow";
 import { PageHeader } from "@/components/navigation/TopBar";
 import { EmptyState, ErrorState, RowSkeleton } from "@/components/ui/States";
@@ -42,6 +43,77 @@ interface Entry {
   at: string;
 }
 
+async function fetchEntries(
+  supabase: SupabaseClient,
+  userId: string,
+  tab: Tab,
+): Promise<Entry[]> {
+  if (tab === "saved") {
+    const { data, error } = await supabase
+      .from("saved_news")
+      .select(`created_at, news_articles(${NEWS_SELECT})`)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? [])
+      .filter((row) => row.news_articles)
+      .map((row) => ({
+        article: normalizeNews(row.news_articles as never),
+        at: row.created_at as string,
+      }));
+  }
+
+  if (tab === "history") {
+    const { data, error } = await supabase
+      .from("news_views")
+      .select(`viewed_at, news_articles(${NEWS_SELECT})`)
+      .eq("user_id", userId)
+      .order("viewed_at", { ascending: false })
+      .limit(80);
+    if (error) throw error;
+    return (data ?? [])
+      .filter((row) => row.news_articles)
+      .map((row) => ({
+        article: normalizeNews(row.news_articles as never),
+        at: row.viewed_at as string,
+      }));
+  }
+
+  // Votes reference quizzes, so the articles need a second lookup.
+  const { data: votes, error: voteError } = await supabase
+    .from("news_votes")
+    .select("created_at, news_quizzes(news_id)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (voteError) throw voteError;
+
+  const rows = (votes ?? []) as unknown as {
+    created_at: string;
+    news_quizzes: { news_id: string } | null;
+  }[];
+  const ids = rows.map((row) => row.news_quizzes?.news_id).filter(Boolean) as string[];
+  if (ids.length === 0) return [];
+
+  const { data: articles, error: articleError } = await supabase
+    .from("news_articles")
+    .select(NEWS_SELECT)
+    .in("id", ids);
+  if (articleError) throw articleError;
+
+  const byId = new Map(
+    (articles ?? []).map((row) => {
+      const normalized = normalizeNews(row as never);
+      return [normalized.id, normalized] as const;
+    }),
+  );
+  return rows
+    .map((row) => {
+      const article = row.news_quizzes ? byId.get(row.news_quizzes.news_id) : undefined;
+      return article ? { article, at: row.created_at } : null;
+    })
+    .filter((entry): entry is Entry => entry !== null);
+}
+
 export default function ArchiveScreen() {
   const { user, loading: sessionLoading } = useSession();
   const [tab, setTab] = useState<Tab>("saved");
@@ -50,97 +122,33 @@ export default function ArchiveScreen() {
   const [term, setTerm] = useState("");
   const [category, setCategory] = useState<string | null>(null);
 
-  const load = useCallback(
-    async (target: Tab) => {
-      if (!user || !isSupabaseConfigured) {
-        setEntries([]);
-        setStatus("idle");
-        return;
-      }
-      setStatus("loading");
-      const supabase = getSupabase();
-      try {
-        if (target === "saved") {
-          const { data, error } = await supabase
-            .from("saved_news")
-            .select(`created_at, news_articles(${NEWS_SELECT})`)
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
-          if (error) throw error;
-          setEntries(
-            (data ?? [])
-              .filter((row) => row.news_articles)
-              .map((row) => ({
-                article: normalizeNews(row.news_articles as never),
-                at: row.created_at as string,
-              })),
-          );
-        } else if (target === "history") {
-          const { data, error } = await supabase
-            .from("news_views")
-            .select(`viewed_at, news_articles(${NEWS_SELECT})`)
-            .eq("user_id", user.id)
-            .order("viewed_at", { ascending: false })
-            .limit(80);
-          if (error) throw error;
-          setEntries(
-            (data ?? [])
-              .filter((row) => row.news_articles)
-              .map((row) => ({
-                article: normalizeNews(row.news_articles as never),
-                at: row.viewed_at as string,
-              })),
-          );
-        } else {
-          const { data: votes, error: voteError } = await supabase
-            .from("news_votes")
-            .select("created_at, news_quizzes(news_id)")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
-          if (voteError) throw voteError;
-
-          const rows = (votes ?? []) as unknown as {
-            created_at: string;
-            news_quizzes: { news_id: string } | null;
-          }[];
-          const ids = rows.map((row) => row.news_quizzes?.news_id).filter(Boolean) as string[];
-          if (ids.length === 0) {
-            setEntries([]);
-            setStatus("idle");
-            return;
-          }
-          const { data: articles, error: articleError } = await supabase
-            .from("news_articles")
-            .select(NEWS_SELECT)
-            .in("id", ids);
-          if (articleError) throw articleError;
-          const byId = new Map(
-            (articles ?? []).map((row) => {
-              const normalized = normalizeNews(row as never);
-              return [normalized.id, normalized];
-            }),
-          );
-          setEntries(
-            rows
-              .map((row) => {
-                const article = row.news_quizzes ? byId.get(row.news_quizzes.news_id) : undefined;
-                return article ? { article, at: row.created_at } : null;
-              })
-              .filter(Boolean) as Entry[],
-          );
-        }
-        setStatus("idle");
-      } catch {
-        setStatus("error");
-      }
-    },
-    [user],
-  );
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (sessionLoading) return;
-    void load(tab);
-  }, [tab, load, sessionLoading]);
+    if (sessionLoading || !user || !isSupabaseConfigured) return;
+    let active = true;
+
+    async function run(userId: string) {
+      try {
+        const rows = await fetchEntries(getSupabase(), userId, tab);
+        if (!active) return;
+        setEntries(rows);
+        setStatus("idle");
+      } catch {
+        if (active) setStatus("error");
+      }
+    }
+
+    void run(user.id);
+    return () => {
+      active = false;
+    };
+  }, [tab, user, sessionLoading, reloadKey]);
+
+  const retry = useCallback(() => {
+    setStatus("loading");
+    setReloadKey((key) => key + 1);
+  }, []);
 
   const filtered = useMemo(() => {
     const needle = term.trim().toLowerCase();
@@ -181,7 +189,11 @@ export default function ArchiveScreen() {
             <button
               key={id}
               type="button"
-              onClick={() => setTab(id)}
+              onClick={() => {
+                if (id === tab) return;
+                setStatus("loading");
+                setTab(id);
+              }}
               className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[12.5px] font-bold transition-colors ${
                 tab === id ? "text-[#08130d]" : "text-fg-muted"
               }`}
@@ -260,7 +272,7 @@ export default function ArchiveScreen() {
         ) : status === "loading" || sessionLoading ? (
           <RowSkeleton count={5} />
         ) : status === "error" ? (
-          <ErrorState onRetry={() => void load(tab)} />
+          <ErrorState onRetry={retry} />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<Bookmark size={26} />}

@@ -42,10 +42,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const lastLoadedUser = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!configured) {
-      setLoading(false);
-      return;
-    }
+    // `loading` already starts false when Supabase is not configured.
+    if (!configured) return;
     const supabase = getSupabase();
     let active = true;
 
@@ -62,6 +60,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
       setLoading(false);
+      if (!next) {
+        lastLoadedUser.current = null;
+        setProfile(null);
+        setSavedIds(new Set());
+        setUnreadCount(0);
+      }
     });
 
     return () => {
@@ -71,10 +75,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [configured]);
 
   const refreshProfile = useCallback(async () => {
-    if (!configured || !userId) {
-      setProfile(null);
-      return;
-    }
+    if (!configured || !userId) return;
     const { data } = await getSupabase()
       .from("profiles")
       .select("*")
@@ -84,19 +85,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [configured, userId]);
 
   const refreshSaved = useCallback(async () => {
-    if (!configured || !userId) {
-      setSavedIds(new Set());
-      return;
-    }
+    if (!configured || !userId) return;
     const { data } = await getSupabase().from("saved_news").select("news_id").eq("user_id", userId);
     setSavedIds(new Set((data ?? []).map((row: { news_id: string }) => row.news_id)));
   }, [configured, userId]);
 
   const refreshUnread = useCallback(async () => {
-    if (!configured || !userId) {
-      setUnreadCount(0);
-      return;
-    }
+    if (!configured || !userId) return;
     const { count } = await getSupabase()
       .from("notifications")
       .select("id", { count: "exact", head: true })
@@ -105,14 +100,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUnreadCount(count ?? 0);
   }, [configured, userId]);
 
+  // Sign-out resets are handled by the auth listener above.
   useEffect(() => {
-    if (!userId) {
-      lastLoadedUser.current = null;
-      setProfile(null);
-      setSavedIds(new Set());
-      setUnreadCount(0);
-      return;
-    }
+    if (!userId) return;
     if (lastLoadedUser.current === userId) return;
     lastLoadedUser.current = userId;
     void refreshProfile();

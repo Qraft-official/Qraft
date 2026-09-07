@@ -1,22 +1,19 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { Spinner } from "@/components/ui/States";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 
 function CallbackHandler() {
   const router = useRouter();
   const params = useSearchParams();
-  const [error, setError] = useState<string | null>(null);
+  // The provider reports failures in the URL, so there is nothing to store.
+  const error = params.get("error_description");
 
   useEffect(() => {
     const next = params.get("next") || "/me";
-    const description = params.get("error_description");
-    if (description) {
-      setError(description);
-      return;
-    }
+    if (params.get("error_description")) return;
     if (!isSupabaseConfigured) {
       router.replace(next);
       return;

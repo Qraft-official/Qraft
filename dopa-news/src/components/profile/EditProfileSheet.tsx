@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Avatar from "./Avatar";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { useSession } from "@/hooks/use-session";
@@ -20,21 +20,23 @@ export default function EditProfileSheet({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title="プロフィールを編集">
+      {/* Mounted only while open, so the draft always starts from the saved profile. */}
+      <EditProfileForm onClose={onClose} onSaved={onSaved} />
+    </BottomSheet>
+  );
+}
+
+function EditProfileForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { user, profile } = useSession();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [username, setUsername] = useState("");
-  const [bio, setBio] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [username, setUsername] = useState(profile?.username ?? "");
+  const [bio, setBio] = useState(profile?.bio ?? "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setUsername(profile?.username ?? "");
-    setBio(profile?.bio ?? "");
-    setAvatarUrl(profile?.avatar_url ?? null);
-  }, [open, profile]);
 
   async function upload(file: File) {
     if (!user) return;
@@ -94,7 +96,7 @@ export default function EditProfileSheet({
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="プロフィールを編集">
+    <>
       <div className="flex items-center gap-4">
         <button
           type="button"
@@ -156,6 +158,6 @@ export default function EditProfileSheet({
         {saving && <Loader2 size={16} className="animate-spin" />}
         保存する
       </button>
-    </BottomSheet>
+    </>
   );
 }

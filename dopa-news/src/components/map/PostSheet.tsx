@@ -18,7 +18,7 @@ interface PostSheetProps {
   post: MapPostWithAuthor | null;
   onClose: () => void;
   userCoords: { lat: number; lng: number } | null;
-  helpfulIds: Set<string>;
+  helpfulIds: ReadonlySet<string>;
   onHelpfulChange: (postId: string, next: boolean, delta: number) => void;
 }
 
@@ -32,17 +32,17 @@ export default function PostSheet({
   const { user } = useSession();
   const gate = useAuthGate();
   const { toast } = useToast();
-  const [nearby, setNearby] = useState<number | null>(null);
-  const [reporting, setReporting] = useState(false);
+  // Both pieces of state are keyed by post id so switching markers resets them
+  // without an extra render pass.
+  const [nearbyFor, setNearbyFor] = useState<{ postId: string; count: number } | null>(null);
+  const [reportingFor, setReportingFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setReporting(false);
-    setNearby(null);
     if (!post) return;
     let active = true;
     void nearbyReportCount(getSupabase(), post).then((count) => {
-      if (active) setNearby(count);
+      if (active) setNearbyFor({ postId: post.id, count });
     });
     return () => {
       active = false;
@@ -50,6 +50,9 @@ export default function PostSheet({
   }, [post]);
 
   if (!post) return null;
+
+  const nearby = nearbyFor?.postId === post.id ? nearbyFor.count : null;
+  const reporting = reportingFor === post.id;
 
   const meta = mapCategory(post.category);
   const helpful = helpfulIds.has(post.id);
@@ -86,7 +89,7 @@ export default function PostSheet({
         reason,
       });
       toast("通報を受け付けました。確認します", "success");
-      setReporting(false);
+      setReportingFor(null);
     } catch {
       toast("通報を送信できませんでした", "error");
     }
@@ -200,7 +203,7 @@ export default function PostSheet({
         </button>
         <button
           type="button"
-          onClick={() => setReporting((v) => !v)}
+          onClick={() => setReportingFor(reporting ? null : post.id)}
           className="flex items-center justify-center gap-1.5 rounded-2xl border border-line bg-ink-700 px-2 py-3 text-[12.5px] font-bold text-fg-muted active:bg-ink-600"
         >
           <Flag size={15} />

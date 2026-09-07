@@ -41,10 +41,7 @@ export function useGeolocation(autoRequest = true): GeoState {
 
   useEffect(() => {
     if (!autoRequest || requested.current) return;
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setStatus("unavailable");
-      return;
-    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
     // Only auto-locate when the browser already remembers a granted permission,
     // so a first-time visitor is never hit by an unexpected prompt.
     if (!navigator.permissions?.query) return;

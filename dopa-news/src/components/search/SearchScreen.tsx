@@ -1,15 +1,28 @@
 "use client";
 
 import { Search, TrendingUp, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import NewsRow from "@/components/news/NewsRow";
 import { PageHeader } from "@/components/navigation/TopBar";
 import { EmptyState, ErrorState, RowSkeleton } from "@/components/ui/States";
 import { searchNews } from "@/lib/news-queries";
+import {
+  clearRecentSearches,
+  getRecentSearches,
+  getServerRecentSearches,
+  rememberSearch,
+  subscribeRecentSearches,
+} from "@/lib/recent-searches";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { NewsWithQuiz } from "@/types/database";
 
-const RECENT_KEY = "dopa-recent-searches";
 const DEBOUNCE_MS = 260;
 
 export default function SearchScreen() {
@@ -17,18 +30,14 @@ export default function SearchScreen() {
   const [results, setResults] = useState<NewsWithQuiz[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [popular, setPopular] = useState<string[]>([]);
-  const [recent, setRecent] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(RECENT_KEY);
-      if (stored) setRecent(JSON.parse(stored) as string[]);
-    } catch {
-      setRecent([]);
-    }
-  }, []);
+  const recent = useSyncExternalStore(
+    subscribeRecentSearches,
+    getRecentSearches,
+    getServerRecentSearches,
+  );
 
   // Popular terms are derived from the keywords of recently published stories.
   useEffect(() => {
@@ -78,17 +87,7 @@ export default function SearchScreen() {
   }, [term, run]);
 
   const remember = useCallback((value: string) => {
-    const cleaned = value.trim();
-    if (!cleaned) return;
-    setRecent((prev) => {
-      const next = [cleaned, ...prev.filter((item) => item !== cleaned)].slice(0, 8);
-      try {
-        window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-      } catch {
-        // Storage can be unavailable in private mode; history is optional.
-      }
-      return next;
-    });
+    rememberSearch(value);
   }, []);
 
   const suggestions = useMemo(() => {
@@ -165,7 +164,16 @@ export default function SearchScreen() {
             <div className="space-y-5">
               {recent.length > 0 && (
                 <section>
-                  <h2 className="mb-2 px-0.5 text-[12px] font-bold text-fg-muted">最近の検索</h2>
+                  <div className="mb-2 flex items-center justify-between px-0.5">
+                    <h2 className="text-[12px] font-bold text-fg-muted">最近の検索</h2>
+                    <button
+                      type="button"
+                      onClick={clearRecentSearches}
+                      className="text-[11.5px] font-semibold text-fg-faint active:text-fg"
+                    >
+                      履歴を消す
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {recent.map((item) => (
                       <button

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, LogOut, Moon, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { PageHeader } from "@/components/navigation/TopBar";
 import BottomSheet from "@/components/ui/BottomSheet";
 import Toggle from "@/components/ui/Toggle";
@@ -37,28 +37,36 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { user, profile, loading, refreshProfile, signOut } = useSession();
   const { toast } = useToast();
-  const [draft, setDraft] = useState<Profile | null>(null);
+  // Toggles apply instantly on top of the saved profile and roll back if the
+  // write fails, so the switches never lag behind the tap.
+  const [pending, setPending] = useState<Partial<Profile>>({});
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    setDraft(profile);
-  }, [profile]);
+  const draft: Profile | null = profile ? { ...profile, ...pending } : null;
 
   const persist = useCallback(
     async (patch: Partial<Profile>) => {
-      if (!user || !draft) return;
-      const previous = draft;
-      setDraft({ ...draft, ...patch } as Profile);
+      if (!user) return;
+      setPending((prev) => ({ ...prev, ...patch }));
       const { error } = await getSupabase().from("profiles").update(patch).eq("id", user.id);
       if (error) {
-        setDraft(previous);
+        setPending((prev) => {
+          const next = { ...prev };
+          for (const key of Object.keys(patch)) delete next[key as keyof Profile];
+          return next;
+        });
         toast("設定を保存できませんでした", "error");
         return;
       }
-      void refreshProfile();
+      await refreshProfile();
+      setPending((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(patch)) delete next[key as keyof Profile];
+        return next;
+      });
     },
-    [user, draft, refreshProfile, toast],
+    [user, refreshProfile, toast],
   );
 
   async function handleSignOut() {
@@ -219,6 +227,13 @@ export default function SettingsScreen() {
         <section>
           <h2 className="mb-2 px-0.5 text-[12px] font-bold text-fg-muted">アカウント</h2>
           <div className="space-y-2">
+            <Link
+              href="/about"
+              className="card flex items-center justify-between px-4 py-3.5 text-[14px] font-semibold active:bg-ink-700"
+            >
+              ニュースの作り方・情報源について
+              <ChevronRight size={17} className="text-fg-faint" />
+            </Link>
             <Link
               href="/terms"
               className="card flex items-center justify-between px-4 py-3.5 text-[14px] font-semibold active:bg-ink-700"

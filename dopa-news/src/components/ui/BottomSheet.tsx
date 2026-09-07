@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 interface BottomSheetProps {
@@ -36,7 +37,12 @@ export default function BottomSheet({
     };
   }, [open, onClose]);
 
-  return (
+  // Screens like the Dopa Map are `position: fixed`, which creates a stacking
+  // context that would trap the sheet beneath the bottom nav and clip it
+  // against `overflow: hidden`. Portalling to the body avoids both.
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[100]">
@@ -97,6 +103,7 @@ export default function BottomSheet({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

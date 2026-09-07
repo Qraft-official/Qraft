@@ -31,6 +31,9 @@ export default function SearchScreen() {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [popular, setPopular] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState("");
+  // While an IME composition is open the input holds partial kana, which would
+  // otherwise fire a search for text the user has not committed yet.
+  const [composing, setComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const recent = useSyncExternalStore(
@@ -82,9 +85,10 @@ export default function SearchScreen() {
   }, []);
 
   useEffect(() => {
+    if (composing) return;
     const handle = setTimeout(() => void run(term), DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [term, run]);
+  }, [term, run, composing]);
 
   const remember = useCallback((value: string) => {
     rememberSearch(value);
@@ -106,6 +110,9 @@ export default function SearchScreen() {
   }, [term, results, popular]);
 
   const showDiscovery = term.trim().length === 0;
+  // The debounced query has not caught up with the input yet, so any empty
+  // `results` still belongs to the previous term and must not be reported.
+  const pending = term.trim() !== submitted;
 
   return (
     <main className="pad-nav min-h-dvh">
@@ -120,6 +127,11 @@ export default function SearchScreen() {
             autoFocus
             enterKeyHint="search"
             onChange={(e) => setTerm(e.target.value)}
+            onCompositionStart={() => setComposing(true)}
+            onCompositionEnd={(e) => {
+              setTerm(e.currentTarget.value);
+              setComposing(false);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 remember(term);
@@ -218,7 +230,7 @@ export default function SearchScreen() {
                 )}
               </section>
             </div>
-          ) : status === "loading" ? (
+          ) : status === "loading" || pending ? (
             <RowSkeleton count={4} />
           ) : status === "error" ? (
             <ErrorState onRetry={() => void run(term)} />

@@ -27,16 +27,18 @@ export default function DocPage({
   title,
   lead,
   updated,
+  backHref = "/me",
   children,
 }: {
   title: string;
   lead: string;
   updated: string;
+  backHref?: string;
   children: ReactNode;
 }) {
   return (
     <main className="pad-nav min-h-dvh">
-      <PageHeader title={title} backHref="/me" />
+      <PageHeader title={title} backHref={backHref} />
       <div className="space-y-3 px-4 pt-3.5">
         <p className="text-[13px] leading-relaxed text-fg-muted">{lead}</p>
         {children}

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  MapLibreMap,
-  Marker,
-  NavigationControl,
-  setWorkerUrl,
-  type GeoJSONSource,
-} from "maplibre-gl";
+import { MapLibreMap, Marker, setWorkerUrl, type GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useRef } from "react";
 import { freshnessOpacity } from "@/lib/format";
@@ -234,8 +228,6 @@ export default function MapCanvas({
     });
     mapRef.current = map;
 
-    map.addControl(new NavigationControl({ showCompass: false }), "top-right");
-
     map.on("load", () => {
       map.addSource(SOURCE_ID, {
         type: "geojson",
@@ -299,7 +291,14 @@ export default function MapCanvas({
       if (event.sourceId === SOURCE_ID && event.isSourceLoaded) syncMarkers();
     });
 
+    // Mobile browsers grow the visual viewport as the address bar retracts, and
+    // `dvh` units settle a frame after mount; MapLibre only tracks window
+    // resizes, so the canvas would keep whatever size it saw first.
+    const observer = new ResizeObserver(() => map.resize());
+    observer.observe(containerRef.current);
+
     return () => {
+      observer.disconnect();
       markers.forEach((m) => m.remove());
       markers.clear();
       userMarkerRef.current?.remove();
@@ -356,5 +355,11 @@ export default function MapCanvas({
     map.easeTo({ center: [userCoords.lng, userCoords.lat], zoom: 13, duration: 900 });
   }, [userCoords]);
 
-  return <div ref={containerRef} className="absolute inset-0" aria-label="ドパマップ" />;
+  // maplibre-gl.css forces `position: relative` onto `.maplibregl-map`, which
+  // beats Tailwind's `absolute` and leaves `inset-0` with nothing to stretch,
+  // collapsing the container to the height of the attribution bar. The explicit
+  // size keeps the map filling its parent under either position.
+  return (
+    <div ref={containerRef} className="absolute inset-0 h-full w-full" aria-label="ドパマップ" />
+  );
 }

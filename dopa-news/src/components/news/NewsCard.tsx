@@ -7,7 +7,8 @@ import { BreakingTag, CategoryTag, HeatMeter } from "./Badges";
 import NewsThumb from "./NewsThumb";
 import SaveButton from "./SaveButton";
 import ShareButton from "./ShareButton";
-import { relativeTime } from "@/lib/format";
+import { timeLabel } from "@/lib/format";
+import { useNow } from "@/hooks/use-now";
 import type { NewsWithQuiz } from "@/types/database";
 
 export default function NewsCard({
@@ -19,6 +20,8 @@ export default function NewsCard({
   index?: number;
   priority?: boolean;
 }) {
+  const now = useNow();
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 14 }}
@@ -56,7 +59,7 @@ export default function NewsCard({
         <div className="flex min-w-0 flex-col gap-1.5">
           <HeatMeter heat={article.heat} />
           <span className="text-[11px] text-fg-faint">
-            {relativeTime(article.published_at)} ・ {article.source_name}
+            {timeLabel(article.published_at, now)} ・ {article.source_name}
           </span>
         </div>
         <div className="flex shrink-0 items-center">

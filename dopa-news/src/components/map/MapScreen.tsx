@@ -5,10 +5,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Crosshair, Flame, LocateFixed, MapPin, Plus, TrendingUp, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ComposeSheet from "./ComposeSheet";
+import MapListFallback from "./MapListFallback";
 import PostSheet from "./PostSheet";
 import type { MapMode } from "./MapCanvas";
 import { Spinner } from "@/components/ui/States";
 import { useAuthGate } from "@/hooks/use-auth-gate";
+import { useWebglSupport } from "@/hooks/use-webgl";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { useSession } from "@/hooks/use-session";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +39,7 @@ export default function MapScreen() {
   const gate = useAuthGate();
   const { toast } = useToast();
   const geo = useGeolocation(true);
+  const hasWebgl = useWebglSupport();
 
   const [type, setType] = useState<MapPostType>("weather");
   const [mode, setMode] = useState<MapMode>("markers");
@@ -143,14 +146,22 @@ export default function MapScreen() {
 
   return (
     <div className="fixed inset-0 mx-auto w-full max-w-[var(--app-max-width)] overflow-hidden">
-      <MapCanvas
-        posts={visiblePosts}
-        mode={mode}
-        center={geo.center}
-        userCoords={geo.coords}
-        selectedId={selected?.id ?? null}
-        onSelect={setSelected}
-      />
+      {hasWebgl ? (
+        <MapCanvas
+          posts={visiblePosts}
+          mode={mode}
+          center={geo.center}
+          userCoords={geo.coords}
+          selectedId={selected?.id ?? null}
+          onSelect={setSelected}
+        />
+      ) : (
+        <MapListFallback
+          posts={visiblePosts}
+          userCoords={geo.coords}
+          onSelect={setSelected}
+        />
+      )}
 
       {/* ---------- top overlay ---------- */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 pad-safe-top">
@@ -192,19 +203,23 @@ export default function MapScreen() {
               {loading ? "読み込み中…" : failed ? "投稿を取得できませんでした" : statusText}
             </span>
             <div className="pointer-events-auto flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setMode((m) => (m === "markers" ? "heat" : "markers"))}
-                aria-pressed={mode === "heat"}
-                className={`glass grid h-9 w-9 place-items-center rounded-full border transition-colors ${
-                  mode === "heat"
-                    ? "border-[#ff5c7a]/60 text-[#ff5c7a]"
-                    : "border-line text-fg-muted"
-                }`}
-                aria-label={mode === "heat" ? "マーカー表示に切り替え" : "ヒートマップ表示に切り替え"}
-              >
-                <Flame size={16} />
-              </button>
+              {hasWebgl && (
+                <button
+                  type="button"
+                  onClick={() => setMode((m) => (m === "markers" ? "heat" : "markers"))}
+                  aria-pressed={mode === "heat"}
+                  className={`glass grid h-9 w-9 place-items-center rounded-full border transition-colors ${
+                    mode === "heat"
+                      ? "border-[#ff5c7a]/60 text-[#ff5c7a]"
+                      : "border-line text-fg-muted"
+                  }`}
+                  aria-label={
+                    mode === "heat" ? "マーカー表示に切り替え" : "ヒートマップ表示に切り替え"
+                  }
+                >
+                  <Flame size={16} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={recenter}
@@ -225,7 +240,8 @@ export default function MapScreen() {
       </div>
 
       {/* ---------- trends ---------- */}
-      <div className="absolute inset-x-0 bottom-[calc(var(--nav-height)+env(safe-area-inset-bottom,0px))] z-20 px-3 pb-3">
+      {/* Raised clear of the basemap attribution strip pinned above the nav. */}
+      <div className="absolute inset-x-0 bottom-[calc(var(--nav-height)+env(safe-area-inset-bottom,0px)+20px)] z-20 px-3 pb-3">
         <AnimatePresence initial={false}>
           {showTrends && trends.length > 0 && (
             <motion.div

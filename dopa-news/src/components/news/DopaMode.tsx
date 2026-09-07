@@ -9,7 +9,8 @@ import SaveButton from "./SaveButton";
 import ShareButton from "./ShareButton";
 import QuizCard from "@/components/quiz/QuizCard";
 import { EmptyState } from "@/components/ui/States";
-import { relativeTime } from "@/lib/format";
+import { timeLabel } from "@/lib/format";
+import { useNow } from "@/hooks/use-now";
 import type { NewsWithQuiz } from "@/types/database";
 
 /** Keeps swipe cards short: only the first few lines of each section. */
@@ -22,6 +23,8 @@ function condense(text: string, maxLines: number): string {
 }
 
 function Slide({ article, index }: { article: NewsWithQuiz; index: number }) {
+  const now = useNow();
+
   return (
     <section className="relative h-dvh w-full shrink-0 snap-start snap-always overflow-hidden">
       <NewsThumb
@@ -39,7 +42,7 @@ function Slide({ article, index }: { article: NewsWithQuiz; index: number }) {
             {article.is_breaking && <BreakingTag />}
             <CategoryTag category={article.category} />
             <span className="text-[10.5px] text-fg-faint">
-              {relativeTime(article.published_at)} ・ {article.source_name}
+              {timeLabel(article.published_at, now)} ・ {article.source_name}
             </span>
           </div>
 

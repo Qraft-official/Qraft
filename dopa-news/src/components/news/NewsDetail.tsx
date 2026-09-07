@@ -11,7 +11,8 @@ import ShareButton from "./ShareButton";
 import QuizCard from "@/components/quiz/QuizCard";
 import { useSession } from "@/hooks/use-session";
 import { SOURCE_TRUST } from "@/lib/categories";
-import { clockTime, relativeTime } from "@/lib/format";
+import { clockTime, timeLabel } from "@/lib/format";
+import { useNow } from "@/hooks/use-now";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { NewsWithQuiz } from "@/types/database";
 
@@ -67,6 +68,7 @@ export default function NewsDetail({
   related: NewsWithQuiz[];
 }) {
   const { user } = useSession();
+  const now = useNow();
   const trust = SOURCE_TRUST[article.source_type] ?? SOURCE_TRUST.unconfirmed;
   const isExternalSource = /^https?:\/\//.test(article.source_url);
 
@@ -131,7 +133,7 @@ export default function NewsDetail({
           </motion.h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <span className="text-[11.5px] text-fg-faint">
-              {relativeTime(article.published_at)}（{clockTime(article.published_at)}公開）
+              {timeLabel(article.published_at, now)}（{clockTime(article.published_at)}公開）
             </span>
             <HeatMeter heat={article.heat} />
           </div>
@@ -235,7 +237,7 @@ export default function NewsDetail({
                       {item.title}
                     </span>
                     <span className="mt-1 block text-[10.5px] text-fg-faint">
-                      {relativeTime(item.published_at)} ・ {item.source_name}
+                      {timeLabel(item.published_at, now)} ・ {item.source_name}
                     </span>
                   </span>
                 </Link>

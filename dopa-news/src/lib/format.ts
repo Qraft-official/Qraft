@@ -1,3 +1,7 @@
+// Dopa News is a Japan-facing app, so every date is formatted in JST. Pinning
+// the zone also keeps server-rendered markup identical to the client's.
+const TZ = "Asia/Tokyo";
+
 export function relativeTime(iso: string, now: number = Date.now()): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -9,13 +13,38 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   if (hours < 24) return `${hours}時間前`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}日前`;
-  return new Date(then).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
+  return new Date(then).toLocaleDateString("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    timeZone: TZ,
+  });
+}
+
+/**
+ * Absolute stand-in shown while `useNow()` has no client clock yet, so the
+ * server and the hydrating client always emit the same text.
+ */
+export function absoluteTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: TZ,
+  });
+}
+
+/** Relative once the client clock is available, absolute during hydration. */
+export function timeLabel(iso: string, now: number | null): string {
+  return now === null ? absoluteTime(iso) : relativeTime(iso, now);
 }
 
 export function clockTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
 
 export function dateLabel(iso: string): string {
@@ -25,13 +54,19 @@ export function dateLabel(iso: string): string {
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: TZ,
   });
 }
 
 export function dayKey(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
+  return d.toLocaleDateString("ja-JP", {
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+    timeZone: TZ,
+  });
 }
 
 /**

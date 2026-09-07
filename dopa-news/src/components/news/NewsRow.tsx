@@ -4,7 +4,8 @@ import Link from "next/link";
 import { CategoryTag } from "./Badges";
 import NewsThumb from "./NewsThumb";
 import SaveButton from "./SaveButton";
-import { relativeTime } from "@/lib/format";
+import { timeLabel } from "@/lib/format";
+import { useNow } from "@/hooks/use-now";
 import type { NewsWithQuiz } from "@/types/database";
 
 export default function NewsRow({
@@ -16,6 +17,8 @@ export default function NewsRow({
   meta?: string;
   showSave?: boolean;
 }) {
+  const now = useNow();
+
   return (
     <div className="card flex items-center gap-3 p-2.5">
       <Link href={`/news/${article.id}`} className="flex min-w-0 flex-1 items-center gap-3">
@@ -34,7 +37,7 @@ export default function NewsRow({
             {article.title}
           </span>
           <span className="mt-1 block text-[10.5px] text-fg-faint">
-            {meta ?? `${relativeTime(article.published_at)} ・ ${article.source_name}`}
+            {meta ?? `${timeLabel(article.published_at, now)} ・ ${article.source_name}`}
           </span>
         </span>
       </Link>

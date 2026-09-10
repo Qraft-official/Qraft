@@ -28,6 +28,8 @@ export type ProblemRow = {
   is_hard_spotlight?: boolean | null;
   promoted?: boolean | null;
   promoted_at?: string | null;
+  topic?: string | null;
+  publish_at?: string | null;
 };
 
 export type ProfileRow = {
@@ -65,7 +67,7 @@ export type ProblemPatch = {
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
 
 const PROBLEM_COLUMNS =
-  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at";
+  "id, author_id, title, problem_text, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, topic, publish_at";
 
 export function asSubject(value: string): Subject {
   return SUBJECTS.includes(value as Subject) ? (value as Subject) : "math";
@@ -133,7 +135,7 @@ export function problemToPost(row: ProblemRow, viewerId?: string | null): Post {
     subject: asSubject(row.subject),
     text,
     title,
-    solution: row.solution ?? undefined,
+    solution: row.is_sprint ? undefined : row.solution ?? undefined,
     photo: row.photo ?? undefined,
     pages: asNotePages(row.pages),
     solutionFormat: format,
@@ -148,12 +150,14 @@ export function problemToPost(row: ProblemRow, viewerId?: string | null): Post {
     eleganceCount: 0,
     sprintDay: row.is_sprint ? (row.sprint_day ?? undefined) : undefined,
     problemMode,
-    correctAnswer: isAuthor && problemMode === "challenge" ? (row.correct_answer ?? "") : undefined,
+    correctAnswer: isAuthor && !row.is_sprint && problemMode === "challenge" ? (row.correct_answer ?? "") : undefined,
     difficultyLevel: asDifficulty(row.difficulty_level),
     confusedCount: Number(row.confused_count ?? 0),
     isHardSpotlight: !!row.is_hard_spotlight,
     promoted: !!row.promoted,
     promotedAt: row.promoted_at ?? undefined,
+    topic: row.topic ?? undefined,
+    publishAt: row.publish_at ?? undefined,
   };
 }
 

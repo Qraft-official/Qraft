@@ -82,6 +82,9 @@ export type Post = {
   promoted?: boolean;
   promotedAt?: string;
   challengeGrade?: ChallengeGrade;
+  topic?: string;
+  publishAt?: string;
+  sprintHint?: string;
 };
 
 export type RatingKind = "aha" | "elegance";

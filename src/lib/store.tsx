@@ -33,7 +33,6 @@ import { referralFetch } from "./referral-client";
 import { isVerifiedCreator, isComplimentaryPremiumAccount, LOUNGE_POSTS } from "./premium";
 import { userIsVerified } from "./verified";
 import {
-  communityForDay,
   INITIAL_FOLLOWERS,
   INITIAL_FOLLOWS,
   MOCK_REPLIES,
@@ -63,7 +62,13 @@ import {
   fetchComments,
   insertComment as persistInsertComment,
 } from "./comments";
-import { getSprintDayId, makeOfficialPost, pickAhaPulsePost, remainingMs } from "./sprint";
+import { getSprintDayId, remainingMs } from "./sprint";
+import {
+  fetchMySprintUnlocks,
+  fetchSprintTeaser,
+  submitSprintAttempt,
+  type SprintTeaser,
+} from "./sprint-client";
 import { supabase } from "./supabase";
 import type {
   ActivityItem,
@@ -146,10 +151,13 @@ type Store = {
   addReply: (input: { replyToId: string; text: string }) => Promise<{ error?: string }>;
   deleteComment: (id: string) => Promise<{ error?: string }>;
   startSprint: () => void;
-  submitSprint: (pages: CanvasPage[]) => void;
+  submitSprint: (pages: CanvasPage[]) => Promise<{ error?: string }>;
   timeoutSprint: () => void;
   updateSprintPages: (pages: CanvasPage[]) => void;
-  officialPost: Post;
+  officialPost: Post | null;
+  pulseTeaser: SprintTeaser | null;
+  sprintUnlocks: Record<string, boolean>;
+  refreshPulse: () => Promise<void>;
   community: Post[];
   updateProfile: (patch: ProfilePatch) => Promise<{ error?: string }>;
   updateLearningSettings: (input: { age: number; tiers: Tiers }) => Promise<{ error?: string }>;
@@ -160,6 +168,7 @@ type Store = {
   getPost: (id: string) => Post | undefined;
   repliesTo: (postId: string) => Post[];
   isDeveloper: boolean;
+  isAdmin: boolean;
   hasPremium: boolean;
   referralMe: ReferralMe | null;
   referralReady: boolean;
@@ -264,6 +273,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reactions, setReactions] = useState<Record<string, string>>({});
   const [confusedMine, setConfusedMine] = useState<Record<string, boolean>>({});
   const [confusedCounts, setConfusedCounts] = useState<Record<string, number>>({});
+  const [pulseTeaser, setPulseTeaser] = useState<SprintTeaser | null>(null);
+  const [sprintUnlocks, setSprintUnlocks] = useState<Record<string, boolean>>({});
   const [sprint, setSprint] = useState<SprintRecord>(() =>
     freshSprint(getSprintDayId()),
   );
@@ -426,16 +437,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setProfileHydrated(true);
         }
         const uid = data.session?.user?.id;
-        const [remote, mine] = await Promise.all([
+        const [remote, mine, teaser, unlocks] = await Promise.all([
           loadRemoteFeed(),
           uid ? fetchMyConfusedProblemIds(uid) : Promise.resolve([] as string[]),
+          fetchSprintTeaser(),
+          uid ? fetchMySprintUnlocks() : Promise.resolve([] as string[]),
         ]);
         if (cancelled) return;
         setRemotePosts(remote.posts);
         setRemoteUsers(remote.profiles);
         if (remote.error) console.warn("Failed to load problems:", remote.error);
+        setPulseTeaser(teaser);
         if (uid) {
           setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
+          setSprintUnlocks(Object.fromEntries(unlocks.map((id) => [id, true])));
         }
       } catch (err) {
         console.warn("Auth bootstrap failed:", err);
@@ -464,12 +479,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           void fetchMyConfusedProblemIds(user.id).then((mine) => {
             setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
           });
+          void fetchSprintTeaser().then(setPulseTeaser);
+          void fetchMySprintUnlocks().then((ids) => {
+            setSprintUnlocks(Object.fromEntries(ids.map((id) => [id, true])));
+          });
         } else {
           if (event === "INITIAL_SESSION") return;
           hydratedUidRef.current = null;
           applySession(null);
           setReferralReady(true);
           setConfusedMine({});
+          setSprintUnlocks({});
+          void fetchSprintTeaser().then(setPulseTeaser);
         }
       } catch (err) {
         console.warn("onAuthStateChange failed:", err);
@@ -486,6 +507,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setRemotePosts(remote.posts);
             setRemoteUsers((prev) => ({ ...prev, ...remote.profiles }));
           });
+          void fetchSprintTeaser().then(setPulseTeaser);
         },
       )
       .subscribe();
@@ -609,31 +631,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [me, remoteUsers],
   );
 
-  const mockOfficial = useMemo(() => makeOfficialPost(sprint.dayId), [sprint.dayId]);
-  const community = useMemo(() => communityForDay(sprint.dayId), [sprint.dayId]);
-  const officialPost = useMemo(
-    () => pickAhaPulsePost(remotePosts, sprint.dayId, mockOfficial),
-    [remotePosts, sprint.dayId, mockOfficial],
-  );
+  const community = useMemo(() => [] as Post[], []);
+  const officialPost = useMemo(() => {
+    const sprints = remotePosts.filter((p) => p.isSprint || p.kind === "sprint");
+    if (!sprints.length) return null;
+    return [...sprints].sort((a, b) => {
+      const da = a.sprintDay ?? a.publishAt ?? a.createdAt;
+      const db = b.sprintDay ?? b.publishAt ?? b.createdAt;
+      return db.localeCompare(da);
+    })[0];
+  }, [remotePosts]);
 
   const catalog = useMemo(() => {
     const hidden = new Set(hiddenReplyIds);
     return [
       ...remotePosts,
       ...extra,
-      mockOfficial,
       ...POSTS,
       ...MOCK_REPLIES,
-      ...community,
       ...LOUNGE_POSTS,
     ].filter((p) => !hidden.has(p.id));
-  }, [extra, mockOfficial, community, remotePosts, hiddenReplyIds]);
+  }, [extra, remotePosts, hiddenReplyIds]);
 
   const posts = useMemo(() => {
     const extras = extra;
     const hidden = new Set(hiddenReplyIds);
     const seen = new Set<string>();
-    const main = [...remotePosts, ...extra, mockOfficial, ...POSTS, ...MOCK_REPLIES]
+    const main = [...remotePosts, ...extra, ...POSTS, ...MOCK_REPLIES]
       .filter((p) => {
         if (hidden.has(p.id)) return false;
         if (seen.has(p.id)) return false;
@@ -658,7 +682,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               MOCK_REPLIES.filter((e) => e.replyToId === p.id && !hidden.has(e.id)).length,
       };
     });
-  }, [extra, mockOfficial, remotePosts, confusedCounts, hiddenReplyIds]);
+  }, [extra, remotePosts, confusedCounts, hiddenReplyIds]);
 
   const getPost = useCallback(
     (id: string) =>
@@ -667,14 +691,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const repliesTo = useCallback(
-    (postId: string) =>
-      catalog
+    (postId: string) => {
+      const parent =
+        remotePosts.find((p) => p.id === postId) || extra.find((p) => p.id === postId);
+      const sprintLocked =
+        !!parent &&
+        (parent.isSprint || parent.kind === "sprint") &&
+        !sprintUnlocks[postId] &&
+        !isAdmin;
+      return catalog
         .filter(
           (p) =>
             p.replyToId === postId || (p.kind === "solution" && p.problemId === postId),
         )
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-    [catalog],
+        .filter((p) => !sprintLocked || p.authorId === me.id)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    },
+    [catalog, extra, remotePosts, sprintUnlocks, isAdmin, me.id],
   );
 
   const completeOnboarding = useCallback(
@@ -1007,7 +1040,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return { error: "投稿するにはログインしてください" };
       }
       const problem = getPost(input.problemId);
-      const isChallenge = problem?.problemMode === "challenge";
+      const isPulse = !!(problem?.isSprint || problem?.kind === "sprint");
+      if (isPulse) {
+        const pulse = await submitSprintAttempt(input.problemId, (input.solverAnswer ?? "").trim());
+        if (pulse.error) return { error: pulse.error };
+        setSprintUnlocks((prev) => ({ ...prev, [input.problemId!]: true }));
+        setSprint((s) => ({ ...s, submittedAt: Date.now(), timedOut: false }));
+      }
+      const isChallenge = problem?.problemMode === "challenge" && !isPulse;
       const solverAnswer = (input.solverAnswer ?? "").trim();
       if (isChallenge && !solverAnswer) {
         return { error: "答えを入力してください（単位は不要です）" };
@@ -1089,8 +1129,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const parent =
       extra.find((p) => p.id === input.replyToId) ||
       remotePosts.find((p) => p.id === input.replyToId) ||
-      POSTS.find((p) => p.id === input.replyToId) ||
-      (input.replyToId.startsWith("sprint-") ? makeOfficialPost(getSprintDayId()) : undefined);
+      POSTS.find((p) => p.id === input.replyToId);
     const localId = `reply-${Date.now()}`;
     const post: Post = {
       id: localId,
@@ -1304,20 +1343,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSprint((s) => ({
       ...s,
       startedAt: Date.now(),
-      submittedAt: null,
-      timedOut: false,
       pages: s.pages.length ? s.pages : [{ id: "page-1", strokes: [], texts: [] }],
     }));
   }, []);
 
-  const submitSprint = useCallback((pages: CanvasPage[]) => {
-    setSprint((s) => ({
-      ...s,
-      pages,
-      submittedAt: Date.now(),
-      timedOut: false,
-    }));
-  }, []);
+  const submitSprint = useCallback(
+    async (pages: CanvasPage[]) => {
+      setSprint((s) => ({ ...s, pages }));
+      if (!officialPost) return { error: "今日の問題がありません" };
+      const res = await submitSprintAttempt(officialPost.id);
+      if (res.error) return { error: res.error };
+      setSprintUnlocks((prev) => ({ ...prev, [officialPost.id]: true }));
+      setSprint((s) => ({ ...s, submittedAt: Date.now(), timedOut: false }));
+      return {};
+    },
+    [officialPost],
+  );
 
   const timeoutSprint = useCallback(() => {
     setSprint((s) => ({ ...s, timedOut: true }));
@@ -1327,7 +1368,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSprint((s) => ({ ...s, pages }));
   }, []);
 
-  const sprintUnlocked = !!(sprint.submittedAt || sprint.timedOut);
+  const refreshPulse = useCallback(async () => {
+    const [teaser, unlocks, remote] = await Promise.all([
+      fetchSprintTeaser(),
+      fetchMySprintUnlocks(),
+      loadRemoteFeed(),
+    ]);
+    setPulseTeaser(teaser);
+    setSprintUnlocks(Object.fromEntries(unlocks.map((id) => [id, true])));
+    setRemotePosts(remote.posts);
+    setRemoteUsers((prev) => ({ ...prev, ...remote.profiles }));
+  }, []);
+
+  const sprintUnlocked = officialPost ? !!sprintUnlocks[officialPost.id] : false;
 
   const refreshNotifications = useCallback(async () => {
     const inbox = await fetchNotifications();
@@ -1405,6 +1458,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     getPost,
     repliesTo,
     isDeveloper,
+    isAdmin,
+    pulseTeaser,
+    sprintUnlocks,
+    refreshPulse,
     hasPremium,
     referralMe,
     referralReady,

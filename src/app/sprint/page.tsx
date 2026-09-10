@@ -2,51 +2,64 @@
 
 import { PostCard } from "@/components/PostCard";
 import { PULSE_BLURB, PULSE_NAME } from "@/lib/constants";
-import { formatTimer, remainingMs } from "@/lib/sprint";
+import { formatTimer } from "@/lib/sprint";
+import { fetchSprintReveal, type SprintReveal } from "@/lib/sprint-client";
+import { remainingTo } from "@/lib/sprint-schedule";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
 import { ArrowLeft, PenLine } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function SprintPage() {
   const router = useRouter();
   const {
     officialPost,
+    pulseTeaser,
     sprint,
-    startSprint,
-    submitSprint,
-    timeoutSprint,
-    community,
     sprintUnlocked,
+    submitSprint,
     hasPremium,
     bgmOn,
     setBgmOn,
     openPaywall,
     openComposer,
-    posts,
+    refreshPulse,
   } = useApp();
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  const [submitError, setSubmitError] = useState("");
+  const [reveal, setReveal] = useState<SprintReveal | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 200);
-    return () => clearInterval(id);
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
   }, []);
 
-  const left = sprint.startedAt ? remainingMs(sprint.startedAt, now) : null;
-  const running = !!sprint.startedAt && !sprint.submittedAt && !sprint.timedOut;
+  useEffect(() => {
+    void refreshPulse();
+    const id = window.setInterval(() => void refreshPulse(), 20000);
+    return () => window.clearInterval(id);
+  }, [refreshPulse]);
 
   useEffect(() => {
-    if (running && left !== null && left <= 0) timeoutSprint();
-  }, [running, left, timeoutSprint]);
+    if (!sprintUnlocked || !officialPost) {
+      setReveal(null);
+      return;
+    }
+    void fetchSprintReveal(officialPost.id).then(setReveal);
+  }, [sprintUnlocked, officialPost]);
 
-  const live = useMemo(() => {
-    const accuracy = sprint.submittedAt ? 91 : sprint.timedOut ? 0 : 0;
-    const avg = "6:18";
-    return { accuracy, avg, n: 12840 };
-  }, [sprint.submittedAt, sprint.timedOut]);
+  const opensAt = pulseTeaser?.opensAt;
+  const closesAt = pulseTeaser?.closesAt || officialPost?.publishAt;
+  const openMs = opensAt ? new Date(opensAt).getTime() : 0;
+  const closeMs = closesAt ? new Date(closesAt).getTime() : 0;
+  const published = Boolean(officialPost) && (!openMs || now >= openMs);
+  const live = published && closeMs > 0 && now < closeMs;
+  const leftOpen = opensAt ? remainingTo(opensAt, new Date(now)) : 0;
+  const leftClose = closesAt ? remainingTo(closesAt, new Date(now)) : 0;
 
   const openQuoteComposer = () => {
+    if (!officialPost) return;
     openComposer({
       open: true,
       mode: "solution",
@@ -54,154 +67,98 @@ export default function SprintPage() {
     });
   };
 
-  if (sprintUnlocked) {
-    return (
-      <div className="min-h-dvh pb-8">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-gray-800 bg-black/80 px-3 py-3 backdrop-blur">
-          <button onClick={() => router.push("/")} className="text-white">
-            <ArrowLeft size={20} />
-          </button>
-          <p className="font-bold">{PULSE_NAME} 結果</p>
-        </header>
-        <div className="mx-4 mt-4 rounded-2xl border border-gray-800 bg-panel p-4">
-          <p className="text-xs text-muted">LIVE</p>
-          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-2xl font-black text-aha">
-                {sprint.timedOut ? "—" : `${live.accuracy}%`}
-              </p>
-              <p className="text-[11px] text-muted">正解率</p>
-            </div>
-            <div>
-              <p className="text-2xl font-black text-white">{live.avg}</p>
-              <p className="text-[11px] text-muted">平均解答時間</p>
-            </div>
-            <div>
-              <p className="text-2xl font-black text-purple-300">
-                {live.n.toLocaleString()}
-              </p>
-              <p className="text-[11px] text-muted">挑戦者</p>
-            </div>
-          </div>
-          <p className="mt-3 text-center text-sm font-bold text-aha">
-            みんなの解答 開放
-          </p>
-        </div>
-        <PostCard post={officialPost} />
-        {posts
-          .filter(
-            (p) =>
-              p.problemMode === "aha" &&
-              p.kind !== "reply" &&
-              p.id !== officialPost.id,
-          )
-          .map((p) => (
-            <PostCard key={p.id} post={p} />
-          ))}
-        {community.map((p) => (
-          <PostCard key={p.id} post={p} />
-        ))}
-      </div>
-    );
-  }
-
-  if (!sprint.startedAt) {
-    return (
-      <div className="flex min-h-dvh flex-col px-5 py-6">
-        <button onClick={() => router.push("/")} className="self-start text-muted">
+  return (
+    <div className="min-h-dvh pb-8">
+      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-gray-800 bg-black/80 px-3 py-3 backdrop-blur">
+        <button type="button" onClick={() => router.push("/")} className="text-white">
           <ArrowLeft size={20} />
         </button>
-        <p className="mt-8 text-sm font-bold text-orange-400">🔥 {PULSE_NAME}</p>
-        <h1 className="mt-2 text-3xl font-black">10分一本勝負</h1>
-        <p className="mt-3 text-sm text-muted">{PULSE_BLURB}</p>
-        <button
-          type="button"
-          onClick={() => openComposer({ open: true, mode: "problem", isSprint: true })}
-          className="mt-4 w-full rounded-full border border-aha/50 bg-aha/10 py-3 text-sm font-bold text-aha"
-        >
-          21時問題を投稿
-        </button>
-        <p className="mt-2 text-sm text-muted">
-          開始した瞬間からカウントダウン。提出しなければタイムアウト。次の配信まで待てますが、一度スタートしたら逃げられません。
-        </p>
-        <div className="mt-6 rounded-2xl border border-gray-800 bg-panel p-4">
-          <PostCard post={officialPost} />
+        <p className="font-bold">{PULSE_NAME}</p>
+      </header>
+
+      {!published && (
+        <div className="px-5 py-6">
+          <p className="text-sm font-bold text-aha">今日の21時問題</p>
+          <h1 className="mt-2 text-3xl font-black">21:00 OPEN</h1>
+          <p className="mt-3 text-sm text-muted">{PULSE_BLURB}</p>
+          <p className="mt-4 font-mono text-4xl font-black text-aha">{formatTimer(leftOpen)}</p>
+          <p className="mt-3 text-sm text-muted">公開まで問題本文は表示されません。</p>
         </div>
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={startSprint}
-          className="glow-lime mt-auto rounded-full bg-aha py-4 text-base font-black text-black"
-        >
-          Start Challenge
-        </motion.button>
-        <button
-          type="button"
-          onClick={() => {
-            if (!hasPremium) {
-              openPaywall("フォーカス BGM は Qraft Premium（月額¥400）限定です。");
-              return;
-            }
-            setBgmOn(!bgmOn);
-          }}
-          className="mt-3 pb-4 text-center text-xs text-muted"
-        >
-          🎵 解答 BGM {hasPremium ? (bgmOn ? "ON" : "OFF") : "· Premium"}
-        </button>
-      </div>
-    );
-  }
+      )}
 
-  const danger = left !== null && left < 30000;
-
-  return (
-    <div className="flex min-h-dvh flex-col bg-black pb-8">
-      <div className="flex items-center justify-between px-4 py-3">
-        <p className="text-xs font-bold text-muted">CHALLENGE</p>
-        <motion.p
-          key={left}
-          animate={{ scale: danger ? [1, 1.08, 1] : 1 }}
-          className={`font-mono text-4xl font-black ${danger ? "text-red-500" : "text-aha"}`}
-        >
-          {formatTimer(left ?? 0)}
-        </motion.p>
-        <button
-          type="button"
-          onClick={() => submitSprint(sprint.pages)}
-          className="rounded-full bg-neon px-3 py-1.5 text-xs font-bold"
-        >
-          結果を見る
-        </button>
-      </div>
-      <button
-        type="button"
-        onClick={() => {
-          if (!hasPremium) {
-            openPaywall("フォーカス BGM は Qraft Premium（月額¥400）限定です。");
-            return;
-          }
-          setBgmOn(!bgmOn);
-        }}
-        className="px-4 pb-1 text-right text-[11px] text-muted"
-      >
-        🎵 BGM {hasPremium ? (bgmOn ? "ON" : "OFF") : "Premium"}
-      </button>
-      <p className="px-4 pb-2 text-xs leading-relaxed text-muted">
-        通常の引用投稿と同じ流れで、手書きノートまたは打ち込み式ノートを選んで解答できます。解法を投稿するとフィードが開放されます。
-      </p>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <PostCard post={officialPost} />
-      </div>
-      <div className="px-4 pt-2">
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          type="button"
-          onClick={openQuoteComposer}
-          className="glow-lime flex w-full items-center justify-center gap-2 rounded-full bg-aha py-4 text-base font-black text-black"
-        >
-          <PenLine size={18} />
-          引用して解法を投稿
-        </motion.button>
-      </div>
+      {published && officialPost && (
+        <>
+          <div className="px-4 py-3">
+            <p className="text-[11px] font-bold tracking-wide text-aha">21:00 CHALLENGE</p>
+            <p className="text-lg font-black">今日の1問</p>
+            {live ? (
+              <motion.p className="mt-1 font-mono text-3xl font-black text-aha">
+                残り {formatTimer(leftClose)}
+              </motion.p>
+            ) : (
+              <p className="mt-1 text-sm text-muted">制限時間終了</p>
+            )}
+            {officialPost.topic ? (
+              <p className="mt-1 text-[11px] text-muted">{officialPost.topic}</p>
+            ) : null}
+          </div>
+          <PostCard post={officialPost} />
+          {sprintUnlocked && reveal?.explanation ? (
+            <div className="mx-4 mt-3 rounded-2xl border border-gray-800 bg-panel p-4">
+              <p className="text-xs font-bold text-muted">解説</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm">{reveal.explanation}</p>
+              {reveal.hint ? <p className="mt-2 text-xs text-muted">ヒント: {reveal.hint}</p> : null}
+            </div>
+          ) : null}
+          {submitError && <p className="px-4 text-sm text-red-400">{submitError}</p>}
+          <div className="px-4 pt-3">
+            {live && !sprintUnlocked ? (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                type="button"
+                onClick={openQuoteComposer}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-aha py-4 text-base font-black text-black"
+              >
+                <PenLine size={18} />
+                引用して解法を投稿
+              </motion.button>
+            ) : null}
+            {live && !sprintUnlocked ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmitError("");
+                  void submitSprint(sprint.pages).then((res) => {
+                    if (res?.error) setSubmitError(res.error);
+                  });
+                }}
+                className="mt-2 w-full rounded-full border border-gray-700 py-3 text-sm font-bold"
+              >
+                提出する（制限時間内）
+              </button>
+            ) : null}
+            {!live && !sprintUnlocked ? (
+              <p className="text-center text-sm text-muted">提出していないため、他の人の解答は表示されません。</p>
+            ) : null}
+            {sprintUnlocked ? (
+              <p className="text-center text-sm text-aha">提出済み — 解説とコメントが開放されます。</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!hasPremium) {
+                openPaywall("フォーカス BGM は Qraft Premium（月額¥400）限定です。");
+                return;
+              }
+              setBgmOn(!bgmOn);
+            }}
+            className="mt-3 px-4 pb-4 text-center text-xs text-muted"
+          >
+            🎵 BGM {hasPremium ? (bgmOn ? "ON" : "OFF") : "Premium"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { IosNotice } from "@/components/IosNotice";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PostCard } from "@/components/PostCard";
-import { SprintBanner } from "@/components/SprintBanner";
+import { PulseChallengeCard } from "@/components/PulseChallengeCard";
 import { AdPost } from "@/components/AdPost";
 import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
 import { useApp } from "@/lib/store";
@@ -22,7 +22,6 @@ export default function HomePage() {
     me,
     officialPost,
     sprintUnlocked,
-    community,
     reposts,
     hasPremium,
     openPremium,
@@ -66,20 +65,15 @@ export default function HomePage() {
       return [...boosted, ...followed];
     }
     if (tab === "sprint") {
-      const ahaFeed = posts.filter(
-        (p) =>
-          p.problemMode === "aha" &&
-          p.kind !== "reply" &&
-          p.id !== officialPost.id,
-      );
-      const extra = sprintUnlocked ? community.filter((c) => !ahaFeed.some((d) => d.id === c.id)) : [];
-      return [officialPost, ...ahaFeed, ...extra];
+      if (!officialPost) return [];
+      if (!sprintUnlocked) return [officialPost];
+      return [officialPost];
     }
     if (tab === "lounge") return loungePosts;
-    const pool = others.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
+    const pool = others.filter((p) => p.kind !== "sprint" && p.kind !== "reply" && !p.isSprint);
     const level = inferUserLevel(me.tiers, posts, myId);
     return sortRecommended(pool, level);
-  }, [tab, posts, follows, myId, officialPost, sprintUnlocked, community, reposts, loungePosts, me.tiers]);
+  }, [tab, posts, follows, myId, officialPost, sprintUnlocked, reposts, loungePosts, me.tiers]);
 
   return (
     <div>
@@ -125,7 +119,7 @@ export default function HomePage() {
         <IosNotice />
       </div>
 
-      <SprintBanner />
+      <PulseChallengeCard />
 
       {tab === "foryou" && (
         <div className="px-4 py-3">

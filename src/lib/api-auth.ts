@@ -53,3 +53,25 @@ export function deviceIdFromRequest(request: Request, bodyDeviceId?: string) {
 export function cookieHasReferralApplied(request: Request) {
   return cookieValue(request, "qraft_referral_applied") === "1";
 }
+
+export async function requireAdminFromRequest(request: Request) {
+  const user = await userFromRequest(request);
+  if (!user) {
+    return { user: null as null, error: "ログインしてください", status: 401 as const };
+  }
+  const token = bearerTokenFromRequest(request);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon || !token) {
+    return { user: null as null, error: "認証できません", status: 401 as const };
+  }
+  const supabase = createClient(url, anon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data, error } = await supabase.rpc("is_admin");
+  if (error || data !== true) {
+    return { user: null as null, error: "管理者のみ利用できます", status: 403 as const };
+  }
+  return { user, error: null as null, status: 200 as const };
+}

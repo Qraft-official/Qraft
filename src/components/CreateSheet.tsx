@@ -597,10 +597,6 @@ export function CreateSheet() {
         setProblemStep(2);
         return;
       }
-      if (!isSprintProblem && postMode === "challenge" && !correctAnswer.trim()) {
-        setStepHint("Challenger モードでは正解の入力が必須です");
-        return;
-      }
       setStepHint("");
       setProblemStep(3);
     })();
@@ -698,7 +694,7 @@ export function CreateSheet() {
         setPosting(false);
         setPostError("Challenger モードでは正解の入力が必須です");
         setStepHint("Challenger モードでは正解の入力が必須です");
-        setProblemStep(2);
+        setProblemStep(3);
         return;
       }
       try {
@@ -760,7 +756,7 @@ export function CreateSheet() {
           >
             {openProblem && (
               <div className="relative flex h-full min-h-0 min-w-0 w-full max-w-full flex-col">
-                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5 md:px-4">
+                <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-2 md:px-4">
                   <ComposerProblemWizardHeader
                     step={problemStep}
                     heading={isSprintProblem ? "21時問題を応募" : "問題を投稿"}
@@ -901,6 +897,7 @@ export function CreateSheet() {
                           <p className="mb-1.5 text-xs font-bold text-muted">モード</p>
                           <ProblemModePicker
                             large
+                            showAnswer={false}
                             value={postMode}
                             onChange={(mode) => {
                               setPostMode(mode);
@@ -932,22 +929,27 @@ export function CreateSheet() {
                         placeholder="タイトル（任意）"
                         className="w-full border-0 border-b border-gray-800 bg-transparent py-2 text-base font-semibold outline-none placeholder:text-muted"
                       />
-                      {(postMode === "aha" || isSprintProblem) && (
+                      {(postMode === "aha" || postMode === "challenge" || isSprintProblem) && (
                         <div>
                           <label className="text-xs font-bold text-muted" htmlFor="composer-aha-answer">
-                            答え
+                            {postMode === "challenge" && !isSprintProblem ? "正解" : "答え"}
                           </label>
                           <input
                             id="composer-aha-answer"
                             value={correctAnswer}
                             onChange={(e) => {
                               setCorrectAnswer(e.target.value);
-                              if (stepHint === "答えを入力してください") setStepHint("");
-                              if (postError === "答えを入力してください") setPostError("");
+                              if (stepHint.includes("答え") || stepHint.includes("正解")) setStepHint("");
+                              if (postError.includes("答え") || postError.includes("正解")) setPostError("");
                             }}
-                            placeholder="答え（必須）"
+                            placeholder={
+                              postMode === "challenge" && !isSprintProblem ? "正解（必須）" : "答え（必須）"
+                            }
                             className="mt-0.5 w-full border-0 border-b border-gray-800 bg-transparent py-2 text-sm outline-none"
                           />
+                          {postMode === "challenge" && !isSprintProblem ? (
+                            <p className="mt-0.5 text-xs text-muted">※単位は書かなくていいです</p>
+                          ) : null}
                         </div>
                       )}
                       <textarea

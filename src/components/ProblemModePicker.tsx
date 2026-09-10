@@ -36,12 +36,14 @@ export function ProblemModePicker({
   correctAnswer,
   onCorrectAnswer,
   large = false,
+  showAnswer = true,
 }: {
   value: ProblemMode;
   onChange: (mode: ProblemMode) => void;
   correctAnswer: string;
   onCorrectAnswer: (value: string) => void;
   large?: boolean;
+  showAnswer?: boolean;
 }) {
   const [modeHelp, setModeHelp] = useState<ProblemMode | null>(null);
 
@@ -93,7 +95,7 @@ export function ProblemModePicker({
           </div>
         );
       })}
-      {value === "challenge" && (
+      {showAnswer && value === "challenge" && (
         <div className="col-span-3">
           <input
             value={correctAnswer}

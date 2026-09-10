@@ -1,10 +1,8 @@
 "use client";
 
-import { PREMIUM_REACTIONS } from "@/lib/constants";
-import { useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
+import { useRef, useState } from "react";
 import { ReactionPicker } from "./ReactionPicker";
-
-const LONG_PRESS_MS = 420;
 
 export function ReactionAction({
   postId,
@@ -20,35 +18,36 @@ export function ReactionAction({
   onPaywall: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const btnRef = useRef<HTMLButtonElement>(null);
-  const timerRef = useRef<number | null>(null);
-  const longPressRef = useRef(false);
+  const busyRef = useRef(false);
 
-  const clearHold = () => {
-    if (timerRef.current != null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+  const closePicker = () => {
+    setOpen(false);
+    setError("");
+    window.requestAnimationFrame(() => btnRef.current?.focus());
   };
 
-  useEffect(() => () => clearHold(), []);
-
-  if (!hasPremium) {
-    return (
-      <button
-        type="button"
-        onClick={onPaywall}
-        className="flex min-h-11 min-w-0 flex-1 items-center justify-center px-0.5 text-[11px] text-muted"
-        aria-label="リアクション（Premium）"
-      >
-        😂+
-      </button>
-    );
-  }
-
-  const openPicker = () => {
-    clearHold();
-    setOpen(true);
+  const pick = (emoji: string) => {
+    if (busyRef.current) return;
+    if (!hasPremium) {
+      closePicker();
+      onPaywall();
+      return;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      onReact(postId, emoji);
+      closePicker();
+    } catch {
+      setError("リアクションを保存できませんでした");
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   };
 
   return (
@@ -56,45 +55,28 @@ export function ReactionAction({
       <button
         type="button"
         ref={btnRef}
-        className={`flex min-h-11 min-w-11 select-none items-center justify-center text-base ${
-          selected ? "scale-110" : "opacity-80 hover:opacity-100"
+        className={`flex min-h-11 min-w-11 items-center justify-center gap-0.5 px-0.5 ${
+          selected ? "text-aha" : "text-muted hover:text-white"
         }`}
-        aria-label="リアクション"
+        aria-label="リアクションを追加"
         aria-expanded={open}
         aria-haspopup="dialog"
-        onPointerDown={(e) => {
-          if (e.button !== 0 && e.pointerType === "mouse") return;
-          longPressRef.current = false;
-          clearHold();
-          timerRef.current = window.setTimeout(() => {
-            longPressRef.current = true;
-            openPicker();
-          }, LONG_PRESS_MS);
-        }}
-        onPointerUp={clearHold}
-        onPointerCancel={clearHold}
-        onPointerLeave={clearHold}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          openPicker();
-        }}
+        aria-pressed={Boolean(selected)}
         onClick={() => {
-          if (longPressRef.current) {
-            longPressRef.current = false;
-            return;
-          }
-          openPicker();
+          setError("");
+          setOpen(true);
         }}
       >
-        {selected || "😊"}
+        <Plus size={16} strokeWidth={2.25} />
       </button>
       <ReactionPicker
         open={open}
-        onClose={() => setOpen(false)}
-        emojis={PREMIUM_REACTIONS}
+        onClose={closePicker}
         selected={selected}
-        onPick={(emoji) => onReact(postId, emoji)}
+        onPick={pick}
         anchorRef={btnRef}
+        busy={busy}
+        error={error}
       />
     </div>
   );

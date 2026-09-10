@@ -1,6 +1,6 @@
 "use client";
 
-const STEP_NAMES = ["問題を作る", "問題の設定", "仕上げ"] as const;
+const STEP_NAMES = ["問題を作る", "問題を設定", "投稿情報"] as const;
 
 export function ComposerProblemWizardHeader({
   step,
@@ -12,7 +12,7 @@ export function ComposerProblemWizardHeader({
   return (
     <div className="min-w-0 flex-1 pr-2">
       <p className="truncate text-sm font-bold">{heading}</p>
-      <div className="mt-1 flex items-center gap-1.5" aria-hidden>
+      <div className="mt-1.5 flex items-center gap-1.5" aria-hidden>
         {[1, 2, 3].map((n) => (
           <span key={n} className="flex min-w-0 flex-1 items-center gap-1.5">
             <span

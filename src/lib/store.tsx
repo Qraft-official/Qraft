@@ -1572,7 +1572,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setBgmOn = useCallback((v: boolean) => setBgmOnState(v), []);
   const setAccentColor = useCallback((c: string) => setAccentColorState(c), []);
   const react = useCallback((postId: string, emoji: string) => {
-    setReactions((prev) => ({ ...prev, [postId]: prev[postId] === emoji ? "" : emoji }));
+    setReactions((prev) => {
+      const next = { ...prev, [postId]: prev[postId] === emoji ? "" : emoji };
+      try {
+        localStorage.setItem(STORAGE_KEYS.reactions, JSON.stringify(next));
+      } catch {
+        /* quota / private mode */
+      }
+      return next;
+    });
   }, []);
 
   const toggleConfused = useCallback(

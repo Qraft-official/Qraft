@@ -110,7 +110,16 @@ export const PREMIUM_PENS = [
   { id: "pink", value: "#FB7185", label: "ネオンピンク" },
 ];
 
-export const PREMIUM_REACTIONS = ["🔥", "🤯", "💫", "🧪", "⚡", "🎯"];
+export const PREMIUM_REACTIONS = ["🔥", "🤯", "💫", "🧪", "⚡", "🎯"] as const;
+
+export const PREMIUM_REACTION_LABELS: Record<(typeof PREMIUM_REACTIONS)[number], string> = {
+  "🔥": "熱い",
+  "🤯": "天才",
+  "💫": "すごい",
+  "🧪": "実験",
+  "⚡": "良問",
+  "🎯": "解けた",
+};
 
 export const PREMIUM_ACCENTS = [
   "#A855F7",

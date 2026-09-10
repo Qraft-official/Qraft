@@ -596,6 +596,16 @@ export function PostCard({
               </button>
             )}
 
+            <ReactionAction
+              postId={post.id}
+              hasPremium={hasPremium}
+              selected={reactions[post.id]}
+              onReact={react}
+              onPaywall={() =>
+                openPaywall(`特別リアクションは Qraft Premium（月額¥${PREMIUM_PRICE_JPY}）限定です。`)
+              }
+            />
+
             <motion.button
               whileTap={{ scale: 1.08 }}
               onClick={() => toggleLike(post.id)}
@@ -606,16 +616,6 @@ export function PostCard({
               <Brain size={16} fill={liked ? "#A855F7" : "none"} />
               {post.likeCount + (liked ? 1 : 0)}
             </motion.button>
-
-            <ReactionAction
-              postId={post.id}
-              hasPremium={hasPremium}
-              selected={reactions[post.id]}
-              onReact={react}
-              onPaywall={() =>
-                openPaywall(`特別リアクションは Qraft Premium（月額¥${PREMIUM_PRICE_JPY}）限定です。`)
-              }
-            />
 
             {post.kind === "solution" && (
               <button

@@ -98,7 +98,7 @@ export function SettingsScreen() {
   const router = useRouter();
   const search = useSearchParams();
   const tab = asTab(search.get("tab"));
-  const { hasPremium, isDeveloper, openPremium, subscribed, unsubscribe } = useApp();
+  const { hasPremium, isDeveloper, isAdmin, openPremium, subscribed, unsubscribe } = useApp();
   const [pushOn, setPushOn] = usePref("qraft.notifyPush", true);
   const [mailOn, setMailOn] = usePref("qraft.notifyEmail", true);
 
@@ -268,6 +268,15 @@ export function SettingsScreen() {
                 お問い合わせ
                 <ChevronRight size={16} className="text-muted" />
               </a>
+              {isAdmin && (
+                <Link
+                  href="/admin/sprint"
+                  className="flex items-center justify-between rounded-2xl border border-aha/40 bg-aha/10 px-4 py-3 text-sm font-bold text-aha"
+                >
+                  21時問題管理
+                  <ChevronRight size={16} />
+                </Link>
+              )}
               {(hasPremium || isDeveloper) && (
                 <FeedbackEntryButton className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-800 bg-panel px-3 py-3 text-sm font-bold" />
               )}

@@ -72,6 +72,8 @@ export type Post = {
   title?: string;
   solution?: string;
   isSprint?: boolean;
+  publishAt?: string;
+  topic?: string;
   /** question = 教えてQrafter!, challenge = Challenger, aha = Aha! */
   problemMode?: ProblemMode;
   /** Author-only. Never sent to other clients from fetch. */

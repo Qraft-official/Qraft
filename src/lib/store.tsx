@@ -206,6 +206,7 @@ type Store = {
   getPost: (id: string) => Post | undefined;
   repliesTo: (postId: string) => Post[];
   isDeveloper: boolean;
+  isAdmin: boolean;
   hasPremium: boolean;
   referralMe: ReferralMe | null;
   referralReady: boolean;
@@ -1958,6 +1959,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     getPost,
     repliesTo,
     isDeveloper,
+    isAdmin,
     hasPremium,
     referralMe,
     referralReady,

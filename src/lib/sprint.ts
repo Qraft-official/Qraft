@@ -1,4 +1,4 @@
-import { PULSE_NAME, SPRINT_HOUR, SPRINT_MS } from "./constants";
+import { SPRINT_HOUR, SPRINT_MS } from "./constants";
 import type { Post, Subject } from "./types";
 
 export function getSprintDayId(now = new Date()): string {
@@ -33,31 +33,59 @@ export function remainingMs(startedAt: number, now = Date.now()): number {
   return startedAt + SPRINT_MS - now;
 }
 
+const PULSE_SAMPLE_BODY = [
+  "整数・規則性",
+  "",
+  "黒板に $1, 2, 3, \\ldots, 100$ が書かれている。",
+  "",
+  "好きな2数 $a, b$ を消し、",
+  "代わりに $a+b-1$ を書く。",
+  "",
+  "これを数が1つになるまで繰り返す。",
+  "",
+  "**問い：** 最後に残る数はいくつ？",
+].join("\n");
+
+const PULSE_SAMPLE_HINT =
+  "「どの2つを選ぶか」ではなく、黒板に書かれている数の合計に注目。";
+
+const PULSE_SAMPLE_SOLUTION = [
+  "最初の合計は",
+  "",
+  "$1+2+\\cdots+100=5050$",
+  "",
+  "1回の操作で $a+b \\to a+b-1$ となるため、黒板上の数の合計は必ず $1$ 減る。",
+  "",
+  "$100$ 個の数を $1$ 個にするには $99$ 回操作するので、",
+  "",
+  "$5050-99=4951$",
+  "",
+  "したがって最後に残る数は $4951$。",
+].join("\n");
+
+/** Client-side PULSE sample (not a DB row). Rotating chemistry/physics mocks were ad/demo content. */
 export const OFFICIAL_BANK: {
   subject: Subject;
   text: string;
   title: string;
+  difficultyLevel: 3;
+  correctAnswer: string;
+  hints: string[];
+  solution: string;
 }[] = [
   {
     subject: "math",
-    title: "内接四角形の一撃",
-    text: "円に内接する四角形 $ABCD$ で $AB=3, BC=4, CD=5, DA=6$ のとき、対角線 $AC$ の長さを求めよ。\n\n$$AC^{2}=\\frac{(ac+bd)(ad+bc)}{ab+cd}$$ を使わず、トレミーと余弦で攻めろ。",
-  },
-  {
-    subject: "physics",
-    title: "単振り子の脳汁",
-    text: "長さ $\\ell$、質量 $m$ の単振り子を振幅 $\\theta_0$ で振る。微小角近似を捨て、周期 $T$ を楕円積分で書け。\n\nさらに $\\theta_0\\to 0$ で $T\\to 2\\pi\\sqrt{\\ell/g}$ に戻ることを示せ。",
-  },
-  {
-    subject: "chemistry",
-    title: "平衡のQraft",
-    text: "反応 $2\\mathrm{SO}_2 + \\mathrm{O}_2 \\rightleftharpoons 2\\mathrm{SO}_3$ で $K_p=4.0$ (圧力は atm)。\n\n初期が $\\mathrm{SO}_2:2.0,\\;\\mathrm{O}_2:1.0,\\;\\mathrm{SO}_3:0$ のとき平衡分圧を求めよ。温度一定、体積一定。",
+    title: "最後に残る数",
+    text: PULSE_SAMPLE_BODY,
+    difficultyLevel: 3,
+    correctAnswer: "4951",
+    hints: [PULSE_SAMPLE_HINT],
+    solution: PULSE_SAMPLE_SOLUTION,
   },
 ];
 
-export function officialForDay(dayId: string): (typeof OFFICIAL_BANK)[number] {
-  const n = dayId.split("-").reduce((a, b) => a + Number(b), 0);
-  return OFFICIAL_BANK[n % OFFICIAL_BANK.length];
+export function officialForDay(_dayId: string): (typeof OFFICIAL_BANK)[number] {
+  return OFFICIAL_BANK[0];
 }
 
 export function makeOfficialPost(dayId: string): Post {
@@ -67,33 +95,41 @@ export function makeOfficialPost(dayId: string): Post {
     authorId: "u-official",
     kind: "sprint",
     subject: bank.subject,
-    text: `🔥 **${PULSE_NAME}** — ${bank.title}\n\n${bank.text}`,
+    title: bank.title,
+    text: bank.text,
     createdAt: `${dayId}T21:00:00`,
-    replyCount: 128,
-    repostCount: 64,
-    likeCount: 890,
-    ahaSum: 4.8 * 210,
-    ahaCount: 210,
+    replyCount: 0,
+    repostCount: 0,
+    likeCount: 0,
+    ahaSum: 0,
+    ahaCount: 0,
     eleganceSum: 0,
     eleganceCount: 0,
     sprintDay: dayId,
+    isSprint: true,
     problemMode: "aha",
+    difficultyLevel: bank.difficultyLevel,
+    correctAnswer: bank.correctAnswer,
+    hints: bank.hints,
+    solution: bank.solution,
   };
 }
 
-/** 21:00 PULSE: always pick from Aha! posts. Ignores user Lv1–Lv5. */
-export function pickAhaPulsePost(posts: Post[], dayId: string, fallback: Post): Post {
-  const aha = posts.filter(
-    (p) => p.problemMode === "aha" && (p.kind === "problem" || p.kind === "sprint"),
-  );
-  const forDay = aha.filter(
-    (p) => p.isSprint || p.kind === "sprint" || p.sprintDay === dayId,
-  );
-  const pool = forDay.length ? forDay : aha;
-  if (!pool.length) {
+/** Live PULSE: published is_sprint for that JST day. No random Aha fallback. */
+export function pickAhaPulsePost(posts: Post[], dayId: string, fallback: Post, now = Date.now()): Post {
+  const live = posts.filter((p) => {
+    if (!(p.isSprint || p.kind === "sprint")) return false;
+    if (p.sprintDay && p.sprintDay !== dayId) return false;
+    if (p.publishAt) {
+      const at = Date.parse(p.publishAt);
+      if (!Number.isFinite(at) || at > now) return false;
+    }
+    return p.sprintDay === dayId || p.kind === "sprint";
+  });
+  const forDay = live.filter((p) => p.sprintDay === dayId);
+  const picked = forDay[0] ?? live[0];
+  if (!picked) {
     return { ...fallback, problemMode: "aha" };
   }
-  const n = dayId.split("-").reduce((acc, part) => acc + Number(part), 0);
-  const picked = pool[Math.abs(n) % pool.length];
-  return { ...picked, kind: picked.kind === "sprint" ? "sprint" : picked.kind, problemMode: "aha" };
+  return { ...picked, kind: "sprint", problemMode: picked.problemMode ?? "aha" };
 }

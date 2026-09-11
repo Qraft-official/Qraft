@@ -20,7 +20,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 type Tab = "posts" | "solutions" | "learn" | "analytics" | "titles";
 
 export default function ProfilePage() {
-  const { me, posts, follows, followers, userOf, reposts, getPost, hasPremium, isDeveloper, openPremium, authorVerified, logout } =
+  const { me, posts, follows, followers, userOf, reposts, getPost, hasPremium, isDeveloper, isAdmin, openPremium, authorVerified, logout } =
     useApp();
   const [tab, setTab] = useState<Tab>("posts");
   const [edit, setEdit] = useState(false);
@@ -67,6 +67,14 @@ export default function ProfilePage() {
             >
               <Settings size={14} /> 設定
             </Link>
+            {isAdmin && (
+              <Link
+                href="/admin/sprint"
+                className="inline-flex items-center rounded-full border border-aha/40 bg-aha/10 px-3 py-1.5 text-sm font-bold text-aha"
+              >
+                21時問題管理
+              </Link>
+            )}
             <button
               onClick={() => setEdit(true)}
               className="rounded-full border border-gray-700 px-4 py-1.5 text-sm font-bold"

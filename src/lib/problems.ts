@@ -20,6 +20,8 @@ export type ProblemRow = {
   photo: string | null;
   is_sprint: boolean;
   sprint_day: string | null;
+  publish_at?: string | null;
+  topic?: string | null;
   created_at: string;
   pages?: NotePage[] | null;
   problem_format?: string | null;
@@ -81,7 +83,7 @@ export type ProblemPatch = {
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
 
 const PROBLEM_COLUMNS =
-  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, hints, felt_easy, felt_normal, felt_hard, duration_sum, duration_n, grade_correct, grade_n, series_id, series_ord";
+  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, publish_at, topic, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, hints, felt_easy, felt_normal, felt_hard, duration_sum, duration_n, grade_correct, grade_n, series_id, series_ord";
 
 const PROBLEM_COLUMNS_LEGACY =
   "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, pages, problem_format, created_at, mode, correct_answer, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at";
@@ -141,26 +143,33 @@ export function problemToPost(
   seriesTitles: Record<string, string> = {},
 ): Post {
   const title = row.title?.trim() ?? "";
-  const body = row.problem_text ?? "";
-  const text = title ? `**${title}**\n\n${body}` : body;
   const format =
     row.problem_format === "handwriting" || row.problem_format === "typed"
       ? row.problem_format
       : undefined;
   const problemMode = asProblemMode(row.mode);
   const isAuthor = !!viewerId && viewerId === row.author_id;
+  const topic = typeof row.topic === "string" ? row.topic.trim() : "";
+  let body = row.problem_text ?? "";
+  if (topic && !body.startsWith(topic)) {
+    body = `${topic}\n\n${body}`;
+  }
+  const text = title ? `**${title}**\n\n${body}` : body;
+  const isSprint = !!row.is_sprint;
   return {
     id: row.id,
     authorId: row.author_id,
-    kind: row.is_sprint ? "sprint" : "problem",
+    kind: isSprint ? "sprint" : "problem",
     subject: asSubject(row.subject),
     text,
     title,
-    solution: row.solution ?? undefined,
+    solution: isSprint ? undefined : row.solution ?? undefined,
     photo: row.photo ?? undefined,
     pages: asNotePages(row.pages),
     solutionFormat: format,
-    isSprint: row.is_sprint,
+    isSprint,
+    publishAt: row.publish_at ?? undefined,
+    topic: topic || undefined,
     createdAt: row.created_at,
     replyCount: 0,
     repostCount: 0,
@@ -169,20 +178,22 @@ export function problemToPost(
     ahaCount: 0,
     eleganceSum: 0,
     eleganceCount: 0,
-    sprintDay: row.is_sprint ? (row.sprint_day ?? undefined) : undefined,
+    sprintDay: isSprint ? (row.sprint_day ?? undefined) : undefined,
     problemMode,
     correctAnswer:
-      problemMode === "aha"
-        ? (row.correct_answer ?? "")
-        : isAuthor && problemMode === "challenge"
+      isSprint
+        ? undefined
+        : problemMode === "aha"
           ? (row.correct_answer ?? "")
-          : undefined,
+          : isAuthor && problemMode === "challenge"
+            ? (row.correct_answer ?? "")
+            : undefined,
     difficultyLevel: asDifficulty(row.difficulty_level),
     confusedCount: Number(row.confused_count ?? 0),
     isHardSpotlight: !!row.is_hard_spotlight,
     promoted: !!row.promoted,
     promotedAt: row.promoted_at ?? undefined,
-    hints: sanitizeHints(row.hints),
+    hints: isSprint ? [] : sanitizeHints(row.hints),
     feltEasy: Number(row.felt_easy ?? 0),
     feltNormal: Number(row.felt_normal ?? 0),
     feltHard: Number(row.felt_hard ?? 0),
@@ -206,7 +217,7 @@ export async function fetchProblems(): Promise<{
     .from("problems")
     .select(PROBLEM_COLUMNS)
     .order("created_at", { ascending: false });
-  if (problemsTask.error && /hints|felt_easy|series_id|duration_sum|grade_correct/i.test(problemsTask.error.message)) {
+  if (problemsTask.error && /hints|felt_easy|series_id|duration_sum|grade_correct|publish_at|topic/i.test(problemsTask.error.message)) {
     problemsTask = (await supabase
       .from("problems")
       .select(PROBLEM_COLUMNS_LEGACY)
@@ -223,7 +234,12 @@ export async function fetchProblems(): Promise<{
     return { posts: [], profiles: {}, error: error.message };
   }
 
-  const rows = (data ?? []) as ProblemRow[];
+  const now = Date.now();
+  const rows = ((data ?? []) as ProblemRow[]).filter((row) => {
+    if (!row.is_sprint) return true;
+    const at = row.publish_at ? Date.parse(row.publish_at) : NaN;
+    return Number.isFinite(at) && at <= now;
+  });
   const seriesIds = [...new Set(rows.map((r) => r.series_id).filter((id): id is string => !!id))];
   const seriesTitles: Record<string, string> = {};
   if (seriesIds.length) {

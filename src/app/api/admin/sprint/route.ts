@@ -1,7 +1,8 @@
-import { adminSupabase } from "@/lib/admin-supabase";
 import { requireAdminUser } from "@/lib/admin-guard";
 import { asDifficulty } from "@/lib/difficulty";
 import { asSubject } from "@/lib/problems";
+import { parseAcceptedAnswers, asSprintAnswerType, type SprintAnswerType } from "@/lib/sprint-grade";
+import { rpcErrorMessage, userSupabaseFromRequest } from "@/lib/user-supabase";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -18,6 +19,7 @@ type SprintRow = {
   is_sprint: boolean;
   mode: string | null;
   created_at: string;
+  author_id?: string;
 };
 
 type SecretRow = {
@@ -25,6 +27,8 @@ type SecretRow = {
   correct_answer: string | null;
   explanation: string | null;
   hint: string | null;
+  answer_type?: string | null;
+  accepted_answers?: unknown;
 };
 
 function asDay(value: unknown): string | null {
@@ -62,19 +66,44 @@ function mapItem(row: SprintRow, secret?: SecretRow | null) {
     correctAnswer: secret?.correct_answer ?? "",
     hint: secret?.hint ?? "",
     explanation: secret?.explanation ?? "",
+    answerType: asSprintAnswerType(secret?.answer_type),
+    acceptedAnswers: parseAcceptedAnswers(secret?.accepted_answers),
   };
 }
 
-async function loadSecrets(
-  admin: NonNullable<ReturnType<typeof adminSupabase>>,
-  ids: string[],
-) {
+function previewPost(row: SprintRow, item: ReturnType<typeof mapItem>) {
+  return {
+    id: item.id,
+    authorId: row.author_id ?? "",
+    kind: "sprint" as const,
+    subject: item.subject,
+    title: item.title,
+    text: item.topic ? `${item.topic}\n\n${item.text}` : item.text,
+    createdAt: item.publishAt || row.created_at,
+    replyCount: 0,
+    repostCount: 0,
+    likeCount: 0,
+    ahaSum: 0,
+    ahaCount: 0,
+    eleganceSum: 0,
+    eleganceCount: 0,
+    sprintDay: item.sprintDay ?? undefined,
+    isSprint: true,
+    problemMode: "aha" as const,
+    difficultyLevel: item.difficultyLevel,
+    publishAt: item.publishAt ?? undefined,
+    topic: item.topic || undefined,
+  };
+}
+
+async function loadSecretMap(
+  sb: NonNullable<ReturnType<typeof userSupabaseFromRequest>>,
+): Promise<Record<string, SecretRow>> {
+  const { data, error } = await sb.rpc("admin_sprint_secrets");
+  if (error) throw new Error(rpcErrorMessage(error.message));
+  const rows = Array.isArray(data) ? (data as SecretRow[]) : [];
   const map: Record<string, SecretRow> = {};
-  if (!ids.length) return map;
-  const { data } = await admin.from("sprint_secrets").select("*").in("problem_id", ids);
-  for (const row of (data ?? []) as SecretRow[]) {
-    map[row.problem_id] = row;
-  }
+  for (const row of rows) map[row.problem_id] = row;
   return map;
 }
 
@@ -83,61 +112,23 @@ export async function GET(request: Request) {
   if ("error" in gate) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
-  const admin = adminSupabase();
-  if (!admin) {
+  const sb = userSupabaseFromRequest(request);
+  if (!sb) {
     return NextResponse.json({ error: "サーバー設定が不足しています" }, { status: 500 });
   }
 
-  const previewId = new URL(request.url).searchParams.get("preview");
-  if (previewId) {
-    const { data, error } = await admin
-      .from("problems")
-      .select(
-        "id, title, problem_text, subject, topic, difficulty_level, sprint_day, publish_at, is_sprint, mode, created_at, author_id",
-      )
-      .eq("id", previewId)
-      .eq("is_sprint", true)
-      .maybeSingle();
-    if (error || !data) {
-      return NextResponse.json({ error: "予約が見つかりません" }, { status: 404 });
-    }
-    const secrets = await loadSecrets(admin, [data.id]);
-    const item = mapItem(data as SprintRow, secrets[data.id]);
-    return NextResponse.json({
-      preview: true,
-      item,
-      post: {
-        id: item.id,
-        authorId: (data as { author_id: string }).author_id,
-        kind: "sprint",
-        subject: item.subject,
-        title: item.title,
-        text: item.topic ? `${item.topic}\n\n${item.text}` : item.text,
-        createdAt: item.publishAt || (data as SprintRow).created_at,
-        replyCount: 0,
-        repostCount: 0,
-        likeCount: 0,
-        ahaSum: 0,
-        ahaCount: 0,
-        eleganceSum: 0,
-        eleganceCount: 0,
-        sprintDay: item.sprintDay ?? undefined,
-        isSprint: true,
-        problemMode: "aha",
-        difficultyLevel: item.difficultyLevel,
-        publishAt: item.publishAt ?? undefined,
-        topic: item.topic || undefined,
-        correctAnswer: undefined,
-        hints: [],
-        solution: undefined,
-      },
-    });
+  let secrets: Record<string, SecretRow>;
+  try {
+    secrets = await loadSecretMap(sb);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "読み込みに失敗しました" }, { status: 403 });
   }
 
-  const { data, error } = await admin
+  const previewId = new URL(request.url).searchParams.get("preview");
+  const { data, error } = await sb
     .from("problems")
     .select(
-      "id, title, problem_text, subject, topic, difficulty_level, sprint_day, publish_at, is_sprint, mode, created_at",
+      "id, title, problem_text, subject, topic, difficulty_level, sprint_day, publish_at, is_sprint, mode, created_at, author_id",
     )
     .eq("is_sprint", true)
     .order("sprint_day", { ascending: false });
@@ -145,20 +136,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   const rows = (data ?? []) as SprintRow[];
-  const secrets = await loadSecrets(
-    admin,
-    rows.map((r) => r.id),
-  );
+  if (previewId) {
+    const row = rows.find((r) => r.id === previewId);
+    if (!row) return NextResponse.json({ error: "予約が見つかりません" }, { status: 404 });
+    const item = mapItem(row, secrets[row.id]);
+    return NextResponse.json({ preview: true, item, post: previewPost(row, item) });
+  }
   return NextResponse.json({ items: rows.map((row) => mapItem(row, secrets[row.id])) });
 }
 
-export async function POST(request: Request) {
+async function upsert(request: Request, editingId: string | null) {
   const gate = await requireAdminUser(request);
   if ("error" in gate) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
-  const admin = adminSupabase();
-  if (!admin) {
+  const sb = userSupabaseFromRequest(request);
+  if (!sb) {
     return NextResponse.json({ error: "サーバー設定が不足しています" }, { status: 500 });
   }
 
@@ -178,6 +171,8 @@ export async function POST(request: Request) {
   const correctAnswer = clip(body.correctAnswer, 500);
   const hint = clip(body.hint, 500);
   const explanation = clip(body.explanation, 8000);
+  const answerType: SprintAnswerType = asSprintAnswerType(body.answerType);
+  const acceptedAnswers = parseAcceptedAnswers(body.acceptedAnswers);
 
   if (!sprintDay) {
     return NextResponse.json({ error: "公開日を YYYY-MM-DD で指定してください" }, { status: 400 });
@@ -189,127 +184,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "正解は必須です" }, { status: 400 });
   }
 
-  const row = {
-    author_id: gate.user.id,
-    title,
-    problem_text: text,
-    subject,
-    topic: topic || null,
-    difficulty_level: difficultyLevel,
-    is_sprint: true,
-    sprint_day: sprintDay,
-    mode: "aha",
-    solution: null,
-    correct_answer: null,
-    hints: [],
-  };
-
-  const { data, error } = await admin.from("problems").insert(row).select("id, sprint_day, publish_at").single();
+  const { data, error } = await sb.rpc("admin_upsert_sprint_problem", {
+    p_sprint_day: sprintDay,
+    p_title: title,
+    p_problem_text: text,
+    p_subject: subject,
+    p_topic: topic,
+    p_difficulty: difficultyLevel,
+    p_correct_answer: correctAnswer,
+    p_hint: hint || null,
+    p_explanation: explanation || null,
+    p_answer_type: answerType,
+    p_accepted_answers: acceptedAnswers,
+    p_id: editingId,
+  });
   if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json({ error: "その日の21時問題はすでに予約されています" }, { status: 409 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: rpcErrorMessage(error.message) }, { status: 400 });
   }
+  return NextResponse.json(data ?? { ok: true });
+}
 
-  const { error: secretError } = await admin.from("sprint_secrets").upsert({
-    problem_id: data.id,
-    correct_answer: correctAnswer,
-    hint: hint || null,
-    explanation: explanation || null,
-    updated_at: new Date().toISOString(),
-  });
-  if (secretError) {
-    await admin.from("problems").delete().eq("id", data.id);
-    return NextResponse.json({ error: secretError.message }, { status: 400 });
-  }
-
-  return NextResponse.json({
-    ok: true,
-    id: data.id,
-    sprintDay: data.sprint_day,
-    publishAt: data.publish_at,
-  });
+export async function POST(request: Request) {
+  return upsert(request, null);
 }
 
 export async function PATCH(request: Request) {
-  const gate = await requireAdminUser(request);
-  if ("error" in gate) {
-    return NextResponse.json({ error: gate.error }, { status: gate.status });
-  }
-  const admin = adminSupabase();
-  if (!admin) {
-    return NextResponse.json({ error: "サーバー設定が不足しています" }, { status: 500 });
-  }
-
   let body: Record<string, unknown>;
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = await request.clone().json();
   } catch {
     return NextResponse.json({ error: "不正なリクエストです" }, { status: 400 });
   }
-
   const id = clip(body.id, 80);
   if (!id) return NextResponse.json({ error: "IDがありません" }, { status: 400 });
-
-  const { data: existing, error: readError } = await admin
-    .from("problems")
-    .select("id, publish_at, is_sprint")
-    .eq("id", id)
-    .eq("is_sprint", true)
-    .maybeSingle();
-  if (readError || !existing) {
-    return NextResponse.json({ error: "予約が見つかりません" }, { status: 404 });
-  }
-  if (!isFuture((existing as { publish_at: string | null }).publish_at)) {
-    return NextResponse.json({ error: "公開済みの21時問題は編集できません" }, { status: 400 });
-  }
-
-  const sprintDay = body.sprintDay !== undefined ? asDay(body.sprintDay) : undefined;
-  if (body.sprintDay !== undefined && !sprintDay) {
-    return NextResponse.json({ error: "公開日を YYYY-MM-DD で指定してください" }, { status: 400 });
-  }
-
-  const updates: Record<string, unknown> = {};
-  if (typeof body.title === "string") updates.title = clip(body.title, 200);
-  if (typeof body.text === "string") updates.problem_text = clip(body.text, 20000);
-  if (typeof body.topic === "string") updates.topic = clip(body.topic, 80) || null;
-  if (body.subject !== undefined) updates.subject = asSubject(String(body.subject));
-  if (body.difficultyLevel !== undefined) updates.difficulty_level = asDifficulty(body.difficultyLevel);
-  if (sprintDay) updates.sprint_day = sprintDay;
-
-  if (Object.keys(updates).length) {
-    const { error } = await admin.from("problems").update(updates).eq("id", id);
-    if (error) {
-      if (error.code === "23505") {
-        return NextResponse.json({ error: "その日の21時問題はすでに予約されています" }, { status: 409 });
-      }
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-  }
-
-  const secretPatch: Record<string, unknown> = { problem_id: id, updated_at: new Date().toISOString() };
-  let touchSecret = false;
-  if (typeof body.correctAnswer === "string") {
-    const ans = clip(body.correctAnswer, 500);
-    if (!ans) return NextResponse.json({ error: "正解は必須です" }, { status: 400 });
-    secretPatch.correct_answer = ans;
-    touchSecret = true;
-  }
-  if (typeof body.hint === "string") {
-    secretPatch.hint = clip(body.hint, 500) || null;
-    touchSecret = true;
-  }
-  if (typeof body.explanation === "string") {
-    secretPatch.explanation = clip(body.explanation, 8000) || null;
-    touchSecret = true;
-  }
-  if (touchSecret) {
-    const { error } = await admin.from("sprint_secrets").upsert(secretPatch);
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-
-  return NextResponse.json({ ok: true, id });
+  return upsert(request, id);
 }
 
 export async function DELETE(request: Request) {
@@ -317,26 +225,15 @@ export async function DELETE(request: Request) {
   if ("error" in gate) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
-  const admin = adminSupabase();
-  if (!admin) {
+  const sb = userSupabaseFromRequest(request);
+  if (!sb) {
     return NextResponse.json({ error: "サーバー設定が不足しています" }, { status: 500 });
   }
   const id = new URL(request.url).searchParams.get("id") ?? "";
   if (!id) return NextResponse.json({ error: "IDがありません" }, { status: 400 });
-
-  const { data: existing } = await admin
-    .from("problems")
-    .select("id, publish_at, is_sprint")
-    .eq("id", id)
-    .eq("is_sprint", true)
-    .maybeSingle();
-  if (!existing) {
-    return NextResponse.json({ error: "予約が見つかりません" }, { status: 404 });
+  const { error } = await sb.rpc("admin_delete_sprint_problem", { p_id: id });
+  if (error) {
+    return NextResponse.json({ error: rpcErrorMessage(error.message) }, { status: 400 });
   }
-  if (!isFuture((existing as { publish_at: string | null }).publish_at)) {
-    return NextResponse.json({ error: "公開済みの21時問題は削除できません" }, { status: 400 });
-  }
-  const { error } = await admin.from("problems").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

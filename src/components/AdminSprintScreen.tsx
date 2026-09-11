@@ -5,6 +5,7 @@ import { SUBJECTS } from "@/lib/constants";
 import { DIFFICULTY_LEVELS } from "@/lib/difficulty";
 import { addJstDays, jstDateString, shortMd } from "@/lib/jst";
 import { referralFetch } from "@/lib/referral-client";
+import { SPRINT_ANSWER_TYPES, type SprintAnswerType } from "@/lib/sprint-grade";
 import { useApp } from "@/lib/store";
 import type { Post, Subject } from "@/lib/types";
 import Link from "next/link";
@@ -24,6 +25,8 @@ type SprintItem = {
   correctAnswer: string;
   hint: string;
   explanation: string;
+  answerType: "number" | "expression" | "text" | "choice" | "multiple";
+  acceptedAnswers: string[];
 };
 
 const emptyForm = () => ({
@@ -36,6 +39,8 @@ const emptyForm = () => ({
   correctAnswer: "",
   hint: "",
   explanation: "",
+  answerType: "number" as SprintAnswerType,
+  acceptedAnswers: "",
 });
 
 export function AdminSprintScreen() {
@@ -77,6 +82,8 @@ export function AdminSprintScreen() {
       correctAnswer: item.correctAnswer,
       hint: item.hint,
       explanation: item.explanation,
+      answerType: item.answerType,
+      acceptedAnswers: (item.acceptedAnswers ?? []).join("\n"),
     });
     setPreviewPost(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -94,6 +101,7 @@ export function AdminSprintScreen() {
     setError("");
     const payload = {
       ...form,
+      acceptedAnswers: form.acceptedAnswers,
       id: editingId ?? undefined,
     };
     const res = await referralFetch("/api/admin/sprint", {
@@ -256,6 +264,41 @@ export function AdminSprintScreen() {
             value={form.correctAnswer}
             onChange={(e) => setForm((f) => ({ ...f, correctAnswer: e.target.value }))}
             className="mt-1 min-h-11 w-full rounded-xl border border-gray-800 bg-panel px-3 text-sm text-white"
+          />
+        </label>
+        <div>
+          <p className="mb-1.5 text-xs font-bold text-muted">解答タイプ</p>
+          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
+            {SPRINT_ANSWER_TYPES.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, answerType: id }))}
+                className={`min-h-11 rounded-xl border text-xs font-bold ${
+                  form.answerType === id ? "border-aha bg-aha/15 text-aha" : "border-gray-800"
+                }`}
+              >
+                {id === "number"
+                  ? "数値"
+                  : id === "expression"
+                    ? "数式"
+                    : id === "text"
+                      ? "文章"
+                      : id === "choice"
+                        ? "選択"
+                        : "複数"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="block text-xs font-bold text-muted">
+          許容する別解（1行1つ）
+          <textarea
+            value={form.acceptedAnswers}
+            onChange={(e) => setForm((f) => ({ ...f, acceptedAnswers: e.target.value }))}
+            rows={4}
+            placeholder={"4951\n変わらない、4951"}
+            className="mt-1 w-full rounded-xl border border-gray-800 bg-panel px-3 py-2 text-sm text-white"
           />
         </label>
         <label className="block text-xs font-bold text-muted">

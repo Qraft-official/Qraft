@@ -2,6 +2,7 @@
 
 import { PostCard } from "@/components/PostCard";
 import { PULSE_BLURB, PULSE_NAME } from "@/lib/constants";
+import { referralFetch } from "@/lib/referral-client";
 import { formatTimer, remainingMs } from "@/lib/sprint";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
@@ -27,6 +28,9 @@ export default function SprintPage() {
     posts,
   } = useApp();
   const [now, setNow] = useState(Date.now());
+  const [answer, setAnswer] = useState("");
+  const [gradeLabel, setGradeLabel] = useState("");
+  const [gradeBusy, setGradeBusy] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 200);
@@ -191,7 +195,43 @@ export default function SprintPage() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <PostCard post={officialPost} />
       </div>
-      <div className="px-4 pt-2">
+      <div className="space-y-2 px-4 pt-2">
+        <label className="block text-xs font-bold text-muted">
+          答え
+          <input
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            className="mt-1 min-h-11 w-full rounded-xl border border-gray-800 bg-panel px-3 text-sm text-white"
+            placeholder="数値や式を入力"
+          />
+        </label>
+        {gradeLabel ? <p className="text-sm font-bold text-aha">{gradeLabel}</p> : null}
+        <button
+          type="button"
+          disabled={gradeBusy || !answer.trim()}
+          onClick={() => {
+            if (gradeBusy) return;
+            setGradeBusy(true);
+            void referralFetch("/api/sprint/grade", {
+              method: "POST",
+              body: JSON.stringify({ problemId: officialPost.id, answer }),
+            }).then((res) => {
+              setGradeBusy(false);
+              if (res.error) {
+                setGradeLabel(res.error);
+                return;
+              }
+              const grade = String((res.data as { grade?: string }).grade ?? "");
+              setGradeLabel(
+                grade === "correct" ? "正解" : grade === "maybe_correct" ? "ほぼ正解（要確認）" : "不正解",
+              );
+              submitSprint(sprint.pages);
+            });
+          }}
+          className="min-h-11 w-full rounded-full border border-aha/40 text-sm font-bold text-aha disabled:opacity-40"
+        >
+          {gradeBusy ? "採点中…" : "答えを送信して採点"}
+        </button>
         <motion.button
           whileTap={{ scale: 0.97 }}
           type="button"

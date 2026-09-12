@@ -88,13 +88,17 @@ import {
   toggleAuthorNotify,
   toggleSavedProblem,
   upsertFeltVote,
+  recordProblemSpoiler,
+  fetchMyProblemSpoilers,
 } from "./learn-client";
 import type {
   AttemptSummary,
   FeltVote,
+  ProblemSpoiler,
   RevengeItem,
   SaveCategory,
 } from "./learn";
+import { eligibleForMetricsAtSubmit } from "./problem-stats";
 import {
   deleteComment as persistDeleteComment,
   fetchComments,
@@ -246,6 +250,8 @@ type Store = {
   feltVotes: Record<string, FeltVote>;
   voteFeltDifficulty: (problemId: string, vote: FeltVote) => Promise<void>;
   lastAttempts: Record<string, AttemptSummary>;
+  problemSpoilers: Record<string, ProblemSpoiler>;
+  recordSpoiler: (problemId: string, kind: "answer" | "explanation") => Promise<void>;
   attemptStarts: Record<string, string>;
   startAttempt: (problemId: string) => Promise<void>;
   notifyAuthors: string[];
@@ -348,6 +354,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const stickySave = useRef<Record<string, boolean>>({});
   const [feltVotes, setFeltVotes] = useState<Record<string, FeltVote>>({});
   const [lastAttempts, setLastAttempts] = useState<Record<string, AttemptSummary>>({});
+  const [problemSpoilers, setProblemSpoilers] = useState<Record<string, ProblemSpoiler>>({});
   const [attemptStarts, setAttemptStarts] = useState<Record<string, string>>({});
   const [notifyAuthors, setNotifyAuthors] = useState<string[]>([]);
   const [revengeDue, setRevengeDue] = useState<RevengeItem[]>([]);
@@ -411,6 +418,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSaved(loadLocalSavedMap());
         setFeltVotes({});
         setLastAttempts({});
+        setProblemSpoilers({});
         setNotifyAuthors([]);
         setRevengeDue([]);
         setCalendarDays([]);
@@ -430,12 +438,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           await ensureProfile(user);
           await ensureWelcomeNotification();
-          const [inbox, profileResult, admin, boot, savedMap] = await Promise.all([
+          const [inbox, profileResult, admin, boot, savedMap, spoilers] = await Promise.all([
             fetchNotifications(),
             fetchLearningProfile(user.id),
             checkIsAdmin(),
             fetchLearningBootstrap(),
             fetchMySavedMap(),
+            fetchMyProblemSpoilers(),
           ]);
           if (cancelled) return;
           if (savedMap) {
@@ -448,6 +457,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setRevengeDue(boot.revenge);
           setCalendarDays(boot.calendarDays);
           setLearnStreak({ current: boot.currentStreak, longest: boot.longestStreak });
+          setProblemSpoilers(spoilers);
           void promptDueRevenge().then(() => {
             void fetchNotifications().then((next) => {
               if (!cancelled) setNotifications(next);
@@ -1324,7 +1334,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           solverAnswer: isChallenge ? solverAnswer : undefined,
           startedAt,
           isRevenge,
-        }).then(() => {
+        }).then((res) => {
+          const spoiler = problemSpoilers[input.problemId!];
+          const submittedAt = new Date().toISOString();
+          const fromDb = res.eligibleForMetrics;
+          const eligible =
+            typeof fromDb === "boolean"
+              ? fromDb
+              : eligibleForMetricsAtSubmit(spoiler, submittedAt);
           setLastAttempts((prev) => ({
             ...prev,
             [input.problemId!]: {
@@ -1332,10 +1349,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               durationSeconds: startedAt
                 ? Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000))
                 : null,
-              submittedAt: new Date().toISOString(),
+              submittedAt,
               isRevenge,
               revengeAvailableAt: null,
-              revengeCompletedAt: challengeGrade === "correct" ? new Date().toISOString() : null,
+              revengeCompletedAt: challengeGrade === "correct" ? submittedAt : null,
+              eligibleForMetrics: eligible,
             },
           }));
           if (challengeGrade === "correct") {
@@ -1348,7 +1366,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return {};
     },
-    [supabaseUid, getPost, attemptStarts, lastAttempts],
+    [supabaseUid, getPost, attemptStarts, lastAttempts, problemSpoilers],
   );
 
   const addReply = useCallback(async (input: { replyToId: string; text: string }) => {
@@ -1738,6 +1756,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const recordSpoiler = useCallback(async (problemId: string, kind: "answer" | "explanation") => {
+    const res = await recordProblemSpoiler(problemId, kind);
+    if (res.spoiler) {
+      setProblemSpoilers((prev) => ({ ...prev, [res.spoiler!.problemId]: res.spoiler! }));
+    }
+  }, []);
+
   const toggleNotifyAuthor = useCallback(
     async (authorId: string) => {
       const on = notifyAuthors.includes(authorId);
@@ -1756,10 +1781,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshLearn = useCallback(async () => {
     if (!supabaseUid) return;
-    const [boot, cards, savedMap] = await Promise.all([
+    const [boot, cards, savedMap, spoilers] = await Promise.all([
       fetchLearningBootstrap(),
       fetchLearningCardState(remotePosts.map((p) => p.id)),
       fetchMySavedMap(),
+      fetchMyProblemSpoilers(),
     ]);
     setNotifyAuthors(boot.notifyAuthors);
     setRevengeDue(boot.revenge);
@@ -1769,6 +1795,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setFeltVotes(cards.votes);
       setLastAttempts(cards.attempts);
     }
+    setProblemSpoilers(spoilers);
     if (savedMap) {
       setSaved((prev) =>
         overlayPendingSaved(savedMap, prev, pendingSaveIds.current, stickySave.current),
@@ -1956,6 +1983,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     feltVotes,
     voteFeltDifficulty,
     lastAttempts,
+    problemSpoilers,
+    recordSpoiler,
     attemptStarts,
     startAttempt,
     notifyAuthors,

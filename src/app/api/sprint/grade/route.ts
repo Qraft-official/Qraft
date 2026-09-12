@@ -59,6 +59,7 @@ export async function POST(request: Request) {
     answerType: asSprintAnswerType(secret.answer_type),
   });
 
+  // eligible_for_metrics is set by trg_protect_sprint_attempt_metrics from problem_spoilers.
   await admin.from("sprint_attempts").upsert({
     user_id: user.id,
     problem_id: problemId,

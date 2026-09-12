@@ -19,6 +19,7 @@ import {
   type ComposerDraft,
 } from "@/lib/composer-draft";
 import { sanitizeHints } from "@/lib/learn";
+import { eligibleForMetricsAtSubmit } from "@/lib/problem-stats";
 import { useApp } from "@/lib/store";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
@@ -55,7 +56,7 @@ const MODE_SUMMARY: Record<ProblemMode, string> = {
 };
 
 export function CreateSheet() {
-  const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall, me } =
+  const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall, me, problemSpoilers, lastAttempts } =
     useApp();
   const quotePostId = composer.open && composer.mode === "solution" ? composer.quotePostId : undefined;
   const openProblem = composer.open && composer.mode === "problem";
@@ -97,6 +98,15 @@ export function CreateSheet() {
   const closingRef = useRef(false);
   const quotePost = quotePostId ? getPost(quotePostId) : undefined;
   const quotingChallenge = openSolution && quotePost?.problemMode === "challenge";
+  const quoteSpoiler = quotePostId ? problemSpoilers[quotePostId] : undefined;
+  const quoteAttempt = quotePostId ? lastAttempts[quotePostId] : undefined;
+  const quoteExcludedFromMetrics =
+    openSolution &&
+    quotePostId &&
+    (quoteAttempt?.submittedAt
+      ? quoteAttempt.eligibleForMetrics === false ||
+        !eligibleForMetricsAtSubmit(quoteSpoiler, quoteAttempt.submittedAt)
+      : Boolean(quoteSpoiler?.answerRevealedAt || quoteSpoiler?.explanationRevealedAt));
 
   useBodyScrollLock(open);
 
@@ -1123,6 +1133,11 @@ export function CreateSheet() {
                 </div>
                 <div id={COMPOSER_KB_DOCK_ID} className="shrink-0" />
                 <div className="composer-footer flex flex-col items-stretch gap-2 border-t border-gray-800 px-4 py-2">
+                  {quoteExcludedFromMetrics && (
+                    <p className="text-[11px] leading-snug text-muted">
+                      答え/解説を確認したため、この解答は統計に含まれません
+                    </p>
+                  )}
                   {quotingChallenge && (
                     <div>
                       <input

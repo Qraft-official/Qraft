@@ -25,6 +25,7 @@ type DurationBlock = {
 
 type AnalyticsPayload = {
   solvers?: number;
+  excludedSolvers?: number;
   correct?: number;
   incorrect?: number;
   difficultyLevel?: number;
@@ -140,7 +141,10 @@ function ProblemPremiumAnalytics({ post }: { post: Post }) {
               <div>
                 <p className="text-[10px] font-bold text-muted">正誤内訳</p>
                 <p className="mt-1 text-sm text-white">
-                  正解 {correct} / 不正解 {incorrect} / 総解答者 {solvers}
+                  正解 {correct} / 不正解 {incorrect} / 有効解答 {solvers}
+                  {Number(data.excludedSolvers ?? 0) > 0
+                    ? ` · 参考解答 ${Number(data.excludedSolvers)}`
+                    : ""}
                   {rate != null ? ` · 正解率 ${rate}% · 不正解率 ${100 - rate}%` : " · 集計中"}
                 </p>
               </div>

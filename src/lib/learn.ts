@@ -30,6 +30,13 @@ export type AttemptSummary = {
   isRevenge: boolean;
   revengeAvailableAt: string | null;
   revengeCompletedAt: string | null;
+  eligibleForMetrics?: boolean | null;
+};
+
+export type ProblemSpoiler = {
+  problemId: string;
+  answerRevealedAt: string | null;
+  explanationRevealedAt: string | null;
 };
 
 export type RevengeItem = {

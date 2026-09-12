@@ -442,7 +442,7 @@ export function PostCard({
             <div className="mt-2 flex max-w-full flex-col gap-1">
               <Link
                 href={`/p/${post.id}`}
-                className="max-w-full text-lg font-bold leading-snug text-white [overflow-wrap:anywhere] [word-break:break-word]"
+                className="max-w-full min-w-0 text-lg font-bold leading-snug text-white"
               >
                 {meta.title}
               </Link>
@@ -453,6 +453,10 @@ export function PostCard({
             <Link href={`/p/${post.id}`} className="mt-2 block max-w-full">
               <LatexText text={meta.body} className="max-w-full text-[15px] text-[#e7e9ea]" />
             </Link>
+          )}
+
+          {post.kind === "solution" && meta.memo && meta.memo !== meta.body.trim() && (
+            <LatexText text={meta.memo} className="mt-2 max-w-full text-sm leading-relaxed text-[#e7e9ea]" />
           )}
 
           {quoted && <QuoteEmbed postId={post.problemId!} />}
@@ -471,10 +475,11 @@ export function PostCard({
           )}
 
           {isMe && post.problemMode === "challenge" && post.correctAnswer != null && post.correctAnswer !== "" && (
-            <p className="mt-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-100">
-              設定した正解: {post.correctAnswer}
+            <div className="mt-2 min-w-0 max-w-full overflow-hidden rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-100">
+              <p className="font-bold">設定した正解</p>
+              <LatexText text={post.correctAnswer} className="mt-1 max-w-full text-xs leading-relaxed text-orange-100" />
               <span className="mt-0.5 block text-[10px] text-orange-200/70">※単位は書かなくていいです</span>
-            </p>
+            </div>
           )}
 
           {typed && typedPages.length > 0 && (

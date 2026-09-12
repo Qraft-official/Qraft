@@ -82,3 +82,68 @@ export function isDiscoverStatsSort(
 ): sort is (typeof DISCOVER_STATS_SORTS)[number] {
   return (DISCOVER_STATS_SORTS as readonly string[]).includes(sort);
 }
+
+export type SpoilerTimes = {
+  answerRevealedAt?: string | null;
+  explanationRevealedAt?: string | null;
+};
+
+/** Hint reveals are not spoilers for metrics. Missing timestamps stay eligible. */
+export function spoilerBeforeSubmit(
+  spoiler: SpoilerTimes | null | undefined,
+  submittedAt: string,
+): boolean {
+  const submitMs = Date.parse(submittedAt);
+  if (!Number.isFinite(submitMs)) return false;
+  for (const raw of [spoiler?.answerRevealedAt, spoiler?.explanationRevealedAt]) {
+    if (!raw) continue;
+    const revealMs = Date.parse(raw);
+    if (Number.isFinite(revealMs) && revealMs < submitMs) return true;
+  }
+  return false;
+}
+
+export function eligibleForMetricsAtSubmit(
+  spoiler: SpoilerTimes | null | undefined,
+  submittedAt: string,
+) {
+  return !spoilerBeforeSubmit(spoiler, submittedAt);
+}
+
+export type GradedAttemptRow = {
+  userId: string;
+  submittedAt: string;
+  grade: "correct" | "incorrect" | "ungraded" | string;
+  durationSeconds?: number | null;
+  eligibleForMetrics?: boolean | null;
+};
+
+/** First graded eligible submit per user. Ineligible rows are dropped, not counted as wrong. */
+export function firstEligibleGradedAttempts(rows: GradedAttemptRow[]) {
+  const best = new Map<string, GradedAttemptRow>();
+  const sorted = [...rows].sort(
+    (a, b) => Date.parse(a.submittedAt) - Date.parse(b.submittedAt),
+  );
+  for (const row of sorted) {
+    if (row.grade !== "correct" && row.grade !== "incorrect") continue;
+    if (row.eligibleForMetrics === false) continue;
+    if (!best.has(row.userId)) best.set(row.userId, row);
+  }
+  return [...best.values()];
+}
+
+export function accuracyFromEligible(rows: GradedAttemptRow[]) {
+  const firsts = firstEligibleGradedAttempts(rows);
+  const solvers = firsts.length;
+  const correct = firsts.filter((r) => r.grade === "correct").length;
+  return { solvers, correct, rate: accuracyRate(correct, solvers) };
+}
+
+export function durationFromEligible(rows: GradedAttemptRow[]) {
+  const samples = firstEligibleGradedAttempts(rows)
+    .map((r) => r.durationSeconds)
+    .filter((s): s is number => isDurationSample(s));
+  const n = samples.length;
+  const sum = samples.reduce((a, b) => a + b, 0);
+  return { n, sum, avg: avgDurationSeconds(sum, n) };
+}

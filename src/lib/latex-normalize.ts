@@ -77,6 +77,57 @@ export function capExcessBlankLines(src: string) {
   return src.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n{5,}/g, "\n\n\n\n");
 }
 
+/** Convert `\(...\)` / `\[...\]` into `$` / `$$` so LatexText can tokenize them. */
+export function convertTexDelimiters(src: string) {
+  return src
+    .replace(/\\\[([\s\S]+?)\\\]/g, "$$$$$1$$$$")
+    .replace(/\\\(([\s\S]+?)\\\)/g, "$$$1$");
+}
+
+function isMathyRun(run: string) {
+  const t = run.trim();
+  if (t.length < 2) return false;
+  if (/[ぁ-んァ-ン一-龯]/.test(t)) return false;
+  if (/^https?:/i.test(t)) return false;
+  if (/\\[a-zA-Z]/.test(t)) return true;
+  if (/[\^_²³¹⁰⁴⁵⁶⁷⁸⁹]/.test(t)) return true;
+  if (/[A-Za-z]\s*\([^)]*\)/.test(t) && /[+\-/*=]/.test(t)) return true;
+  if (/\([^)]+\)\s*\/\s*[A-Za-z0-9(]/.test(t)) return true;
+  if (/[A-Za-z0-9]\/[A-Za-z0-9]/.test(t) && /[A-Za-z()]/.test(t)) return true;
+  if (/\.\.\./.test(t) && /[+\-^]/.test(t)) return true;
+  return false;
+}
+
+function wrapRunsInPlain(text: string) {
+  const re =
+    /(?:\\[a-zA-Z]+(?:\s*\{[^{}]*\})+|[A-Za-z0-9\\²³¹⁰⁴⁵⁶⁷⁸⁹πθΔΣ√∞()[\]{}+\-*=^_./≤≥≠≈×÷±]|…|\.{3})+/g;
+  return text.replace(re, (run) => (isMathyRun(run) ? `$${run}$` : run));
+}
+
+function wrapOutsideDollars(src: string) {
+  const out: string[] = [];
+  const re = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    if (m.index > last) out.push(wrapRunsInPlain(src.slice(last, m.index)));
+    out.push(m[0]);
+    last = m.index + m[0].length;
+  }
+  if (last < src.length) out.push(wrapRunsInPlain(src.slice(last)));
+  return out.join("");
+}
+
+/** Make mixed Japanese + bare math render through the shared KaTeX path. */
+export function prepareProseForLatex(src: string) {
+  const capped = capExcessBlankLines(src);
+  const converted = convertTexDelimiters(capped);
+  const fences = converted.split(/(```[\s\S]*?```)/g);
+  return fences
+    .map((chunk) => (chunk.startsWith("```") ? chunk : wrapOutsideDollars(chunk)))
+    .join("");
+}
+
 /** Convert unsupported TeX (MathLive `\displaylines`) into KaTeX-friendly macros. */
 export function normalizeLatexForKatex(src: string) {
   let s = src.trim();

@@ -33,7 +33,7 @@ function PageBody({ page, index }: { page: NotePage; index: number }) {
       ) : (
         <div className="relative z-10 flex min-h-[8rem] max-w-full flex-col p-3">
           {page.latex ? (
-            <div className="mt-1 max-w-full [overflow-wrap:anywhere] [word-break:break-word]">
+            <div className="mt-1 max-w-full min-w-0">
               <LatexText text={page.latex} className="max-w-full text-sm" />
             </div>
           ) : null}

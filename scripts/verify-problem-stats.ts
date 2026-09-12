@@ -7,6 +7,10 @@ import {
   isDurationSample,
   observedDifficultyLabel,
   STATS_MIN_N,
+  accuracyFromEligible,
+  durationFromEligible,
+  eligibleForMetricsAtSubmit,
+  firstEligibleGradedAttempts,
 } from "../src/lib/problem-stats";
 import { asDiscoverSort, coerceDiscoverSort, sortUnavailableForKind } from "../src/lib/discover-feed";
 import { ATTEMPT_AVG_MAX_SEC, ATTEMPT_AVG_MIN_SEC } from "../src/lib/learn";
@@ -36,4 +40,30 @@ assert.equal(coerceDiscoverSort("accuracy_asc", "solution"), "newest");
 assert.equal(sortUnavailableForKind("accuracy_asc", "problem"), null);
 assert.equal(sortUnavailableForKind("accuracy_asc", "all"), null);
 assert.ok(sortUnavailableForKind("top_rated", "problem"));
+
+const t0 = "2026-09-12T00:00:00.000Z";
+const t1 = "2026-09-12T00:01:00.000Z";
+const t2 = "2026-09-12T00:02:00.000Z";
+
+assert.equal(eligibleForMetricsAtSubmit(undefined, t1), true);
+assert.equal(eligibleForMetricsAtSubmit({}, t1), true);
+assert.equal(eligibleForMetricsAtSubmit({ answerRevealedAt: t0 }, t1), false);
+assert.equal(eligibleForMetricsAtSubmit({ explanationRevealedAt: t0 }, t1), false);
+assert.equal(eligibleForMetricsAtSubmit({ answerRevealedAt: t2 }, t1), true);
+
+const mixed = [
+  { userId: "a", submittedAt: t1, grade: "correct" as const, durationSeconds: 60, eligibleForMetrics: true },
+  { userId: "b", submittedAt: t1, grade: "incorrect" as const, durationSeconds: 90, eligibleForMetrics: false },
+  { userId: "b", submittedAt: t2, grade: "correct" as const, durationSeconds: 40, eligibleForMetrics: false },
+  { userId: "c", submittedAt: t1, grade: "correct" as const, durationSeconds: 30, eligibleForMetrics: true },
+  { userId: "d", submittedAt: t1, grade: "ungraded" as const, durationSeconds: 20, eligibleForMetrics: true },
+];
+const acc = accuracyFromEligible(mixed);
+assert.equal(acc.solvers, 2);
+assert.equal(acc.correct, 2);
+assert.equal(firstEligibleGradedAttempts(mixed).length, 2);
+const dur = durationFromEligible(mixed);
+assert.equal(dur.n, 2);
+assert.equal(dur.sum, 90);
+
 console.log("ok problem-stats discover sorts");

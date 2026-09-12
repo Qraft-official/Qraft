@@ -10,6 +10,7 @@ import {
   type LearningBootstrap,
   type LearningCardState,
   type ProblemSeries,
+  type ProblemSpoiler,
   type RevengeItem,
   type SaveCategory,
 } from "./learn";
@@ -51,6 +52,7 @@ export async function fetchLearningCardState(
       isRevenge: !!a.isRevenge,
       revengeAvailableAt: typeof a.revengeAvailableAt === "string" ? a.revengeAvailableAt : null,
       revengeCompletedAt: typeof a.revengeCompletedAt === "string" ? a.revengeCompletedAt : null,
+      eligibleForMetrics: typeof a.eligibleForMetrics === "boolean" ? a.eligibleForMetrics : null,
     };
   }
   return { saved, votes, attempts };
@@ -272,23 +274,74 @@ export async function submitProblemAttempt(input: {
   };
 
   if (open?.id) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("problem_attempts")
       .update(payload)
       .eq("id", open.id)
-      .eq("user_id", uid);
-    return { error: error?.message ?? null };
+      .eq("user_id", uid)
+      .select("eligible_for_metrics")
+      .maybeSingle();
+    return {
+      error: error?.message ?? null,
+      eligibleForMetrics: typeof data?.eligible_for_metrics === "boolean" ? data.eligible_for_metrics : null,
+    };
   }
 
   if (!open && input.grade && input.grade !== "ungraded") {
-    const { error } = await supabase.from("problem_attempts").insert({
-      user_id: uid,
-      problem_id: input.problemId,
-      ...payload,
-    });
-    return { error: error?.message ?? null };
+    const { data, error } = await supabase
+      .from("problem_attempts")
+      .insert({
+        user_id: uid,
+        problem_id: input.problemId,
+        ...payload,
+      })
+      .select("eligible_for_metrics")
+      .maybeSingle();
+    return {
+      error: error?.message ?? null,
+      eligibleForMetrics: typeof data?.eligible_for_metrics === "boolean" ? data.eligible_for_metrics : null,
+    };
   }
-  return { error: null };
+  return { error: null, eligibleForMetrics: null as boolean | null };
+}
+
+export async function recordProblemSpoiler(problemId: string, kind: "answer" | "explanation") {
+  if (!isProblemUuid(problemId)) return { error: "問題が指定されていません" as string | null, spoiler: null as ProblemSpoiler | null };
+  const { data, error } = await supabase.rpc("record_problem_spoiler", {
+    p_problem_id: problemId,
+    p_kind: kind,
+  });
+  if (error) return { error: error.message, spoiler: null };
+  const raw = (data ?? {}) as Record<string, unknown>;
+  return {
+    error: null as string | null,
+    spoiler: {
+      problemId: String(raw.problemId ?? problemId),
+      answerRevealedAt: typeof raw.answerRevealedAt === "string" ? raw.answerRevealedAt : null,
+      explanationRevealedAt: typeof raw.explanationRevealedAt === "string" ? raw.explanationRevealedAt : null,
+    } satisfies ProblemSpoiler,
+  };
+}
+
+export async function fetchMyProblemSpoilers(): Promise<Record<string, ProblemSpoiler>> {
+  const { data, error } = await supabase
+    .from("problem_spoilers")
+    .select("problem_id, answer_revealed_at, explanation_revealed_at");
+  if (error) {
+    console.warn("problem_spoilers:", error.message);
+    return {};
+  }
+  const out: Record<string, ProblemSpoiler> = {};
+  for (const row of data ?? []) {
+    const r = row as Record<string, unknown>;
+    const id = String(r.problem_id);
+    out[id] = {
+      problemId: id,
+      answerRevealedAt: typeof r.answer_revealed_at === "string" ? r.answer_revealed_at : null,
+      explanationRevealedAt: typeof r.explanation_revealed_at === "string" ? r.explanation_revealed_at : null,
+    };
+  }
+  return out;
 }
 
 export async function fetchMyAttempts(): Promise<HistoryAttempt[]> {

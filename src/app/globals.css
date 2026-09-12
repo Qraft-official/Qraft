@@ -54,6 +54,34 @@ body {
   font-size: 1.05em;
 }
 
+.qraft-prose {
+  overflow-wrap: break-word;
+  word-break: normal;
+  line-break: strict;
+}
+
+.qraft-math-inline,
+.qraft-math-block {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.qraft-math-inline .katex,
+.qraft-math-block .katex,
+.qraft-math-inline .katex-html,
+.qraft-math-block .katex-html {
+  white-space: nowrap;
+}
+
+.qraft-math-block .katex-display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .aha-scroll::-webkit-scrollbar {
   height: 0;
   width: 0;

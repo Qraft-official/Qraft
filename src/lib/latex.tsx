@@ -2,7 +2,12 @@
 
 import katex from "katex";
 import { Fragment, useMemo } from "react";
-import { katexHtmlHasError, latexToPlainText, normalizeLatexForKatex, capExcessBlankLines } from "./latex-normalize";
+import {
+  katexHtmlHasError,
+  latexToPlainText,
+  normalizeLatexForKatex,
+  prepareProseForLatex,
+} from "./latex-normalize";
 import { splitTextSizeParts, textSizeClass } from "./text-size";
 
 function render(math: string, display: boolean) {
@@ -43,13 +48,13 @@ function splitCode(text: string): { type: "text" | "code"; lang: string; value: 
 
 function tokenizeMath(text: string): Part[] {
   const parts: Part[] = [];
-  const re = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
+  const re = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     if (m.index > last) parts.push({ type: "text", value: text.slice(last, m.index) });
-    if (m[1] != null) parts.push({ type: "block", value: m[1] });
-    else parts.push({ type: "inline", value: m[2] });
+    if (m[1] != null || m[4] != null) parts.push({ type: "block", value: m[1] ?? m[4] });
+    else parts.push({ type: "inline", value: m[2] ?? m[3] });
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
@@ -127,9 +132,9 @@ function formatText(value: string) {
 }
 
 export function LatexText({ text, className = "" }: { text: string; className?: string }) {
-  const blocks = useMemo(() => splitCode(capExcessBlankLines(text)), [text]);
+  const blocks = useMemo(() => splitCode(prepareProseForLatex(text)), [text]);
   return (
-    <div className={`max-w-full whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere] [word-break:break-word] [&_.katex]:max-w-full [&_.katex-display]:my-2 [&_.katex-display]:block [&_.katex-display]:max-w-full ${className}`}>
+    <div className={`qraft-prose max-w-full min-w-0 whitespace-pre-wrap leading-relaxed [overflow-wrap:break-word] [word-break:normal] [line-break:strict] [&_.katex]:max-w-full [&_.katex-display]:my-2 [&_.katex-display]:block [&_.katex-display]:max-w-full ${className}`}>
       {blocks.map((b, bi) => {
         if (b.type === "code") {
           return (
@@ -160,7 +165,7 @@ export function LatexText({ text, className = "" }: { text: string; className?: 
                 return (
                   <span
                     key={i}
-                    className="my-2 block overflow-x-auto text-center"
+                    className="qraft-math-block my-2 block max-w-full overflow-x-auto text-center"
                     dangerouslySetInnerHTML={{ __html: html }}
                   />
                 );
@@ -168,7 +173,7 @@ export function LatexText({ text, className = "" }: { text: string; className?: 
               return (
                 <span
                   key={i}
-                  className="inline-block align-middle"
+                  className="qraft-math-inline inline-block max-w-full align-middle overflow-x-auto"
                   dangerouslySetInnerHTML={{ __html: html }}
                 />
               );

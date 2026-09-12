@@ -1,8 +1,11 @@
 "use client";
 
 import { LatexText } from "@/lib/latex";
+import { isDisplayImageSrc } from "@/lib/problem-images";
 import { useApp } from "@/lib/store";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { UserAvatar } from "./UserAvatar";
 
 export function QuoteEmbed({ postId, compact }: { postId: string; compact?: boolean }) {
@@ -36,9 +39,51 @@ export function QuoteEmbed({ postId, compact }: { postId: string; compact?: bool
           </span>
         )}
       </div>
-      <div className={`mt-1 ${compact ? "max-h-16 overflow-y-auto" : ""}`}>
+      {post.title?.trim() ? (
+        <p className="mt-1 truncate text-[13px] font-bold text-white">{post.title.trim()}</p>
+      ) : null}
+      <div className={`mt-1 min-w-0 ${compact ? "max-h-16 overflow-y-auto" : ""}`}>
         <LatexText text={compact ? snippet : post.text} className="text-[13px] text-[#c5cdd6]" />
       </div>
     </Link>
+  );
+}
+
+/** Compact, collapsible problem statement for the expanded solve notebook. */
+export function QuotedProblemPeek({ postId }: { postId: string }) {
+  const { getPost } = useApp();
+  const post = getPost(postId);
+  const [open, setOpen] = useState(false);
+  if (!post) {
+    return (
+      <p className="rounded-xl border border-gray-800 px-3 py-2 text-[11px] text-muted">
+        引用元の問題は非公開、または削除されています。
+      </p>
+    );
+  }
+  const title = post.title?.trim() || "問題";
+  const body = post.text?.trim() || "";
+  const photo = isDisplayImageSrc(post.photo) ? post.photo : undefined;
+
+  return (
+    <div className="min-w-0 rounded-xl border border-gray-800 bg-black/50">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-h-11 w-full min-w-0 items-center gap-2 px-3 py-2 text-left"
+        aria-expanded={open}
+      >
+        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-white">{title}</span>
+        <span className="shrink-0 text-[11px] font-bold text-aha">{open ? "閉じる" : "問題を見る"}</span>
+        {open ? <ChevronUp size={16} className="shrink-0 text-muted" /> : <ChevronDown size={16} className="shrink-0 text-muted" />}
+      </button>
+      <div className={open ? "quoted-problem-peek-body max-h-[28vh] overflow-y-auto overscroll-contain px-3 pb-3" : "quoted-problem-peek-body max-h-[4.5rem] overflow-hidden px-3 pb-2"}>
+        {body ? <LatexText text={body} className="text-[13px] leading-relaxed text-[#c5cdd6]" /> : null}
+        {open && photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo} alt="" className="mt-2 max-h-32 w-full rounded-lg object-contain" />
+        ) : null}
+      </div>
+    </div>
   );
 }

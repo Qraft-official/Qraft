@@ -34,7 +34,7 @@ import { ImageUploadSection } from "./ImageUploadSection";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { ComposerExpandOverlay } from "./NotebookExpandControls";
 import { ProblemModePicker } from "./ProblemModePicker";
-import { QuoteEmbed } from "./QuoteEmbed";
+import { QuoteEmbed, QuotedProblemPeek } from "./QuoteEmbed";
 import type { TextSizeId } from "@/lib/text-size";
 import type { TypedPage } from "./TypedNotebook";
 
@@ -1214,7 +1214,13 @@ export function CreateSheet() {
                 </div>
               </div>
             )}
-            <ComposerExpandOverlay open={editorExpanded} onClose={() => setEditorExpanded(false)}>
+            <ComposerExpandOverlay
+              open={editorExpanded}
+              onClose={() => setEditorExpanded(false)}
+              header={
+                openSolution && quotePostId ? <QuotedProblemPeek postId={quotePostId} /> : undefined
+              }
+            >
               {inputMode === "hand" ? (
                 <div className="notebook-stage notebook-stage-expanded flex min-h-0 flex-1 flex-col">
                   <MultiPageCanvas

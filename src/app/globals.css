@@ -134,6 +134,10 @@ html.qraft-scroll-lock body {
   }
 }
 
+.quoted-problem-peek-body .katex-display {
+  margin: 0.35em 0;
+}
+
 .composer-dialog.composer-dialog-expanded {
   height: min(100%, var(--composer-vvh, 100dvh));
   max-height: calc(var(--composer-vvh, 100dvh) - 0.5rem);

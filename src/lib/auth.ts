@@ -129,33 +129,12 @@ export async function ensureProfile(user: {
   if (!isEmailConfirmed(user)) return;
   try {
     const incoming = ownProfileInsertPayload(user);
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("id, name, handle")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (existing) {
-      const patch: Record<string, unknown> = {};
-      if (!existing.name) patch.name = incoming.name;
-      if (!existing.handle && incoming.handle && !isReservedHandle(incoming.handle)) {
-        patch.handle = incoming.handle;
-      }
-      if (Object.keys(patch).length) {
-        await supabase.from("profiles").update(patch).eq("id", user.id);
-      }
-      return;
-    }
-    const first = await supabase.from("profiles").insert(incoming);
-    if (!first.error) return;
-    if (/duplicate|unique/i.test(first.error.message)) return;
-    const retry = await supabase.from("profiles").insert({
-      id: user.id,
-      name: incoming.name,
-      handle: null,
+    const { error } = await supabase.rpc("ensure_my_profile", {
+      p_name: incoming.name,
+      p_handle: incoming.handle,
     });
-    if (retry.error && !/duplicate|unique/i.test(retry.error.message)) {
-      console.warn("ensureProfile failed:", retry.error.message);
-    }
+    if (!error) return;
+    console.warn("ensureProfile failed:", error.message);
   } catch (err) {
     console.warn("ensureProfile failed:", err);
   }

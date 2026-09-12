@@ -26,15 +26,17 @@ export function NotebookExpandButton({
 export function ComposerExpandOverlay({
   open,
   onClose,
+  header,
   children,
 }: {
   open: boolean;
   onClose: () => void;
+  header?: ReactNode;
   children: ReactNode;
 }) {
   if (!open) return null;
   return (
-    <div className="absolute inset-0 z-30 flex min-h-0 flex-col bg-[#0b1220]">
+    <div className="absolute inset-0 z-30 flex min-h-0 flex-col bg-[#0b1220] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <div className="flex shrink-0 items-center gap-2 px-3 py-2">
         <button
           type="button"
@@ -54,6 +56,7 @@ export function ComposerExpandOverlay({
           完了
         </button>
       </div>
+      {header ? <div className="min-w-0 shrink-0 px-3 pb-2">{header}</div> : null}
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
     </div>
   );

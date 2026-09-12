@@ -5,6 +5,7 @@ import { PostCard } from "@/components/PostCard";
 import { ProfileRadar } from "@/components/ProfileRadar";
 import { UserAvatar, UserBanner } from "@/components/UserAvatar";
 import { UserListModal } from "@/components/UserListModal";
+import { SampleAccountMark } from "@/components/SampleAccountMark";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
 import { EmptyState } from "@/components/UiStates";
@@ -50,6 +51,7 @@ export default function ProfilePage() {
               <VerifiedBadge show={authorVerified(me.id)} tone={verifiedBadgeTone(me)} />
             </h1>
             <p className="text-sm text-muted">@{me.handle}</p>
+            <SampleAccountMark show={!!me.isSample} />
             <p className="mt-1 text-xs text-aha">{me.school}</p>
             {(hasPremium || isDeveloper) && (
               <p className="mt-1 text-[11px] font-bold text-amber-300">

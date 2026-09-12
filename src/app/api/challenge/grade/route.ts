@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
   const { data, error } = await admin
     .from("problems")
-    .select("mode, correct_answer")
+    .select("mode, correct_answer, publish_at, is_sprint")
     .eq("id", problemId)
     .maybeSingle();
 
@@ -42,6 +42,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   if (!data) {
+    return NextResponse.json({ error: "問題が見つかりません" }, { status: 404 });
+  }
+  const opens = data.publish_at ? Date.parse(String(data.publish_at)) : NaN;
+  if (Number.isFinite(opens) && Date.now() < opens) {
     return NextResponse.json({ error: "問題が見つかりません" }, { status: 404 });
   }
   if (asProblemMode(data.mode) !== "challenge") {

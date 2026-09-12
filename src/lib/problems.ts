@@ -6,6 +6,7 @@ import { asDifficulty } from "./difficulty";
 import { sanitizeHints } from "./learn";
 import { HANDWRITING_UPLOAD_ERROR } from "./handwriting-export";
 import { persistHandwritingPages, firstDrawingUrl } from "./problem-images";
+import { isProblemListedForFeed } from "./publish-at";
 import { supabase } from "./supabase";
 import { userIsVerified } from "./verified";
 import type { NotePage, Post, Subject, User } from "./types";
@@ -49,6 +50,7 @@ export type ProfileRow = {
   id: string;
   name: string;
   handle: string | null;
+  is_sample?: boolean | null;
 };
 
 export type NewProblem = {
@@ -111,6 +113,11 @@ export function fallbackUser(id: string, profile?: ProfileRow | null): User {
     age: null,
     verified: false,
     isVerified: false,
+    isSample: !!profile?.is_sample,
+    followerCount: 0,
+    followingCount: 0,
+    stats: { calc: 0, insight: 0, proof: 0 },
+    analytics: [],
   };
   const verified = userIsVerified(user);
   user.verified = verified;
@@ -235,11 +242,7 @@ export async function fetchProblems(): Promise<{
   }
 
   const now = Date.now();
-  const rows = ((data ?? []) as ProblemRow[]).filter((row) => {
-    if (!row.is_sprint) return true;
-    const at = row.publish_at ? Date.parse(row.publish_at) : NaN;
-    return Number.isFinite(at) && at <= now;
-  });
+  const rows = ((data ?? []) as ProblemRow[]).filter((row) => isProblemListedForFeed(row, now));
   const seriesIds = [...new Set(rows.map((r) => r.series_id).filter((id): id is string => !!id))];
   const seriesTitles: Record<string, string> = {};
   if (seriesIds.length) {
@@ -257,12 +260,19 @@ export async function fetchProblems(): Promise<{
   const profiles: Record<string, User> = {};
 
   if (authorIds.length) {
-    const { data: profileRows } = await supabase
+    let profileRes = await supabase
       .from("profiles")
-      .select("id, name, handle")
+      .select("id, name, handle, is_sample")
       .in("id", authorIds);
-    for (const p of (profileRows ?? []) as ProfileRow[]) {
-      profiles[p.id] = fallbackUser(p.id, p);
+    if (profileRes.error && /is_sample/i.test(profileRes.error.message)) {
+      const legacy = await supabase.from("profiles").select("id, name, handle").in("id", authorIds);
+      for (const p of (legacy.data ?? []) as ProfileRow[]) {
+        profiles[p.id] = fallbackUser(p.id, p);
+      }
+    } else {
+      for (const p of (profileRes.data ?? []) as ProfileRow[]) {
+        profiles[p.id] = fallbackUser(p.id, p);
+      }
     }
   }
 

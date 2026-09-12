@@ -30,6 +30,8 @@ export type User = {
   /** Official / creator verification. Prefer `userIsVerified()`. */
   verified?: boolean;
   isVerified?: boolean;
+  /** Launch / demo sample account (DB profiles.is_sample). */
+  isSample?: boolean;
 };
 
 export type ProfilePatch = Partial<

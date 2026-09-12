@@ -1,6 +1,8 @@
 import { ME_ID } from "./constants";
 import type { Post, User } from "./types";
 
+export const SHOW_CLIENT_MOCK_FEED = process.env.NODE_ENV !== "production";
+
 export const USERS: User[] = [
   {
     id: ME_ID,

@@ -65,12 +65,16 @@ export function computeWeeklyRankings(
   now = Date.now(),
 ): WeeklyRankings {
   const eligible = posts.filter(
-    (p) => p.kind !== "reply" && p.kind !== "sprint" && isWithinLast7Days(p.createdAt, now),
+    (p) =>
+      p.kind !== "reply" &&
+      p.kind !== "sprint" &&
+      isWithinLast7Days(p.createdAt, now) &&
+      !userOf(p.authorId).isSample,
   );
   const pool =
     eligible.length > 0
       ? eligible
-      : posts.filter((p) => p.kind !== "reply" && p.kind !== "sprint");
+      : posts.filter((p) => p.kind !== "reply" && p.kind !== "sprint" && !userOf(p.authorId).isSample);
 
   const scored = pool
     .map((p) => ({ post: p, score: postReactionScore(p, extraByProblem[p.id] ?? 0) }))
@@ -92,7 +96,7 @@ export function computeWeeklyRankings(
   }
 
   const weeklyQrafters = [...byAuthor.entries()]
-    .filter(([, n]) => n > 0)
+    .filter(([id, n]) => n > 0 && !userOf(id).isSample)
     .sort((a, b) => b[1] - a[1])
     .map(([id, n]) => ({ user: userOf(id), weeklyReactions: Math.round(n) }));
 

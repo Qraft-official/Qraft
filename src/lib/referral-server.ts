@@ -197,11 +197,27 @@ export async function applyReferralCode(input: {
     }
   }
 
-  const { data: self } = await admin
+  const selfFull = await admin
     .from("profiles")
-    .select("created_at, referral_code")
+    .select("created_at, referral_code, is_sample")
     .eq("id", input.refereeId)
     .maybeSingle();
+  const selfLegacy =
+    selfFull.error && /is_sample/i.test(selfFull.error.message)
+      ? await admin
+          .from("profiles")
+          .select("created_at, referral_code")
+          .eq("id", input.refereeId)
+          .maybeSingle()
+      : null;
+  const self = (selfLegacy?.data ?? selfFull.data) as {
+    created_at?: string | null;
+    referral_code?: string | null;
+    is_sample?: boolean | null;
+  } | null;
+  if (self?.is_sample) {
+    return { error: "このアカウントでは紹介プログラムを利用できません。" };
+  }
   if (self?.referral_code && String(self.referral_code).trim().toUpperCase() === code) {
     return { error: "自分の紹介コードは使えません。" };
   }
@@ -215,13 +231,24 @@ export async function applyReferralCode(input: {
     return { error: "紹介コードの入力期限（登録から7日以内）を過ぎています。" };
   }
 
-  const { data: referrer } = await admin
+  const referrerFull = await admin
     .from("profiles")
-    .select("id")
+    .select("id, is_sample")
     .ilike("referral_code", code)
     .maybeSingle();
+  const referrerLegacy =
+    referrerFull.error && /is_sample/i.test(referrerFull.error.message)
+      ? await admin.from("profiles").select("id").ilike("referral_code", code).maybeSingle()
+      : null;
+  const referrer = (referrerLegacy?.data ?? referrerFull.data) as {
+    id: string;
+    is_sample?: boolean | null;
+  } | null;
   if (!referrer?.id) return { error: "紹介コードが見つかりません。" };
   if (referrer.id === input.refereeId) return { error: "自分の紹介コードは使えません。" };
+  if (referrer.is_sample) {
+    return { error: "この紹介コードは利用できません。" };
+  }
 
   const now = new Date();
   const trialUntil = new Date(now.getTime() + REFERRAL_TRIAL_HOURS * 3600000).toISOString();
@@ -273,6 +300,8 @@ export async function applyReferralCode(input: {
 async function awardReferrerDiscount(referrerId: string, refereeId: string) {
   const admin = adminSupabase();
   if (!admin) return;
+  const { data: sampleRow } = await admin.from("profiles").select("is_sample").eq("id", referrerId).maybeSingle();
+  if (sampleRow && "is_sample" in sampleRow && sampleRow.is_sample) return;
   const secret = process.env.STRIPE_SECRET_KEY;
   if (!secret) {
     await admin.from("profiles").update({ stripe_referral_coupon_id: "pending-local" }).eq("id", referrerId);

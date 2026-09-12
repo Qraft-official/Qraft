@@ -44,6 +44,7 @@ import {
   INITIAL_FOLLOWS,
   MOCK_REPLIES,
   POSTS,
+  SHOW_CLIENT_MOCK_FEED,
   USER_MAP,
   USERS,
 } from "./mock-data";
@@ -707,6 +708,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       activeTitles,
       verified,
       isVerified: verified,
+      isSample: !!base.isSample,
     };
   }, [tiers, age, follows.length, profile, hasPremium, accentColor, supabaseUid, remoteUsers]);
 
@@ -721,7 +723,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const mockOfficial = useMemo(() => makeOfficialPost(sprint.dayId), [sprint.dayId]);
-  const community = useMemo(() => communityForDay(sprint.dayId), [sprint.dayId]);
+  const community = useMemo(
+    () => (SHOW_CLIENT_MOCK_FEED ? communityForDay(sprint.dayId) : []),
+    [sprint.dayId],
+  );
   const officialPost = useMemo(
     () => pickAhaPulsePost(remotePosts, sprint.dayId, mockOfficial),
     [remotePosts, sprint.dayId, mockOfficial],
@@ -729,22 +734,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const catalog = useMemo(() => {
     const hidden = new Set(hiddenReplyIds);
-    return [
-      ...remotePosts,
-      ...extra,
-      mockOfficial,
-      ...POSTS,
-      ...MOCK_REPLIES,
-      ...community,
-      ...LOUNGE_POSTS,
-    ].filter((p) => !hidden.has(p.id));
+    const mockFeed = SHOW_CLIENT_MOCK_FEED
+      ? [mockOfficial, ...POSTS, ...MOCK_REPLIES, ...community]
+      : [];
+    return [...remotePosts, ...extra, ...mockFeed, ...LOUNGE_POSTS].filter((p) => !hidden.has(p.id));
   }, [extra, mockOfficial, community, remotePosts, hiddenReplyIds]);
 
   const posts = useMemo(() => {
     const extras = extra;
     const hidden = new Set(hiddenReplyIds);
     const seen = new Set<string>();
-    const main = [...remotePosts, ...extra, mockOfficial, ...POSTS, ...MOCK_REPLIES]
+    const mockFeed = SHOW_CLIENT_MOCK_FEED ? [mockOfficial, ...POSTS, ...MOCK_REPLIES] : [];
+    const mockReplies = SHOW_CLIENT_MOCK_FEED ? MOCK_REPLIES : [];
+    const main = [...remotePosts, ...extra, ...mockFeed]
       .filter((p) => {
         if (hidden.has(p.id)) return false;
         if (seen.has(p.id)) return false;
@@ -753,7 +755,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return main.map((p) => {
-      const mock = MOCK_PROBLEM_META[p.id];
+      const mock = SHOW_CLIENT_MOCK_FEED ? MOCK_PROBLEM_META[p.id] : undefined;
       const baseCount = confusedCounts[p.id] ?? p.confusedCount ?? mock?.confused ?? 0;
       const level = p.difficultyLevel ?? mock?.level ?? 3;
       return {
@@ -768,7 +770,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ? p.replyCount
             : extras.filter((e) => e.kind === "reply" && e.replyToId === p.id && !hidden.has(e.id)).length +
               remotePosts.filter((e) => e.kind === "reply" && e.replyToId === p.id && !hidden.has(e.id)).length +
-              MOCK_REPLIES.filter((e) => e.replyToId === p.id && !hidden.has(e.id)).length,
+              mockReplies.filter((e) => e.replyToId === p.id && !hidden.has(e.id)).length,
       };
     });
   }, [extra, mockOfficial, remotePosts, confusedCounts, ratingAgg, hiddenReplyIds]);
@@ -783,7 +785,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const ids: string[] = [];
     for (const p of remotePosts) if (p.kind === "solution") ids.push(p.id);
     for (const p of extra) if (p.kind === "solution") ids.push(p.id);
-    for (const p of POSTS) if (p.kind === "solution") ids.push(p.id);
+    if (SHOW_CLIENT_MOCK_FEED) {
+      for (const p of POSTS) if (p.kind === "solution") ids.push(p.id);
+    }
     return [...new Set(ids)].sort().join(",");
   }, [remotePosts, extra]);
 
@@ -1895,11 +1899,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     users: [
       me,
       ...Object.values(remoteUsers).filter((u) => u.id !== me.id),
-      ...USERS.filter((u) => u.id !== ME_ID && u.id !== me.id && !remoteUsers[u.id]).map((u) => ({
-        ...u,
-        verified: userIsVerified(u),
-        isVerified: userIsVerified(u),
-      })),
+      ...(SHOW_CLIENT_MOCK_FEED
+        ? USERS.filter((u) => u.id !== ME_ID && u.id !== me.id && !remoteUsers[u.id]).map((u) => ({
+            ...u,
+            verified: userIsVerified(u),
+            isVerified: userIsVerified(u),
+          }))
+        : []),
     ],
     posts,
     loungePosts: LOUNGE_POSTS,

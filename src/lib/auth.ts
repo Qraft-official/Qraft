@@ -301,16 +301,27 @@ export async function savePublicProfile(
   return {};
 }
 
+type ProfileRowLike = { id: string; name: string; handle: string | null; is_sample?: boolean | null };
+
 export async function searchProfiles(query: string) {
   const q = query.trim().replace(/[%_,]/g, "").slice(0, 40);
-  if (!q) return { profiles: [] as { id: string; name: string; handle: string | null }[], error: null as string | null };
-  const { data, error } = await supabase
+  if (!q) return { profiles: [] as ProfileRowLike[], error: null as string | null };
+  let res = await supabase
     .from("profiles")
-    .select("id, name, handle")
+    .select("id, name, handle, is_sample")
     .or(`name.ilike.%${q}%,handle.ilike.%${q}%`)
     .limit(24);
-  if (error) return { profiles: [], error: error.message };
-  return { profiles: data ?? [], error: null };
+  if (res.error && /is_sample/i.test(res.error.message)) {
+    const legacy = await supabase
+      .from("profiles")
+      .select("id, name, handle")
+      .or(`name.ilike.%${q}%,handle.ilike.%${q}%`)
+      .limit(24);
+    if (legacy.error) return { profiles: [], error: legacy.error.message };
+    return { profiles: (legacy.data ?? []) as ProfileRowLike[], error: null };
+  }
+  if (res.error) return { profiles: [], error: res.error.message };
+  return { profiles: (res.data ?? []) as ProfileRowLike[], error: null };
 }
 
 export function sessionUserFields(user: User) {

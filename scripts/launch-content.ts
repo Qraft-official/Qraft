@@ -49,8 +49,10 @@ export type PlannedPost = {
 
 const UUID_NS = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
-export const LAUNCH_END_JST = "2026-09-12T08:00:00+09:00";
+export const LAUNCH_START_JST = "2026-09-12T12:30:00+09:00";
+export const LAUNCH_END_JST = "2026-09-12T20:30:00+09:00";
 export const SAMPLE_EMAIL_DOMAIN = "qraft.invalid";
+export const PROD_SUPABASE_REF = "orvfimwduohqojfirhsk";
 
 export const SAMPLE_USERS: SampleUserSpec[] = [
   { handle: "math_kai", name: "Math Kai", subjects: ["math"], fields: ["整数", "数論"] },
@@ -130,14 +132,22 @@ function dataDir() {
   return join(here, "..", "data", "launch");
 }
 
-export function loadLaunchQuests(): { quests: LaunchQuest[]; files: { name: string; count: number }[] } {
+export type SkippedQuest = { file: string; id: string; title: string; reason: string };
+
+export function loadLaunchQuests(): {
+  quests: LaunchQuest[];
+  files: { name: string; count: number }[];
+  skipped: SkippedQuest[];
+} {
   const files = [
     { name: "ahaquest.json", path: join(dataDir(), "ahaquest.json") },
     { name: "ahaquesto.json", path: join(dataDir(), "ahaquesto.json") },
   ];
   const quests: LaunchQuest[] = [];
   const summary: { name: string; count: number }[] = [];
+  const skipped: SkippedQuest[] = [];
   const seen = new Set<string>();
+  const seenText = new Set<string>();
   for (const file of files) {
     const raw = JSON.parse(readFileSync(file.path, "utf8")) as unknown;
     if (!Array.isArray(raw)) throw new Error(`${file.name} is not a JSON array`);
@@ -147,8 +157,16 @@ export function loadLaunchQuests(): { quests: LaunchQuest[]; files: { name: stri
       const q = item as Record<string, unknown>;
       const id = String(q.id ?? "").trim();
       if (!id) throw new Error(`${file.name} has a row without id`);
-      if (seen.has(id)) throw new Error(`duplicate id ${id}`);
+      if (seen.has(id)) throw new Error(`duplicate id ${id} in ${file.name}`);
       seen.add(id);
+      const title = String(q.title ?? "");
+      const problem = String(q.problem ?? "");
+      const fp = `${title}\n${problem}`.replace(/\s+/g, " ").trim().toLowerCase();
+      if (fp && seenText.has(fp)) {
+        skipped.push({ file: file.name, id, title, reason: "duplicate_text" });
+        continue;
+      }
+      if (fp) seenText.add(fp);
       quests.push({
         id,
         sourceFile: file.name,
@@ -167,7 +185,7 @@ export function loadLaunchQuests(): { quests: LaunchQuest[]; files: { name: stri
     }
     summary.push({ name: file.name, count: n });
   }
-  return { quests, files: summary };
+  return { quests, files: summary, skipped };
 }
 
 function mulberry32(seed: number) {
@@ -200,12 +218,17 @@ export function assignAuthors(quests: LaunchQuest[]) {
   return out;
 }
 
-/** Spread times from (now + buffer) to 08:00 JST with uneven gaps. */
-export function schedulePublishTimes(count: number, now = new Date(), end = new Date(LAUNCH_END_JST)) {
-  const start = new Date(now.getTime() + 5 * 60_000);
+/** Spread times from max(now+5m, 12:30 JST) to 20:30 JST with uneven gaps. */
+export function schedulePublishTimes(
+  count: number,
+  now = new Date(),
+  end = new Date(LAUNCH_END_JST),
+) {
+  const floor = new Date(LAUNCH_START_JST);
+  const start = new Date(Math.max(now.getTime() + 5 * 60_000, floor.getTime()));
   if (start.getTime() >= end.getTime()) {
     throw new Error(
-      `公開窓がありません: start ${start.toISOString()} >= end ${end.toISOString()} (08:00 JST)`,
+      `公開窓がありません: start ${start.toISOString()} >= end ${end.toISOString()} (20:30 JST)`,
     );
   }
   const rand = mulberry32(20260912);
@@ -226,7 +249,7 @@ export function schedulePublishTimes(count: number, now = new Date(), end = new 
     times.push(acc);
   }
   times.sort((a, b) => a - b);
-  const minGap = 75_000;
+  const minGap = 150_000;
   for (let i = 1; i < times.length; i += 1) {
     if (times[i] < times[i - 1] + minGap) times[i] = times[i - 1] + minGap;
   }
@@ -261,8 +284,9 @@ export function planLaunchContent(now = new Date()): {
   files: { name: string; count: number }[];
   users: SampleUserSpec[];
   posts: PlannedPost[];
+  skipped: SkippedQuest[];
 } {
-  const { quests, files } = loadLaunchQuests();
+  const { quests, files, skipped } = loadLaunchQuests();
   const authors = assignAuthors(quests);
   const times = schedulePublishTimes(quests.length, now);
   const posts = quests.map((q, i) => {
@@ -288,7 +312,7 @@ export function planLaunchContent(now = new Date()): {
       publishAtJst: formatJst(at),
     };
   });
-  return { files, users: SAMPLE_USERS, posts };
+  return { files, users: SAMPLE_USERS, posts, skipped };
 }
 
 export function randomPassword() {

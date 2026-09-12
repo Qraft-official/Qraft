@@ -1,6 +1,7 @@
 "use client";
 
 import { PostCard } from "@/components/PostCard";
+import { ProblemSolveStats } from "@/components/ProblemSolveStats";
 import { useApp } from "@/lib/store";
 import { ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -33,6 +34,11 @@ export default function PostPage() {
         <p className="font-bold">ポスト</p>
       </header>
       <PostCard post={post} />
+      {(post.kind === "problem") && (
+        <div className="border-b border-gray-800 px-4 pb-4">
+          <ProblemSolveStats post={post} detail />
+        </div>
+      )}
       {sols.length > 0 && (
         <p className="border-b border-gray-800 px-4 py-2 text-xs font-bold text-muted">
           引用解法

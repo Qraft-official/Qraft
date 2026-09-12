@@ -72,7 +72,17 @@ function asClaimView(row: ReferralClaimRow): ReferralClaimView {
 export async function ensureReferralCode(userId: string) {
   const admin = adminSupabase();
   if (!admin) return "";
-  const { data } = await admin.from("profiles").select("referral_code").eq("id", userId).maybeSingle();
+  const full = await admin
+    .from("profiles")
+    .select("referral_code, is_sample")
+    .eq("id", userId)
+    .maybeSingle();
+  const legacy =
+    full.error && /is_sample/i.test(full.error.message)
+      ? await admin.from("profiles").select("referral_code").eq("id", userId).maybeSingle()
+      : null;
+  const data = (legacy?.data ?? full.data) as { referral_code?: string | null; is_sample?: boolean | null } | null;
+  if (data?.is_sample) return "";
   if (data?.referral_code) return String(data.referral_code);
   const { data: rpc } = await admin.rpc("random_referral_code");
   const code = typeof rpc === "string" && rpc ? rpc : Math.random().toString(36).slice(2, 10).toUpperCase();

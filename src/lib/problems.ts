@@ -7,6 +7,7 @@ import { sanitizeHints } from "./learn";
 import { HANDWRITING_UPLOAD_ERROR } from "./handwriting-export";
 import { persistHandwritingPages, firstDrawingUrl } from "./problem-images";
 import { isProblemListedForFeed } from "./publish-at";
+import { isDiscoverStatsSort } from "./problem-stats";
 import { supabase } from "./supabase";
 import { userIsVerified } from "./verified";
 import type { NotePage, Post, Subject, User } from "./types";
@@ -277,6 +278,63 @@ export async function fetchProblems(): Promise<{
   }
 
   return { posts, profiles, error: null };
+}
+
+export async function fetchDiscoverProblems(input: {
+  sort: string;
+  subject?: string;
+  mode?: string;
+  level?: number | "all";
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{
+  posts: Post[];
+  profiles: Record<string, User>;
+  total: number;
+  error: string | null;
+}> {
+  if (!isDiscoverStatsSort(input.sort)) {
+    return { posts: [], profiles: {}, total: 0, error: "unsupported sort" };
+  }
+  const limit = Math.max(1, Math.min(input.limit ?? 20, 50));
+  const offset = Math.max(0, input.offset ?? 0);
+  const { data, error } = await supabase.rpc("discover_problems", {
+    p_sort: input.sort,
+    p_subject: !input.subject || input.subject === "all" ? null : input.subject,
+    p_mode: !input.mode || input.mode === "all" ? null : input.mode,
+    p_level: input.level && input.level !== "all" ? input.level : null,
+    p_q: input.q?.trim() || null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) return { posts: [], profiles: {}, total: 0, error: error.message };
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const viewerId = session?.user?.id ?? null;
+  const now = Date.now();
+  const rows = ((data ?? []) as (ProblemRow & { total_count?: number })[]).filter((row) =>
+    isProblemListedForFeed(row, now),
+  );
+  const total = Number(rows[0]?.total_count ?? 0);
+  const posts = rows.map((row) => problemToPost(row, viewerId));
+  const profiles: Record<string, User> = {};
+  const authorIds = [...new Set(rows.map((r) => r.author_id))];
+  if (authorIds.length) {
+    let profileRes = await supabase
+      .from("profiles")
+      .select("id, name, handle, is_sample")
+      .in("id", authorIds);
+    if (profileRes.error && /is_sample/i.test(profileRes.error.message)) {
+      const legacy = await supabase.from("profiles").select("id, name, handle").in("id", authorIds);
+      for (const p of (legacy.data ?? []) as ProfileRow[]) profiles[p.id] = fallbackUser(p.id, p);
+    } else {
+      for (const p of (profileRes.data ?? []) as ProfileRow[]) profiles[p.id] = fallbackUser(p.id, p);
+    }
+  }
+  return { posts, profiles, total, error: null };
 }
 
 function answerPayload(input: NewProblem) {

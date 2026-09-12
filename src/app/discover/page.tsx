@@ -19,8 +19,10 @@ import {
   type ModeFilter,
   type SubjectFilter,
 } from "@/lib/discover-feed";
+import { isDiscoverStatsSort } from "@/lib/problem-stats";
+import { fetchDiscoverProblems } from "@/lib/problems";
 import { useApp } from "@/lib/store";
-import type { Tier, User } from "@/lib/types";
+import type { Post, Tier, User } from "@/lib/types";
 import { userIsVerified, verifiedBadgeTone } from "@/lib/verified";
 import {
   computeWeeklyRankings,
@@ -87,7 +89,7 @@ function DiscoverFallback() {
 }
 
 function DiscoverInner() {
-  const { posts, users, me, follows, toggleFollow, searchUsers, userOf, ratings, reposts } = useApp();
+  const { posts, users, me, follows, toggleFollow, searchUsers, userOf, ratings, reposts, hydrateRemoteUsers } = useApp();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -108,6 +110,12 @@ function DiscoverInner() {
     byProblem: Record<string, number>;
     byAuthor: Record<string, number>;
   }>({ byProblem: {}, byAuthor: {} });
+  const [rpcPosts, setRpcPosts] = useState<Post[]>([]);
+  const [rpcTotal, setRpcTotal] = useState(0);
+  const [rpcError, setRpcError] = useState<string | null>(null);
+  const [rpcLoading, setRpcLoading] = useState(false);
+
+  const statsSort = isDiscoverStatsSort(sort) && view === "posts";
 
   useEffect(() => {
     if (composingRef.current) return;
@@ -183,6 +191,42 @@ function DiscoverInner() {
     [posts, subject, mode, level, filterQuery, kind, effectiveSort, sortCtx],
   );
 
+  useEffect(() => {
+    if (!statsSort) {
+      setRpcPosts([]);
+      setRpcTotal(0);
+      setRpcError(null);
+      return;
+    }
+    let cancelled = false;
+    setRpcLoading(true);
+    void fetchDiscoverProblems({
+      sort,
+      subject,
+      mode,
+      level,
+      q: qParam.trim(),
+      limit: 20,
+      offset: 0,
+    }).then((res) => {
+      if (cancelled) return;
+      setRpcLoading(false);
+      if (res.error) {
+        setRpcError(res.error);
+        setRpcPosts([]);
+        setRpcTotal(0);
+        return;
+      }
+      setRpcError(null);
+      setRpcPosts(res.posts);
+      setRpcTotal(res.total);
+      hydrateRemoteUsers(res.profiles);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [statsSort, sort, subject, mode, level, qParam, hydrateRemoteUsers]);
+
   const matchedUsers = useMemo(() => {
     const n = filterQuery.toLowerCase().replace(/^@/, "");
     const seen = new Set<string>();
@@ -213,6 +257,34 @@ function DiscoverInner() {
     mode !== "all" ||
     level !== "all" ||
     kind !== "all";
+  const listedPosts = statsSort ? rpcPosts : filteredPosts;
+  const listedCount = statsSort ? rpcTotal : filteredPosts.length;
+
+  const loadMoreStats = useCallback(() => {
+    if (!statsSort || rpcLoading || rpcPosts.length >= rpcTotal) return;
+    setRpcLoading(true);
+    void fetchDiscoverProblems({
+      sort,
+      subject,
+      mode,
+      level,
+      q: qParam.trim(),
+      limit: 20,
+      offset: rpcPosts.length,
+    }).then((res) => {
+      setRpcLoading(false);
+      if (res.error) {
+        setRpcError(res.error);
+        return;
+      }
+      setRpcPosts((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...res.posts.filter((p) => !seen.has(p.id))];
+      });
+      setRpcTotal(res.total);
+      hydrateRemoteUsers(res.profiles);
+    });
+  }, [statsSort, rpcLoading, rpcPosts.length, rpcTotal, sort, subject, mode, level, qParam, hydrateRemoteUsers]);
 
   return (
     <div className="mx-auto w-full max-w-[600px] overflow-x-hidden">
@@ -523,18 +595,21 @@ function DiscoverInner() {
         <div>
           {!searching && <WeeklyBoards qrafters={weekly.weeklyQrafters} questions={weekly.weeklyQuestions} />}
           {searching && (
-            <p className="px-4 py-2 text-xs font-bold text-aha">検索結果 · {filteredPosts.length}件</p>
+            <p className="px-4 py-2 text-xs font-bold text-aha">検索結果 · {listedCount}件</p>
           )}
           {!searching && (
           <p className="px-4 py-2 text-xs text-muted">
             {view === "newest"
               ? "新着順"
               : DISCOVER_SORT_OPTIONS.find((s) => s.id === sort)?.label}{" "}
-            · {filteredPosts.length}件
+            · {listedCount}件
             {filtersActive ? " · フィルター適用中" : ""}
           </p>
           )}
-          {filteredPosts.length === 0 ? (
+          {rpcError && statsSort && (
+            <p className="px-4 py-2 text-xs text-rose-300">{rpcError}</p>
+          )}
+          {listedPosts.length === 0 && !rpcLoading ? (
             <EmptyState
               title={q.trim() ? "一致する投稿がありません" : "条件に合う投稿はまだありません"}
               body="検索語を変えるか、フィルターをリセットすると見つかりやすくなります。"
@@ -545,12 +620,26 @@ function DiscoverInner() {
               }}
             />
           ) : (
-            filteredPosts.map((p, i) => (
-              <div key={p.id} className="relative">
-                {effectiveSort === "hall" && <RankBadge rank={i + 1} />}
-                <PostCard post={p} />
-              </div>
-            ))
+            <>
+              {listedPosts.map((p, i) => (
+                <div key={p.id} className="relative">
+                  {effectiveSort === "hall" && <RankBadge rank={i + 1} />}
+                  <PostCard post={p} />
+                </div>
+              ))}
+              {statsSort && listedPosts.length < rpcTotal && (
+                <div className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={loadMoreStats}
+                    disabled={rpcLoading}
+                    className="min-h-11 w-full rounded-full border border-gray-700 text-sm font-bold"
+                  >
+                    {rpcLoading ? "読み込み中" : "さらに表示"}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

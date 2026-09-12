@@ -105,3 +105,56 @@ as $$
     'by_author', coalesce((select jsonb_object_agg(author_id::text, n) from by_author), '{}'::jsonb)
   );
 $$;
+
+-- Do not ping followers for unpublished scheduled posts (sample launch window).
+create or replace function public.on_problem_inserted_learning()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  author_handle text;
+begin
+  perform public.record_learning_activity(
+    new.author_id,
+    case when new.is_sprint then 'pulse' else 'post' end,
+    new.id
+  );
+
+  if new.publish_at is not null and new.publish_at > now() then
+    return new;
+  end if;
+
+  select coalesce(nullif(pr.handle, ''), 'qrafter') into author_handle
+  from public.profiles pr
+  where pr.id = new.author_id;
+
+  insert into public.notifications (user_id, title, message, link, dedupe_key)
+  select
+    n.subscriber_id,
+    '新着問題',
+    '@' || coalesce(author_handle, 'qrafter') || ' が新しい問題を投稿しました',
+    '/p/' || new.id::text,
+    'newpost:' || new.id::text
+  from public.user_post_notifications n
+  where n.author_id = new.author_id
+    and n.subscriber_id <> new.author_id
+  on conflict (user_id, dedupe_key) where (dedupe_key is not null) do nothing;
+
+  return new;
+end;
+$$;
+
+-- Comments inherit problem visibility (unpublished rows fail the EXISTS via RLS).
+drop policy if exists "comments are readable" on public.comments;
+create policy "comments are readable"
+  on public.comments for select
+  to anon, authenticated
+  using (
+    exists (
+      select 1
+      from public.problems p
+      where p.id = comments.post_id
+    )
+  );

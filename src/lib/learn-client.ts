@@ -218,7 +218,6 @@ export async function startProblemAttempt(problemId: string) {
   } = await supabase.auth.getSession();
   const uid = session?.user?.id;
   if (!uid) return { error: "ログインしてください", startedAt: null as string | null };
-  const startedAt = new Date().toISOString();
   const { data: open } = await supabase
     .from("problem_attempts")
     .select("id, started_at")
@@ -229,15 +228,18 @@ export async function startProblemAttempt(problemId: string) {
   if (open?.started_at) {
     return { error: null, startedAt: String(open.started_at) };
   }
-  const { error } = await supabase.from("problem_attempts").insert({
-    user_id: uid,
-    problem_id: problemId,
-    started_at: startedAt,
-  });
+  const { data: inserted, error } = await supabase
+    .from("problem_attempts")
+    .insert({
+      user_id: uid,
+      problem_id: problemId,
+    })
+    .select("started_at")
+    .maybeSingle();
   if (error && !/duplicate|unique/i.test(error.message)) {
-    return { error: error.message, startedAt };
+    return { error: error.message, startedAt: null };
   }
-  return { error: null, startedAt };
+  return { error: null, startedAt: inserted?.started_at ? String(inserted.started_at) : new Date().toISOString() };
 }
 
 export async function submitProblemAttempt(input: {
@@ -253,12 +255,6 @@ export async function submitProblemAttempt(input: {
   } = await supabase.auth.getSession();
   const uid = session?.user?.id;
   if (!uid) return { error: "ログインしてください" };
-  const submittedAt = new Date().toISOString();
-  const started = input.startedAt ? new Date(input.startedAt).getTime() : NaN;
-  const duration =
-    Number.isFinite(started) && started > 0
-      ? Math.max(0, Math.round((Date.now() - started) / 1000))
-      : null;
 
   const { data: open } = await supabase
     .from("problem_attempts")
@@ -269,33 +265,30 @@ export async function submitProblemAttempt(input: {
     .maybeSingle();
 
   const payload = {
-    submitted_at: submittedAt,
-    duration_seconds: duration,
+    submitted_at: new Date().toISOString(),
     grade: input.grade,
     solver_answer: input.solverAnswer?.trim() || null,
     is_revenge: !!input.isRevenge,
   };
 
   if (open?.id) {
-    const startedAt = open.started_at ? new Date(String(open.started_at)).getTime() : started;
-    const dur = Number.isFinite(startedAt)
-      ? Math.max(0, Math.round((Date.now() - startedAt) / 1000))
-      : duration;
     const { error } = await supabase
       .from("problem_attempts")
-      .update({ ...payload, duration_seconds: dur })
+      .update(payload)
       .eq("id", open.id)
       .eq("user_id", uid);
     return { error: error?.message ?? null };
   }
 
-  const { error } = await supabase.from("problem_attempts").insert({
-    user_id: uid,
-    problem_id: input.problemId,
-    started_at: input.startedAt || submittedAt,
-    ...payload,
-  });
-  return { error: error?.message ?? null };
+  if (!open && input.grade && input.grade !== "ungraded") {
+    const { error } = await supabase.from("problem_attempts").insert({
+      user_id: uid,
+      problem_id: input.problemId,
+      ...payload,
+    });
+    return { error: error?.message ?? null };
+  }
+  return { error: null };
 }
 
 export async function fetchMyAttempts(): Promise<HistoryAttempt[]> {

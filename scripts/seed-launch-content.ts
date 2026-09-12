@@ -4,11 +4,16 @@
  *   npx tsx scripts/seed-launch-content.ts --dry-run
  *   npx tsx scripts/seed-launch-content.ts --execute
  *
+ * Production (after applying 20260912020000_launch_sample_and_publish_at.sql only):
+ *   NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set
+ *   (values never logged). Then:
+ *   npx tsx scripts/seed-launch-content.ts --execute
+ *
  * --execute writes to the configured Supabase project. Never run without permission.
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { planLaunchContent, randomPassword, sampleEmail, sampleUserId, SAMPLE_USERS } from "./launch-content";
+import { planLaunchContent, randomPassword, sampleEmail, sampleUserId, SAMPLE_USERS, PROD_SUPABASE_REF } from "./launch-content";
 
 function loadEnvFile(path: string) {
   try {
@@ -48,15 +53,25 @@ function printPlan() {
   for (const p of plan.posts) counts.set(p.authorHandle, (counts.get(p.authorHandle) ?? 0) + 1);
   console.log("mode", execute ? "EXECUTE" : "DRY-RUN");
   console.log("files", plan.files);
-  console.log("sample_users", plan.users.length);
-  console.log("problems", plan.posts.length);
-  console.log("first_publish", plan.posts[0]?.publishAtJst);
-  console.log("last_publish", plan.posts[plan.posts.length - 1]?.publishAtJst);
+  console.log("sample user予定数", plan.users.length);
+  console.log("problem予定数", plan.posts.length);
+  console.log("最初のpublish_at JST", plan.posts[0]?.publishAtJst);
+  console.log("最後のpublish_at JST", plan.posts[plan.posts.length - 1]?.publishAtJst);
+  console.log("既存PULSE変更数 =", 0);
+  console.log("既存実ユーザー変更数 =", 0);
+  if (plan.skipped.length) {
+    console.log("skipped_duplicates", plan.skipped.length);
+    for (const s of plan.skipped) {
+      console.log(`  skip ${s.file} ${s.id} ${s.reason} ${s.title}`);
+    }
+  } else {
+    console.log("skipped_duplicates", 0);
+  }
   console.log("assignment:");
   for (const u of SAMPLE_USERS) {
     console.log(`  @${u.handle} (${u.name}) ${counts.get(u.handle) ?? 0}問`);
   }
-  console.log("schedule:");
+  console.log("全投稿の公開時刻JST:");
   for (const p of plan.posts) {
     console.log(
       `  ${p.publishAtJst}  ${p.seedKey}  @${p.authorHandle}  ${p.subject}/${p.field}  ${p.title}`,
@@ -70,6 +85,9 @@ async function runExecute(plan: ReturnType<typeof planLaunchContent>) {
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !service) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY が必要です");
+  }
+  if (!url.includes(PROD_SUPABASE_REF)) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL が本番 Qraft project ではありません。中止します。");
   }
   const admin = createClient(url, service, {
     auth: { persistSession: false, autoRefreshToken: false },

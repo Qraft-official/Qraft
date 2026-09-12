@@ -237,6 +237,7 @@ type Store = {
   refreshNotifications: () => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   searchUsers: (query: string) => Promise<{ error?: string }>;
+  hydrateRemoteUsers: (profiles: Record<string, User>) => void;
   toggleConfused: (postId: string) => Promise<void>;
   confusedMine: Record<string, boolean>;
   saved: Record<string, SaveCategory>;
@@ -1463,6 +1464,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return {};
   }, []);
 
+  const hydrateRemoteUsers = useCallback((profiles: Record<string, User>) => {
+    setRemoteUsers((prev) => ({ ...prev, ...profiles }));
+  }, []);
+
   const openComposer = useCallback(
     (next: Exclude<Composer, { open: false }>) => {
       if (next.mode === "solution" && !next.quotePostId) return;
@@ -1942,6 +1947,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     community,
     updateProfile,
     searchUsers,
+    hydrateRemoteUsers,
     toggleConfused,
     confusedMine,
     saved,

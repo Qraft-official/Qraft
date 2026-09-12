@@ -43,6 +43,7 @@ import { FeltDifficulty } from "./FeltDifficulty";
 import { AttemptTime } from "./RevengeBanner";
 import { SimilarProblems } from "./SimilarProblems";
 import { SeriesAssignSheet, SeriesNav } from "./SeriesNav";
+import { ProblemSolveStats } from "./ProblemSolveStats";
 
 function isTypedNotebook(post: Post) {
   if (post.solutionFormat === "typed") return true;
@@ -528,7 +529,8 @@ export function PostCard({
             </>
           )}
 
-          {(post.kind === "problem" || post.kind === "sprint") && (
+          {post.kind === "problem" && <ProblemSolveStats post={post} />}
+          {post.kind === "sprint" && (
             <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-white/45">
               <span>解答 {post.gradeN ?? 0}</span>
               {(post.gradeN ?? 0) > 0 && (

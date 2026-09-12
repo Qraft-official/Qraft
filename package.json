@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "seed:launch": "npx tsx scripts/seed-launch-content.ts",
+    "test:stats": "npx tsx scripts/verify-problem-stats.ts",
     "lint": "eslint"
   },
   "dependencies": {

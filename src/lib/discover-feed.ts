@@ -12,7 +12,11 @@ export type DiscoverSortKey =
   | "hall"
   | "most_confused"
   | "top_rated"
-  | "most_reposted";
+  | "most_reposted"
+  | "accuracy_asc"
+  | "accuracy_desc"
+  | "duration_asc"
+  | "duration_desc";
 
 export type DiscoverKindFilter = "all" | "problem" | "solution";
 export type SubjectFilter = "all" | Subject;
@@ -36,6 +40,30 @@ export const DISCOVER_SORT_OPTIONS: {
     unavailableHint: "「？」は問題投稿の機能です",
   },
   {
+    id: "accuracy_asc",
+    label: "正答率が低い順",
+    requiresKind: "problem",
+    unavailableHint: "正答率は問題投稿の機能です",
+  },
+  {
+    id: "accuracy_desc",
+    label: "正答率が高い順",
+    requiresKind: "problem",
+    unavailableHint: "正答率は問題投稿の機能です",
+  },
+  {
+    id: "duration_desc",
+    label: "平均解答時間が長い順",
+    requiresKind: "problem",
+    unavailableHint: "解答時間は問題投稿の機能です",
+  },
+  {
+    id: "duration_asc",
+    label: "平均解答時間が短い順",
+    requiresKind: "problem",
+    unavailableHint: "解答時間は問題投稿の機能です",
+  },
+  {
     id: "top_rated",
     label: "評価が高い順",
     requiresKind: "solution",
@@ -56,7 +84,11 @@ export function asDiscoverSort(v: string | null): DiscoverSortKey {
     v === "hall" ||
     v === "most_confused" ||
     v === "top_rated" ||
-    v === "most_reposted"
+    v === "most_reposted" ||
+    v === "accuracy_asc" ||
+    v === "accuracy_desc" ||
+    v === "duration_asc" ||
+    v === "duration_desc"
   ) {
     return v;
   }
@@ -77,6 +109,15 @@ export function sortUnavailableForKind(
   }
   if (sort === "top_rated" && kind === "problem") {
     return "星評価は解法投稿の機能です";
+  }
+  if (
+    (sort === "accuracy_asc" ||
+      sort === "accuracy_desc" ||
+      sort === "duration_asc" ||
+      sort === "duration_desc") &&
+    kind === "solution"
+  ) {
+    return "正答率・解答時間は問題投稿の機能です";
   }
   return null;
 }

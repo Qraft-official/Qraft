@@ -105,6 +105,20 @@ export function isEmailConfirmed(user: {
   return Boolean(user?.email_confirmed_at || user?.confirmed_at);
 }
 
+/** Client profile insert: never send is_sample (DB default false). */
+export function ownProfileInsertPayload(user: {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+}) {
+  const handle = handleFromUser(user);
+  return {
+    id: user.id,
+    name: displayNameFromUser(user),
+    handle: handle && !isReservedHandle(handle) ? handle : null,
+  };
+}
+
 export async function ensureProfile(user: {
   id: string;
   email?: string | null;
@@ -114,10 +128,7 @@ export async function ensureProfile(user: {
 }) {
   if (!isEmailConfirmed(user)) return;
   try {
-    const incoming = {
-      name: displayNameFromUser(user),
-      handle: handleFromUser(user) ?? null,
-    };
+    const incoming = ownProfileInsertPayload(user);
     const { data: existing } = await supabase
       .from("profiles")
       .select("id, name, handle")
@@ -134,13 +145,17 @@ export async function ensureProfile(user: {
       }
       return;
     }
-    const first = await supabase.from("profiles").upsert({
+    const first = await supabase.from("profiles").insert(incoming);
+    if (!first.error) return;
+    if (/duplicate|unique/i.test(first.error.message)) return;
+    const retry = await supabase.from("profiles").insert({
       id: user.id,
       name: incoming.name,
-      handle: incoming.handle && !isReservedHandle(incoming.handle) ? incoming.handle : null,
+      handle: null,
     });
-    if (!first.error) return;
-    await supabase.from("profiles").upsert({ id: user.id, name: incoming.name, handle: null });
+    if (retry.error && !/duplicate|unique/i.test(retry.error.message)) {
+      console.warn("ensureProfile failed:", retry.error.message);
+    }
   } catch (err) {
     console.warn("ensureProfile failed:", err);
   }

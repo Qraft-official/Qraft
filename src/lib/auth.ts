@@ -178,14 +178,19 @@ export async function saveLearningProfile(
   userId: string,
   input: { age: number; tiers: Tiers; onboarded?: boolean },
 ) {
-  const patch: Record<string, unknown> = {
-    age: input.age,
-    math_tier: input.tiers.math,
-    physics_tier: input.tiers.physics,
-    chemistry_tier: input.tiers.chemistry,
-  };
-  if (input.onboarded !== undefined) patch.onboarded = input.onboarded;
-  const { error } = await supabase.from("profiles").update(patch).eq("id", userId);
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id || session.user.id !== userId) {
+    return { error: "ログインしてください" };
+  }
+  const { error } = await supabase.rpc("save_my_learning_profile", {
+    p_age: input.age,
+    p_math: input.tiers.math,
+    p_physics: input.tiers.physics,
+    p_chemistry: input.tiers.chemistry,
+    p_onboarded: input.onboarded ?? null,
+  });
   return { error: error?.message };
 }
 

@@ -5,6 +5,7 @@ import { ownProfileInsertPayload } from "../src/lib/auth";
 for (const file of [
   "supabase/migrations/20260912050000_profiles_signup_insert_rls.sql",
   "supabase/migrations/20260912080000_ensure_my_profile_signup.sql",
+  "supabase/migrations/20260912150000_save_my_learning_profile.sql",
 ]) {
   const sql = readFileSync(file, "utf8");
   assert.match(sql, /drop policy if exists "users can insert own profile"/);
@@ -21,6 +22,10 @@ assert.match(rpc, /create or replace function public\.ensure_my_profile/);
 assert.match(rpc, /security definer/i);
 assert.match(rpc, /uid uuid := \(select auth\.uid\(\)\)/);
 assert.match(rpc, /is_sample, false/);
+
+const onboard = readFileSync("supabase/migrations/20260912150000_save_my_learning_profile.sql", "utf8");
+assert.match(onboard, /create or replace function public\.save_my_learning_profile/);
+assert.doesNotMatch(onboard, /can_use_app\(\)/);
 
 const row = ownProfileInsertPayload({
   id: "11111111-1111-1111-1111-111111111111",

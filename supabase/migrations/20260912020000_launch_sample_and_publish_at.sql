@@ -106,7 +106,8 @@ as $$
   );
 $$;
 
--- Do not ping followers for unpublished scheduled posts (sample launch window).
+-- Sample authors and unpublished regular posts must not write learning
+-- activity or notifications. PULSE insert activity stays unchanged.
 create or replace function public.on_problem_inserted_learning()
 returns trigger
 language plpgsql
@@ -115,14 +116,28 @@ set search_path to 'public'
 as $$
 declare
   author_handle text;
+  author_is_sample boolean := false;
+  not_yet_public boolean := (new.publish_at is not null and new.publish_at > now());
 begin
+  select coalesce(pr.is_sample, false) into author_is_sample
+  from public.profiles pr
+  where pr.id = new.author_id;
+
+  if coalesce(author_is_sample, false) then
+    return new;
+  end if;
+
+  if not_yet_public and not coalesce(new.is_sprint, false) then
+    return new;
+  end if;
+
   perform public.record_learning_activity(
     new.author_id,
     case when new.is_sprint then 'pulse' else 'post' end,
     new.id
   );
 
-  if new.publish_at is not null and new.publish_at > now() then
+  if not_yet_public then
     return new;
   end if;
 

@@ -7,9 +7,11 @@ import { InviteCapture } from "@/components/InviteCapture";
 import { Onboarding } from "@/components/Onboarding";
 import { useApp } from "@/lib/store";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
+import { isPublicBrowsePath } from "@/lib/public-routes";
 import { AppBootSkeleton } from "@/components/UiStates";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 const CreateSheet = dynamic(
@@ -37,33 +39,45 @@ const FocusBgm = dynamic(
   { ssr: false },
 );
 
-function SsrFallbackChrome({ children }: { children: React.ReactNode }) {
+function PublicChrome({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="mx-auto min-h-[100vh] min-h-dvh w-full max-w-lg bg-[#0b1220] text-[#e7e9ea] md:max-w-2xl lg:max-w-4xl"
-      style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
-      suppressHydrationWarning
-    >
-      <header className="border-b border-gray-700 px-4 py-3" suppressHydrationWarning>
-        <p className="text-lg font-black tracking-tight text-white" suppressHydrationWarning>
-          Qraft<span className="ml-1" style={{ color: "#ccff00" }}>クラフト</span>
-        </p>
-        <p className="text-xs" style={{ color: "#8b98a5" }} suppressHydrationWarning>
-          STEM creators のためのドパミン SNS
-        </p>
+    <div className="mx-auto min-h-dvh w-full max-w-lg bg-black text-[#e7e9ea] md:max-w-2xl lg:max-w-4xl">
+      <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-gray-800 bg-black/80 px-4 py-3 backdrop-blur">
+        <Link href="/" className="text-lg font-black tracking-tight">
+          Qraft<span className="ml-1 text-aha">クラフト</span>
+        </Link>
+        <nav className="flex items-center gap-2" aria-label="公開ナビ">
+          <Link
+            href="/discover"
+            className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-bold text-muted hover:text-white"
+          >
+            Discover
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex min-h-11 items-center rounded-full bg-aha px-4 text-sm font-black text-black"
+          >
+            ログイン
+          </Link>
+        </nav>
       </header>
       {children}
+      <footer className="border-t border-gray-800 px-4 py-8 text-xs text-muted">
+        <p>Qraft（クラフト）· ひらめきを競う問題SNS</p>
+        <p className="mt-2 flex flex-wrap gap-3">
+          <Link href="/terms" className="text-sky-400">
+            利用規約
+          </Link>
+          <Link href="/privacy" className="text-sky-400">
+            プライバシー
+          </Link>
+        </p>
+      </footer>
     </div>
   );
 }
 
-export function AppShell({
-  children,
-  adsensePreview = false,
-}: {
-  children: React.ReactNode;
-  adsensePreview?: boolean;
-}) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const {
     ready,
     onboarded,
@@ -78,8 +92,8 @@ export function AppShell({
     paywallOpen,
   } = useApp();
   const path = usePathname();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [inAdFrame, setInAdFrame] = useState(false);
   const [loadCreate, setLoadCreate] = useState(false);
   const [loadReply, setLoadReply] = useState(false);
   const [loadPremium, setLoadPremium] = useState(false);
@@ -89,20 +103,20 @@ export function AppShell({
   const isAuthCallback = path.startsWith("/auth/callback");
   const isLegal = path === "/terms" || path === "/privacy";
   const isInvite = path.startsWith("/i/");
-  const crawlerSafe = adsensePreview || inAdFrame;
+  const publicBrowse = isPublicBrowsePath(path);
 
   useEffect(() => {
     setMounted(true);
-    try {
-      setInAdFrame(window.self !== window.top);
-    } catch {
-      setInAdFrame(true);
-    }
   }, []);
 
   useEffect(() => {
     rememberPremiumReturnPath(path);
   }, [path]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    if (path === "/login" || path === "/signup") router.replace("/");
+  }, [authenticated, path, router]);
 
   useEffect(() => {
     if (!composer.open) return;
@@ -135,16 +149,15 @@ export function AppShell({
     );
   }
 
-  if (crawlerSafe) {
-    return (
-      <>
-        {capture}
-        <SsrFallbackChrome>{children}</SsrFallbackChrome>
-      </>
-    );
-  }
-
   if (!mounted || !ready || (authenticated && !profileHydrated)) {
+    if (publicBrowse && !authenticated) {
+      return (
+        <>
+          {capture}
+          <PublicChrome>{children}</PublicChrome>
+        </>
+      );
+    }
     return (
       <>
         {capture}
@@ -156,10 +169,18 @@ export function AppShell({
   }
 
   if (!authenticated) {
+    if (isPublicBrowsePath(path)) {
+      return (
+        <>
+          {capture}
+          <PublicChrome>{children}</PublicChrome>
+        </>
+      );
+    }
     return (
       <>
         {capture}
-        <AuthScreen />
+        <AuthScreen initialMode={path.startsWith("/signup") ? "signup" : "login"} />
       </>
     );
   }

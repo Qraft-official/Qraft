@@ -1,12 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Sans_JP } from "next/font/google";
-import { headers } from "next/headers";
-import Script from "next/script";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AppDialogHost } from "@/components/AppDialogHost";
 import { AppProvider } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
-import { ADSENSE_CLIENT_ID, isAdsenseCrawler } from "@/lib/adsense";
+import { ADSENSE_CLIENT_ID } from "@/lib/adsense";
+import { CANONICAL_ORIGIN } from "@/lib/constants";
 import "./globals.css";
 import React from "react";
 
@@ -27,8 +26,14 @@ const noto = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "Qraft",
-  description: "STEM creators のためのドパミン SNS",
+  metadataBase: new URL(CANONICAL_ORIGIN),
+  title: {
+    default: "Qraft（クラフト）| ひらめきを競う問題SNS",
+    template: "%s | Qraft",
+  },
+  description:
+    "Qraftは面白い問題を見つけ、自分で解き、みんなの結果や解法を楽しむ問題SNSです。数学・物理・化学のオリジナル問題に挑戦できます。",
+  robots: { index: true, follow: true },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
@@ -58,14 +63,11 @@ export const viewport: Viewport = {
   themeColor: "#0b1220",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const ua = (await headers()).get("user-agent");
-  const adsensePreview = isAdsenseCrawler(ua);
-
   return (
     <html
       lang="ja"
@@ -78,14 +80,6 @@ export default async function RootLayout({
         style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
         suppressHydrationWarning
       >
-        {/* 原因だった adsense-init を削除し、SDKの読み込みのみ残しています */}
-        <Script
-          id="adsense-sdk"
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
         <noscript>
           <div
             style={{
@@ -98,31 +92,14 @@ export default async function RootLayout({
             <p style={{ fontSize: "1.5rem", fontWeight: 900, color: "#ffffff" }}>Qraft</p>
             <p style={{ marginTop: "8px", fontSize: "0.875rem", color: "#ccff00" }}>クラフト</p>
             <p style={{ marginTop: "8px", fontSize: "0.875rem", color: "#e7e9ea" }}>
-              STEM creators のためのドパミン SNS
+              ひらめきを競う問題SNS。面白い問題を見つけ、自分で解き、みんなの結果や解法を楽しめます。
             </p>
           </div>
         </noscript>
         <div id="qraft-root">
-          {adsensePreview ? (
-          <header
-            style={{
-              borderBottom: "1px solid #374151",
-              padding: "12px 16px",
-              backgroundColor: "#0b1220",
-              color: "#e7e9ea",
-            }}
-          >
-            <p style={{ fontSize: "1.125rem", fontWeight: 900, color: "#ffffff", margin: 0 }}>
-              Qraft<span style={{ marginLeft: 4, color: "#ccff00" }}>クラフト</span>
-            </p>
-            <p style={{ fontSize: 12, color: "#8b98a5", margin: "4px 0 0" }}>
-              STEM creators のためのドパミン SNS
-            </p>
-          </header>
-          ) : null}
           <AppErrorBoundary>
             <AppProvider>
-              <AppShell adsensePreview={adsensePreview}>{children}</AppShell>
+              <AppShell>{children}</AppShell>
               <AppDialogHost />
             </AppProvider>
           </AppErrorBoundary>

@@ -15,13 +15,25 @@ import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 type Mode = "login" | "signup";
 
-export function AuthScreen() {
+export function AuthScreen({ initialMode }: { initialMode?: Mode }) {
+  return (
+    <Suspense fallback={null}>
+      <AuthScreenInner initialMode={initialMode} />
+    </Suspense>
+  );
+}
+
+function AuthScreenInner({ initialMode }: { initialMode?: Mode }) {
   const { signUpWithEmail, signInWithEmail } = useApp();
-  const [mode, setMode] = useState<Mode>("login");
+  const pathname = usePathname();
+  const [mode, setMode] = useState<Mode>(
+    initialMode ?? (pathname.startsWith("/signup") ? "signup" : "login"),
+  );
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
   const [email, setEmail] = useState("");
@@ -122,6 +134,17 @@ export function AuthScreen() {
             <br />
             「わかった」を追おう。
           </p>
+          <p className="mt-4 text-sm leading-relaxed text-muted">
+            ひらめきを競う問題SNS。ログインしなくても、公開中の問題は読めます。
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm font-bold">
+            <Link href="/" className="text-sky-400">
+              公開トップ
+            </Link>
+            <Link href="/discover" className="text-sky-400">
+              Discover
+            </Link>
+          </div>
         </div>
 
         <form

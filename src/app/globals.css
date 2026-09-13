@@ -381,6 +381,22 @@ select:focus-visible {
   padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
 }
 
+.ad-slot {
+  margin: 1.75rem 1rem 2rem;
+  padding: 0.75rem 0.5rem 1rem;
+  border-top: 1px solid #1f2937;
+  border-bottom: 1px solid #1f2937;
+}
+
+.ad-slot-label {
+  margin: 0 0 0.5rem;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #8b98a5;
+  text-align: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

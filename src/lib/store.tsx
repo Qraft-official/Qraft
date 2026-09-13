@@ -538,15 +538,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setProfileHydrated(true);
         }
         const uid = data.session?.user?.id;
-        const [remote, mine] = await Promise.all([
-          loadRemoteFeed(),
-          uid ? fetchMyConfusedProblemIds(uid) : Promise.resolve([] as string[]),
-        ]);
-        if (cancelled) return;
-        setRemotePosts(remote.posts);
-        setRemoteUsers(remote.profiles);
-        if (remote.error) console.warn("Failed to load problems:", remote.error);
         if (uid) {
+          const [remote, mine] = await Promise.all([
+            loadRemoteFeed(),
+            fetchMyConfusedProblemIds(uid),
+          ]);
+          if (cancelled) return;
+          setRemotePosts(remote.posts);
+          setRemoteUsers(remote.profiles);
+          if (remote.error) console.warn("Failed to load problems:", remote.error);
           setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
         }
       } catch (err) {

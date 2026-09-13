@@ -126,7 +126,7 @@ export function fallbackUser(id: string, profile?: ProfileRow | null): User {
   return user;
 }
 
-function asNotePages(value: unknown): NotePage[] | undefined {
+export function asNotePages(value: unknown): NotePage[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const pages: NotePage[] = [];
   for (const raw of value) {

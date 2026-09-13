@@ -15,6 +15,7 @@ import { inferUserLevel } from "@/lib/difficulty";
 import { sortRecommended } from "@/lib/recommend";
 import type { FeedTab } from "@/lib/types";
 import { AD_FEED_INTERVAL, adForSlot, loadHiddenAdIds } from "@/lib/ads";
+import { PUBLIC_FEED_AD_EVERY } from "@/lib/public-catalog";
 import { PREMIUM_PRICE_JPY } from "@/lib/constants";
 import { Crown } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -201,9 +202,9 @@ export function HomeFeed() {
               post={p}
               showRepostLabel={reposts.includes(p.id) && p.authorId !== me.id}
             />
-            {tab === "foryou" && i === 2 && (
-              <GoogleAdSlot enabled={feed.length >= 3} />
-            )}
+            {tab === "foryou" &&
+              feed.length >= PUBLIC_FEED_AD_EVERY &&
+              (i + 1) % PUBLIC_FEED_AD_EVERY === 0 && <GoogleAdSlot enabled />}
             {!hasPremium && tab === "foryou" && (i + 1) % AD_FEED_INTERVAL === 0 && (
               <FeedAd
                 slot={Math.floor((i + 1) / AD_FEED_INTERVAL) - 1}

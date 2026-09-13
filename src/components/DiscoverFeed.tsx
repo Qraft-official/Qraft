@@ -21,6 +21,7 @@ import {
   type SubjectFilter,
 } from "@/lib/discover-feed";
 import { isDiscoverStatsSort } from "@/lib/problem-stats";
+import { PUBLIC_FEED_AD_EVERY } from "@/lib/public-catalog";
 import { fetchDiscoverProblems } from "@/lib/problems";
 import { useApp } from "@/lib/store";
 import type { Post, Tier, User } from "@/lib/types";
@@ -623,12 +624,15 @@ function DiscoverInner() {
           ) : (
             <>
               {listedPosts.map((p, i) => (
-                <div key={p.id} className="relative">
+                <div key={p.id} className="relative min-w-0 max-w-full overflow-x-hidden">
                   {effectiveSort === "hall" && <RankBadge rank={i + 1} />}
                   <PostCard post={p} />
+                  {listedPosts.length >= PUBLIC_FEED_AD_EVERY &&
+                  (i + 1) % PUBLIC_FEED_AD_EVERY === 0 ? (
+                    <GoogleAdSlot enabled />
+                  ) : null}
                 </div>
               ))}
-              <GoogleAdSlot enabled={listedPosts.length >= 3} />
               {statsSort && listedPosts.length < rpcTotal && (
                 <div className="px-4 py-3">
                   <button

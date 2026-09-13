@@ -1,4 +1,5 @@
 import { ProblemGate } from "@/components/ProblemGate";
+import { PublicProblemView } from "@/components/PublicProblemView";
 import { CANONICAL_ORIGIN } from "@/lib/constants";
 import { fetchPublicProblemPreview } from "@/lib/public-catalog";
 import type { Metadata } from "next";
@@ -28,5 +29,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PostPage({ params }: Props) {
   const { id } = await params;
   const preview = await fetchPublicProblemPreview(id);
-  return <ProblemGate preview={preview} />;
+  return (
+    <ProblemGate>
+      <PublicProblemView preview={preview} />
+    </ProblemGate>
+  );
 }

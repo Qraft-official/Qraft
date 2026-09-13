@@ -41,7 +41,7 @@ const FocusBgm = dynamic(
 
 function PublicChrome({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-lg bg-black text-[#e7e9ea] md:max-w-2xl lg:max-w-4xl">
+    <div className="mx-auto min-h-dvh w-full max-w-lg overflow-x-hidden bg-black text-[#e7e9ea] md:max-w-2xl lg:max-w-4xl">
       <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-gray-800 bg-black/80 px-4 py-3 backdrop-blur">
         <Link href="/" className="text-lg font-black tracking-tight">
           Qraft<span className="ml-1 text-aha">クラフト</span>

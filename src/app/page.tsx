@@ -1,6 +1,7 @@
 import { HomeGate } from "@/components/HomeGate";
+import { PublicLanding } from "@/components/PublicLanding";
 import { CANONICAL_ORIGIN } from "@/lib/constants";
-import { fetchPublicProblemPreviews } from "@/lib/public-catalog";
+import { fetchPublicProblemPreviews, PUBLIC_HOME_LIMIT } from "@/lib/public-catalog";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,10 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const problems = await fetchPublicProblemPreviews(8);
-  return <HomeGate problems={problems} />;
+  const problems = await fetchPublicProblemPreviews(PUBLIC_HOME_LIMIT);
+  return (
+    <HomeGate>
+      <PublicLanding problems={problems} />
+    </HomeGate>
+  );
 }

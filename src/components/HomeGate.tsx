@@ -1,12 +1,11 @@
 "use client";
 
 import { HomeFeed } from "@/components/HomeFeed";
-import { PublicLanding } from "@/components/PublicLanding";
-import type { PublicProblemPreview } from "@/lib/public-catalog";
 import { useApp } from "@/lib/store";
+import type { ReactNode } from "react";
 
-export function HomeGate({ problems }: { problems: PublicProblemPreview[] }) {
-  const { authenticated } = useApp();
-  if (!authenticated) return <PublicLanding problems={problems} />;
-  return <HomeFeed />;
+export function HomeGate({ children }: { children: ReactNode }) {
+  const { authenticated, ready } = useApp();
+  if (authenticated && ready) return <HomeFeed />;
+  return children;
 }

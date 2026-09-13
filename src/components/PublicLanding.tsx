@@ -1,17 +1,10 @@
-"use client";
-
-import { GoogleAdSlot } from "@/components/GoogleAdSlot";
-import { PublicProblemCard } from "@/components/PublicProblemCard";
+import { PublicProblemFeed } from "@/components/PublicProblemFeed";
 import type { PublicProblemPreview } from "@/lib/public-catalog";
-import { publicProblemHasBody } from "@/lib/public-catalog";
 import Link from "next/link";
 
 export function PublicLanding({ problems }: { problems: PublicProblemPreview[] }) {
-  const examples = problems.filter(publicProblemHasBody).slice(0, 6);
-  const adsOk = examples.length >= 1;
-
   return (
-    <main className="pb-10">
+    <main className="min-w-0 max-w-full overflow-x-hidden pb-10">
       <section className="border-b border-gray-800 px-4 py-8">
         <p className="text-sm font-bold tracking-wide text-aha">Qraft（クラフト）</p>
         <h1 className="mt-2 text-3xl font-black leading-tight text-white">
@@ -25,7 +18,7 @@ export function PublicLanding({ problems }: { problems: PublicProblemPreview[] }
       <section className="border-b border-gray-800 px-4 py-6">
         <h2 className="text-lg font-black">Qraftとは</h2>
         <p className="mt-3 text-sm leading-relaxed text-[#c5cdd6]">
-          出題者がオリジナル問題を投稿し、解答者が制限なく、あるいはChallengerやAha!、毎日21時のPULSEといったモードで挑みます。解けたら結果が見え、他の人の解法を読んで「そういう手があったか」と楽しめます。
+          出題者がオリジナル問題を投稿し、解答者が教えてQrafter!、Challenger、Aha!、毎日21時のPULSEといったモードで挑みます。解けたら結果が見え、他の人の解法を読んで「そういう手があったか」と楽しめます。
         </p>
       </section>
 
@@ -56,7 +49,7 @@ export function PublicLanding({ problems }: { problems: PublicProblemPreview[] }
           <li>問題と解法がタイムラインの単位になること</li>
           <li>打ち込みと手書きの両方で数式を残せること</li>
           <li>教えてQrafter! / Challenger / Aha! と、毎日21時のPULSEという勝負の時間があること</li>
-          <li>答えや解説は spoiler として扱い、見るタイミングを自分で選べること</li>
+          <li>答えや解説は見るタイミングを自分で選べること</li>
         </ul>
       </section>
 
@@ -68,21 +61,17 @@ export function PublicLanding({ problems }: { problems: PublicProblemPreview[] }
           </Link>
         </div>
         <p className="mt-2 text-sm text-muted">
-          未ログインのまま、問題文・教科・難易度・モードを読めます。PULSEは公開時刻を過ぎたものだけが表示されます。
+          未ログインのまま、問題文・教科・難易度・モードを読めます。公開前のPULSEは表示しません。
         </p>
       </section>
 
-      {examples.length === 0 ? (
+      {problems.length === 0 ? (
         <p className="px-4 py-8 text-sm text-muted">
           いま表示できる公開問題がありません。ログインすると、権限のある問題を閲覧できます。
         </p>
       ) : (
-        examples.map((preview) => (
-          <PublicProblemCard key={preview.id} preview={preview} href={`/p/${preview.id}`} compact />
-        ))
+        <PublicProblemFeed problems={problems} compact />
       )}
-
-      <GoogleAdSlot enabled={adsOk} />
 
       <section className="px-4 py-8">
         <p className="text-sm leading-relaxed text-[#c5cdd6]">

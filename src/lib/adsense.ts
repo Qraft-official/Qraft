@@ -19,7 +19,8 @@ export function shouldInsertInFeedAd(index: number, totalPosts: number, every = 
 
 export function isGoogleInFeedPath(pathname: string | null | undefined) {
   if (!pathname) return false;
-  return pathname === "/" || pathname === "/discover" || pathname.startsWith("/discover?");
+  if (pathname === "/" || pathname === "/discover") return true;
+  return /^\/p\/[^/]+$/.test(pathname);
 }
 
 /** Google AdSense site preview loads the site in an iframe from these origins. */
@@ -39,13 +40,6 @@ export const ADSENSE_FRAME_ANCESTORS = [
 ].join(" ");
 
 export const ADSENSE_FRAME_ANCESTORS_CSP = `frame-ancestors ${ADSENSE_FRAME_ANCESTORS}`;
-
-export function isAdsenseCrawler(userAgent: string | null | undefined) {
-  if (!userAgent) return false;
-  return /Mediapartners-Google|AdsBot-Google|Google-Adsense|Googlebot|APIs-Google|FeedFetcher-Google/i.test(
-    userAgent,
-  );
-}
 
 export function adsenseScriptSrc(clientId: string) {
   return `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(clientId)}`;

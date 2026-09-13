@@ -35,7 +35,13 @@ function pushAd(ins: HTMLModElement) {
   }
 }
 
-export function GoogleAdSlot({ enabled }: { enabled: boolean }) {
+export function GoogleAdSlot({
+  enabled,
+  label = "広告",
+}: {
+  enabled: boolean;
+  label?: string;
+}) {
   const pathname = usePathname();
   const insRef = useRef<HTMLModElement>(null);
   const allowed =
@@ -55,8 +61,8 @@ export function GoogleAdSlot({ enabled }: { enabled: boolean }) {
   if (!allowed) return null;
 
   return (
-    <aside className="ad-slot" aria-label="広告">
-      <p className="ad-slot-label">広告</p>
+    <aside className="ad-slot" aria-label={label}>
+      <p className="ad-slot-label">{label}</p>
       <Script
         id="adsense-sdk"
         src={adsenseScriptSrc(ADSENSE_CLIENT_ID)}

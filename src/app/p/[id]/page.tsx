@@ -1,60 +1,37 @@
-"use client";
+import { ProblemGate } from "@/components/ProblemGate";
+import { PublicProblemView } from "@/components/PublicProblemView";
+import { CANONICAL_ORIGIN } from "@/lib/constants";
+import { fetchPublicProblemPreview } from "@/lib/public-catalog";
+import type { Metadata } from "next";
 
-import { PostCard } from "@/components/PostCard";
-import { ProblemSolveStats } from "@/components/ProblemSolveStats";
-import { useApp } from "@/lib/store";
-import { ArrowLeft } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+type Props = { params: Promise<{ id: string }> };
 
-export default function PostPage() {
-  const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const { getPost, repliesTo } = useApp();
-  const post = getPost(id);
+export const dynamic = "force-dynamic";
 
-  if (!post) {
-    return (
-      <div className="p-6">
-        <button onClick={() => router.back()}>戻る</button>
-        <p className="mt-4 text-muted">ポストが見つかりません。</p>
-      </div>
-    );
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const preview = await fetchPublicProblemPreview(id);
+  if (!preview) {
+    return {
+      title: "問題 | Qraft",
+      robots: { index: false, follow: true },
+    };
   }
+  const description = (preview.body || preview.title || "Qraftの公開問題").slice(0, 160);
+  return {
+    title: `${preview.title || "問題"} | Qraft`,
+    description,
+    alternates: { canonical: `${CANONICAL_ORIGIN}/p/${preview.id}` },
+    robots: { index: true, follow: true },
+  };
+}
 
-  const thread = repliesTo(post.id);
-  const sols = thread.filter((p) => p.kind === "solution");
-  const replies = thread.filter((p) => p.kind === "reply");
-
+export default async function PostPage({ params }: Props) {
+  const { id } = await params;
+  const preview = await fetchPublicProblemPreview(id);
   return (
-    <div>
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-gray-800 bg-black/80 px-3 py-3 backdrop-blur">
-        <button onClick={() => router.back()}>
-          <ArrowLeft size={20} />
-        </button>
-        <p className="font-bold">ポスト</p>
-      </header>
-      <PostCard post={post} />
-      {(post.kind === "problem") && (
-        <div className="border-b border-gray-800 px-4 pb-4">
-          <ProblemSolveStats post={post} detail />
-        </div>
-      )}
-      {sols.length > 0 && (
-        <p className="border-b border-gray-800 px-4 py-2 text-xs font-bold text-muted">
-          引用解法
-        </p>
-      )}
-      {sols.map((p) => (
-        <PostCard key={p.id} post={p} />
-      ))}
-      {replies.length > 0 && (
-        <p className="border-b border-gray-800 px-4 py-2 text-xs font-bold text-muted">
-          リプライ
-        </p>
-      )}
-      {replies.map((p) => (
-        <PostCard key={p.id} post={p} />
-      ))}
-    </div>
+    <ProblemGate>
+      <PublicProblemView preview={preview} />
+    </ProblemGate>
   );
 }

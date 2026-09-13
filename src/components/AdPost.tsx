@@ -1,5 +1,7 @@
 "use client";
 
+/** House (Qraft) in-feed promo card. Not a Google AdSense unit. */
+
 import {
   AD_ACCOUNT_HANDLE,
   AD_ACCOUNT_NAME,

@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from "./constants";
 
 export const AD_ACCOUNT_HANDLE = "advertisement";
 export const AD_ACCOUNT_NAME = "広告";
-/** Insert an in-feed ad after every N timeline posts (6th, 12th, 18th, …). */
+/** Insert a house AdPost after every N timeline posts. Home now uses Google in-feed instead. */
 export const AD_FEED_INTERVAL = 6;
 
 export type InFeedAd = {

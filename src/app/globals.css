@@ -381,6 +381,31 @@ select:focus-visible {
   padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
 }
 
+.ad-slot {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0.5rem 1rem 0.75rem;
+  border-bottom: 1px solid #1f2937;
+}
+
+.ad-slot-label {
+  margin: 0 0 0.35rem;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #8b98a5;
+}
+
+.ad-slot .adsbygoogle {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

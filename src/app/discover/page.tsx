@@ -1,5 +1,6 @@
 "use client";
 
+import { GoogleAdSlot } from "@/components/GoogleAdSlot";
 import { PostCard } from "@/components/PostCard";
 import { UserAvatar } from "@/components/UserAvatar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -19,6 +20,7 @@ import {
   type ModeFilter,
   type SubjectFilter,
 } from "@/lib/discover-feed";
+import { ADSENSE_INFEED_EVERY, shouldInsertInFeedAd } from "@/lib/adsense";
 import { isDiscoverStatsSort } from "@/lib/problem-stats";
 import { fetchDiscoverProblems } from "@/lib/problems";
 import { useApp } from "@/lib/store";
@@ -622,9 +624,12 @@ function DiscoverInner() {
           ) : (
             <>
               {listedPosts.map((p, i) => (
-                <div key={p.id} className="relative">
+                <div key={p.id} className="relative min-w-0 max-w-full overflow-x-hidden">
                   {effectiveSort === "hall" && <RankBadge rank={i + 1} />}
                   <PostCard post={p} />
+                  {shouldInsertInFeedAd(i, listedPosts.length, ADSENSE_INFEED_EVERY) ? (
+                    <GoogleAdSlot enabled />
+                  ) : null}
                 </div>
               ))}
               {statsSort && listedPosts.length < rpcTotal && (

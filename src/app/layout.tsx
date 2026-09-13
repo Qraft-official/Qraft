@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Sans_JP } from "next/font/google";
 import { headers } from "next/headers";
-import Script from "next/script";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AppDialogHost } from "@/components/AppDialogHost";
 import { AppProvider } from "@/lib/store";
@@ -78,14 +77,6 @@ export default async function RootLayout({
         style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
         suppressHydrationWarning
       >
-        {/* 原因だった adsense-init を削除し、SDKの読み込みのみ残しています */}
-        <Script
-          id="adsense-sdk"
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3606701928621609"
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
         <noscript>
           <div
             style={{

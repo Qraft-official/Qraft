@@ -2,6 +2,7 @@
 
 import { PostCard } from "@/components/PostCard";
 import { PULSE_BLURB, PULSE_NAME } from "@/lib/constants";
+import { playCorrectFeedback, unlockCorrectFeedback } from "@/lib/correct-feedback";
 import { referralFetch } from "@/lib/referral-client";
 import { formatTimer, remainingMs } from "@/lib/sprint";
 import { useApp } from "@/lib/store";
@@ -211,6 +212,7 @@ export default function SprintPage() {
           disabled={gradeBusy || !answer.trim()}
           onClick={() => {
             if (gradeBusy) return;
+            unlockCorrectFeedback();
             setGradeBusy(true);
             void referralFetch("/api/sprint/grade", {
               method: "POST",
@@ -222,6 +224,7 @@ export default function SprintPage() {
                 return;
               }
               const grade = String((res.data as { grade?: string }).grade ?? "");
+              if (grade === "correct") playCorrectFeedback();
               setGradeLabel(
                 grade === "correct" ? "正解" : grade === "maybe_correct" ? "ほぼ正解（要確認）" : "不正解",
               );

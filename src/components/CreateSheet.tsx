@@ -19,6 +19,7 @@ import {
   type ComposerDraft,
 } from "@/lib/composer-draft";
 import { sanitizeHints } from "@/lib/learn";
+import { unlockCorrectFeedback } from "@/lib/correct-feedback";
 import { useApp } from "@/lib/store";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type { CanvasPage, ProblemMode, Subject, Tier } from "@/lib/types";
@@ -1144,6 +1145,7 @@ export function CreateSheet() {
                     }
                     onClick={() => {
                       if (!quotePostId || postingRef.current) return;
+                      if (quotingChallenge) unlockCorrectFeedback();
                       postingRef.current = true;
                       void (async () => {
                         setPosting(true);

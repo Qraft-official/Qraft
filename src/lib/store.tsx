@@ -29,6 +29,7 @@ import { handleValidationError, sanitizeHandleInput } from "./handle";
 import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
 import { getDeviceIdentity, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
+import { playCorrectFeedback } from "./correct-feedback";
 import { referralFetch } from "./referral-client";
 import {
   isVerifiedCreator,
@@ -1250,6 +1251,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (res.error) return { error: res.error };
         if (res.data && res.data.graded === true) {
           challengeGrade = res.data.correct === true ? "correct" : "incorrect";
+          if (challengeGrade === "correct") playCorrectFeedback();
         }
       }
       const hydrated = await persistHandwritingPages(authorId, input.pages, input.drawingBlobs);

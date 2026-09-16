@@ -103,6 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isAuthCallback = path.startsWith("/auth/callback");
   const isLegal = path === "/terms" || path === "/privacy";
   const isInvite = path.startsWith("/i/");
+  const isDevPreview = process.env.NODE_ENV !== "production" && path.startsWith("/dev/");
   const publicBrowse = isPublicBrowsePath(path);
 
   useEffect(() => {
@@ -140,7 +141,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </Suspense>
   );
 
-  if (isAuthCallback || isLegal || isInvite) {
+  if (isAuthCallback || isLegal || isInvite || isDevPreview) {
     return (
       <>
         {capture}

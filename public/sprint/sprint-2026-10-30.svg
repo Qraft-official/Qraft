@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 400" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img">
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <polygon points="220,42 220,132 368,148 268,168 312,330 248,230 118,318 178,226 62,132 162,164" fill="none" stroke="#222222" stroke-width="2.3" stroke-linejoin="round"/>
+<circle cx="220" cy="42" r="3" fill="#222222"/><circle cx="368" cy="148" r="3" fill="#222222"/><circle cx="312" cy="330" r="3" fill="#222222"/><circle cx="118" cy="318" r="3" fill="#222222"/><circle cx="62" cy="132" r="3" fill="#222222"/>
+<text x="220" y="28" fill="#222222" font-size="17" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">40°</text><text x="348" y="168" fill="#222222" font-size="17" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">35°</text><text x="330" y="352" fill="#222222" font-size="17" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">50°</text><text x="90" y="348" fill="#222222" font-size="17" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">25°</text><text x="40" y="118" fill="#222222" font-size="17" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">?</text>
+<text x="220" y="382" fill="#555555" font-size="13" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="middle">（図の角の見かけの大きさは、数値どおりではない）</text>
+</svg>

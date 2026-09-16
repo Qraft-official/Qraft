@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "seed:launch": "npx tsx scripts/seed-launch-content.ts",
+    "seed:sprint-sep-2026": "npx tsx scripts/seed-sprint-september-2026.ts",
     "test:stats": "npx tsx scripts/verify-problem-stats.ts",
     "test:profile-rls": "npx tsx scripts/verify-profile-signup-rls.ts",
     "lint": "eslint"

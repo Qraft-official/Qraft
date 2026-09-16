@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 400" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img">
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <polygon points="150,330 340,330 309.6,142 246.3,142" fill="#F6E59B" stroke="none" stroke-width="2.2" stroke-linejoin="round"/>
+<polygon points="340,330 438.8,276.8 342.5,124.3 309.6,142" fill="#F6E59B" stroke="none" stroke-width="2.2" stroke-linejoin="round"/>
+<polygon points="150,330 248.8,276.8 279.2,124.3 246.3,142" fill="#F6E59B" stroke="none" stroke-width="2.2" stroke-linejoin="round"/>
+<line x1="248.8" y1="276.8" x2="438.8" y2="276.8" stroke="#666666" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="7 6"/>
+<line x1="294.4" y1="48" x2="438.8" y2="276.8" stroke="#666666" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="7 6"/>
+<line x1="150" y1="330" x2="340" y2="330" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="340" y1="330" x2="438.8" y2="276.8" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="150" y1="330" x2="248.8" y2="276.8" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="294.4" y1="48" x2="150" y2="330" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="294.4" y1="48" x2="340" y2="330" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="294.4" y1="48" x2="248.8" y2="276.8" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<polygon points="246.3,142 309.6,142 342.5,124.3 279.2,124.3" fill="none" stroke="#8A6A12" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="294.4" cy="48" r="3.2" fill="#222222"/><circle cx="150" cy="330" r="3.2" fill="#222222"/><circle cx="340" cy="330" r="3.2" fill="#222222"/><circle cx="438.8" cy="276.8" r="3.2" fill="#222222"/><circle cx="248.8" cy="276.8" r="3.2" fill="#222222"/><circle cx="246.3" cy="142" r="3.2" fill="#222222"/>
+<text x="294.4" y="38" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">O</text>
+<text x="134" y="350" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">A</text>
+<text x="356" y="350" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">B</text>
+<text x="434.8" y="298.8" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">C</text>
+<text x="230.8" y="284.8" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">D</text>
+<text x="228.3" y="146" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">P</text>
+<text x="152.2" y="189" fill="#555555" font-size="14" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="end">OP:PA = 1:2</text>
+<text x="260" y="372" fill="#555555" font-size="15" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="middle">底面の1辺 12cm　高さ 18cm</text>
+<text x="260" y="390" fill="#555555" font-size="13" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="middle">（図は見取り図であり、縮尺どおりではない）</text>
+</svg>

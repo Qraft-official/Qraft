@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
           "/auth/",
           "/welcome-mission",
           "/sprint",
+          "/dev/",
           "/series",
           "/u/",
           "/api/",

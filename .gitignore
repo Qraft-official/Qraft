@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# PULSE secret banks (answers / explanations / hints). Never commit.
+.local/
+data/sprint/*.json
+data/sprint/private/
+**/qraft_21_questions*.json
+
 # vercel
 .vercel
 

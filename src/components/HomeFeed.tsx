@@ -133,7 +133,7 @@ export function HomeFeed() {
       {tab === "foryou" && <RevengeBanner />}
 
       {hasPremium && tab === "foryou" && (
-        <p className="px-4 py-1.5 text-xs text-amber-200/80">Premium限定イベント · 先行デイリーチャレンジ開催中</p>
+        <p className="px-4 py-1.5 text-xs text-amber-200/80">Premium限定イベント · デイリーチャレンジ開催中</p>
       )}
 
       {tab === "sprint" && (

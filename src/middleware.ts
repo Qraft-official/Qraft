@@ -4,6 +4,12 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export function middleware(request: NextRequest) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    request.nextUrl.pathname.startsWith("/dev/")
+  ) {
+    return new NextResponse(null, { status: 404 });
+  }
   const res = NextResponse.next();
   res.headers.delete("X-Frame-Options");
   res.headers.delete("x-frame-options");

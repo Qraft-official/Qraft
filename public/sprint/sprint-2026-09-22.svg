@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 400" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img">
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <polygon points="80,70 340,70 340,330 80,330" fill="none" stroke="#222222" stroke-width="2.4" stroke-linejoin="round"/>
+<line x1="175" y1="230" x2="80" y2="70" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="175" y1="230" x2="340" y2="70" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="175" y1="230" x2="340" y2="330" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="175" y1="230" x2="80" y2="330" stroke="#222222" stroke-width="2.2" stroke-linecap="round"/>
+<circle cx="80" cy="70" r="3.6" fill="#222222"/><circle cx="340" cy="70" r="3.6" fill="#222222"/><circle cx="340" cy="330" r="3.6" fill="#222222"/><circle cx="80" cy="330" r="3.6" fill="#222222"/><circle cx="175" cy="230" r="3.6" fill="#222222"/>
+<text x="64" y="64" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">A</text>
+<text x="356" y="64" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">B</text>
+<text x="356" y="350" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">C</text>
+<text x="64" y="350" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">D</text>
+<text x="161" y="236" fill="#222222" font-size="18" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="700" text-anchor="middle">P</text>
+<text x="192.5" y="150" fill="#555555" font-size="14" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="middle">18cm²</text>
+<text x="265.5" y="215" fill="#555555" font-size="14" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="middle">22cm²</text>
+<text x="192.5" y="280" fill="#555555" font-size="14" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="middle">32cm²</text>
+<text x="210" y="362" fill="#555555" font-size="15" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="middle">1辺 10cm</text>
+<text x="210" y="380" fill="#555555" font-size="13" font-family="ui-sans-serif, system-ui, 'Noto Sans JP', sans-serif" font-weight="600" text-anchor="middle">（図は縮尺どおりではない）</text>
+</svg>

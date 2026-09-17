@@ -17,6 +17,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X, ChevronDown } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
+import { modeStoresAnswer } from "@/lib/challenge";
+import { AuthorAnswerFields } from "./AnswerFields";
 import { ComposerModeTabs } from "./ComposerModeTabs";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { ComposerExpandOverlay } from "./NotebookExpandControls";
@@ -71,6 +73,7 @@ export function EditProblemModal({
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<ProblemMode>("question");
   const [correctAnswer, setCorrectAnswer] = useState("");
+  const [answerUnit, setAnswerUnit] = useState("");
   const [hints, setHints] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -92,6 +95,7 @@ export function EditProblemModal({
     setTitle(post.title ?? "");
     setMode(post.problemMode ?? "question");
     setCorrectAnswer(post.correctAnswer ?? "");
+    setAnswerUnit(post.answerUnit ?? "");
     setHints(post.hints ?? []);
     setError("");
     setSaving(false);
@@ -183,7 +187,9 @@ export function EditProblemModal({
         typedPages.some((p, i) => p.latex !== (origTyped[i] ?? ""));
       const titleDirty = title.trim() !== (post.title ?? "").trim();
       const modeDirty = mode !== (post.problemMode ?? "question");
-      const answerDirty = correctAnswer !== (post.correctAnswer ?? "");
+      const answerDirty =
+        correctAnswer !== (post.correctAnswer ?? "") ||
+        (answerUnit.trim() !== (post.answerUnit ?? "").trim());
       const hintsDirty = (hints.join("\n") !== (post.hints ?? []).join("\n"));
       const inkDirty = pages.some(
         (p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0,
@@ -243,6 +249,7 @@ export function EditProblemModal({
         text: wrapMathliveLatex(joined) || title.trim(),
         mode,
         correctAnswer: mode === "challenge" || mode === "aha" ? correctAnswer : null,
+        answerUnit: mode === "challenge" || mode === "aha" ? answerUnit : null,
         format: "typed",
         hints,
         pages: typedPages.map((p, i) => ({
@@ -282,6 +289,7 @@ export function EditProblemModal({
       text: title.trim() || "手書きの問題",
       mode,
       correctAnswer: mode === "challenge" || mode === "aha" ? correctAnswer : null,
+      answerUnit: mode === "challenge" || mode === "aha" ? answerUnit : null,
       format: "handwriting",
       hints,
       drawingBlobs: packed.drawingBlobs,
@@ -356,18 +364,18 @@ export function EditProblemModal({
                   onChange={setMode}
                   correctAnswer={correctAnswer}
                   onCorrectAnswer={setCorrectAnswer}
+                  showAnswer={false}
                 />
-                {mode === "aha" && (
+                {modeStoresAnswer(mode) && (
                   <div className="border-b border-gray-800 px-3 py-2 md:px-4">
-                    <label className="text-xs font-bold text-muted" htmlFor="edit-aha-answer">
-                      答え
-                    </label>
-                    <input
-                      id="edit-aha-answer"
-                      value={correctAnswer}
-                      onChange={(e) => setCorrectAnswer(e.target.value)}
-                      placeholder="答え（必須）"
-                      className="mt-0.5 w-full border-0 bg-transparent py-2 text-sm outline-none"
+                    <AuthorAnswerFields
+                      answerId="edit-aha-answer"
+                      unitId="edit-aha-unit"
+                      answer={correctAnswer}
+                      unit={answerUnit}
+                      onAnswer={setCorrectAnswer}
+                      onUnit={setAnswerUnit}
+                      answerLabel={mode === "challenge" ? "正解" : "答え"}
                     />
                   </div>
                 )}

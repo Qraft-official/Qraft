@@ -81,6 +81,8 @@ export type Post = {
   /** Author-only. Never sent to other clients from fetch. */
   correctAnswer?: string;
   solverAnswer?: string;
+  /** Public display unit. Not a secret. */
+  answerUnit?: string;
   /** 1–5. Author-selected difficulty. */
   difficultyLevel?: number;
   hints?: string[];

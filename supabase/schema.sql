@@ -30,7 +30,9 @@ create table if not exists public.problems (
   created_at timestamptz not null default now(),
   mode text not null default 'question'
     check (mode in ('question', 'challenge', 'aha')),
-  correct_answer text
+  correct_answer text,
+  answer_unit text
+    check (answer_unit is null or char_length(btrim(answer_unit)) <= 12)
 );
 
 create index if not exists problems_created_at_idx
@@ -436,7 +438,14 @@ alter table public.referral_claims
 -- Challenge / 教えて！Qraft modes (also applied remotely)
 alter table public.problems
   add column if not exists mode text not null default 'question',
-  add column if not exists correct_answer text;
+  add column if not exists correct_answer text,
+  add column if not exists answer_unit text;
+
+alter table public.problems
+  drop constraint if exists problems_answer_unit_len;
+alter table public.problems
+  add constraint problems_answer_unit_len
+  check (answer_unit is null or char_length(btrim(answer_unit)) <= 12);
 
 alter table public.problems drop constraint if exists problems_mode_check;
 alter table public.problems

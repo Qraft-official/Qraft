@@ -19,6 +19,7 @@ import {
   type ComposerDraft,
 } from "@/lib/composer-draft";
 import { sanitizeHints } from "@/lib/learn";
+import { modeStoresAnswer } from "@/lib/challenge";
 import { unlockCorrectFeedback } from "@/lib/correct-feedback";
 import { useApp } from "@/lib/store";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
@@ -28,6 +29,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Keyboard, PenLine, Sparkles, X, ChevronDown } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
+import { AuthorAnswerFields, SolverAnswerField } from "@/components/AnswerFields";
 import { ComposerModeTabs } from "./ComposerModeTabs";
 import { ComposerProblemWizardHeader } from "./ComposerProblemWizardHeader";
 import { HintEditor } from "./HintEditor";
@@ -81,6 +83,7 @@ export function CreateSheet() {
   const [postMode, setPostMode] = useState<ProblemMode>("question");
   const [difficultyLevel, setDifficultyLevel] = useState<Tier>(3);
   const [correctAnswer, setCorrectAnswer] = useState("");
+  const [answerUnit, setAnswerUnit] = useState("");
   const [solverAnswer, setSolverAnswer] = useState("");
   const [hints, setHints] = useState<string[]>([]);
   const [pulseToast, setPulseToast] = useState("");
@@ -97,7 +100,12 @@ export function CreateSheet() {
   problemStepRef.current = problemStep;
   const closingRef = useRef(false);
   const quotePost = quotePostId ? getPost(quotePostId) : undefined;
-  const quotingChallenge = openSolution && quotePost?.problemMode === "challenge";
+  const quotingGradable =
+    openSolution &&
+    !!quotePost &&
+    quotePost.kind !== "sprint" &&
+    !quotePost.isSprint &&
+    modeStoresAnswer(quotePost.problemMode ?? "question");
 
   useBodyScrollLock(open);
 
@@ -211,6 +219,7 @@ export function CreateSheet() {
       setTypedIndex(0);
       setPostMode("question");
       setCorrectAnswer("");
+      setAnswerUnit("");
       setHints([]);
       setProblemStep(1);
       setStepHint("");
@@ -250,6 +259,7 @@ export function CreateSheet() {
     setPostMode(d.postMode);
     setDifficultyLevel(d.difficultyLevel);
     setCorrectAnswer(d.correctAnswer);
+    setAnswerUnit(d.answerUnit ?? "");
     setHints(sanitizeHints(d.hints));
     setInputMode(d.inputMode);
     setTypedPages(d.typedPages.length ? d.typedPages : [{ id: "t-1", latex: "" }]);
@@ -278,6 +288,7 @@ export function CreateSheet() {
         postMode,
         difficultyLevel,
         correctAnswer,
+        answerUnit,
         solutionDraft,
         hints,
         inputMode,
@@ -307,6 +318,7 @@ export function CreateSheet() {
     postMode,
     difficultyLevel,
     correctAnswer,
+    answerUnit,
     solutionDraft,
     hints,
     inputMode,
@@ -347,7 +359,7 @@ export function CreateSheet() {
   };
 
   const isDirty = () => {
-    if (title.trim() || text.trim() || solutionDraft.trim() || photo || aiPrompt.trim() || correctAnswer.trim() || solverAnswer.trim()) {
+    if (title.trim() || text.trim() || solutionDraft.trim() || photo || aiPrompt.trim() || correctAnswer.trim() || answerUnit.trim() || solverAnswer.trim()) {
       return true;
     }
     if (hints.some((h) => h.trim())) return true;
@@ -376,6 +388,7 @@ export function CreateSheet() {
       postMode,
       difficultyLevel,
       correctAnswer,
+      answerUnit,
       solutionDraft,
       hints,
       inputMode,
@@ -614,11 +627,15 @@ export function CreateSheet() {
     void (async () => {
       setPosting(true);
       setPostError("");
-      if ((isSprintProblem || postMode === "aha") && !correctAnswer.trim()) {
+      if ((isSprintProblem || postMode === "aha" || postMode === "challenge") && !correctAnswer.trim()) {
         postingRef.current = false;
         setPosting(false);
-        setPostError("答えを入力してください");
-        setStepHint("答えを入力してください");
+        const msg =
+          !isSprintProblem && postMode === "challenge"
+            ? "Challenger モードでは正解の入力が必須です"
+            : "答えを入力してください";
+        setPostError(msg);
+        setStepHint(msg);
         setProblemStep(3);
         return;
       }
@@ -646,6 +663,8 @@ export function CreateSheet() {
           mode: isSprintProblem ? "aha" : postMode,
           correctAnswer:
             isSprintProblem || postMode === "aha" || postMode === "challenge" ? correctAnswer : null,
+          answerUnit:
+            !isSprintProblem && (postMode === "aha" || postMode === "challenge") ? answerUnit : null,
           difficultyLevel,
           pages: typedPages.map((p, i) => ({
             id: p.id,
@@ -684,19 +703,13 @@ export function CreateSheet() {
           mode: isSprintProblem ? "aha" : postMode,
           correctAnswer:
             isSprintProblem || postMode === "aha" || postMode === "challenge" ? correctAnswer : null,
+          answerUnit:
+            !isSprintProblem && (postMode === "aha" || postMode === "challenge") ? answerUnit : null,
           difficultyLevel,
           drawingBlobs: packed?.drawingBlobs ?? [],
           pages: packed?.pages ?? [],
           hints: sanitizeHints(hints),
         };
-      }
-      if (!isSprintProblem && postMode === "challenge" && !correctAnswer.trim()) {
-        postingRef.current = false;
-        setPosting(false);
-        setPostError("Challenger モードでは正解の入力が必須です");
-        setStepHint("Challenger モードでは正解の入力が必須です");
-        setProblemStep(3);
-        return;
       }
       try {
         const res = await addProblem(payload);
@@ -930,28 +943,37 @@ export function CreateSheet() {
                         placeholder="タイトル（任意）"
                         className="w-full border-0 border-b border-gray-800 bg-transparent py-2 text-base font-semibold outline-none placeholder:text-muted"
                       />
-                      {(postMode === "aha" || postMode === "challenge" || isSprintProblem) && (
+                      {isSprintProblem && (
                         <div>
-                          <label className="text-xs font-bold text-muted" htmlFor="composer-aha-answer">
-                            {postMode === "challenge" && !isSprintProblem ? "正解" : "答え"}
+                          <label className="text-xs font-bold text-muted" htmlFor="composer-pulse-answer">
+                            答え
                           </label>
                           <input
-                            id="composer-aha-answer"
+                            id="composer-pulse-answer"
                             value={correctAnswer}
                             onChange={(e) => {
                               setCorrectAnswer(e.target.value);
-                              if (stepHint.includes("答え") || stepHint.includes("正解")) setStepHint("");
-                              if (postError.includes("答え") || postError.includes("正解")) setPostError("");
+                              if (stepHint.includes("答え")) setStepHint("");
                             }}
-                            placeholder={
-                              postMode === "challenge" && !isSprintProblem ? "正解（必須）" : "答え（必須）"
-                            }
-                            className="mt-0.5 w-full border-0 border-b border-gray-800 bg-transparent py-2 text-sm outline-none"
+                            placeholder="答え（必須）"
+                            className="mt-0.5 min-h-11 w-full border-0 border-b border-gray-800 bg-transparent py-2 text-sm outline-none"
                           />
-                          {postMode === "challenge" && !isSprintProblem ? (
-                            <p className="mt-0.5 text-xs text-muted">※単位は書かなくていいです</p>
-                          ) : null}
                         </div>
+                      )}
+                      {(postMode === "aha" || postMode === "challenge") && !isSprintProblem && (
+                        <AuthorAnswerFields
+                          answerId="composer-aha-answer"
+                          unitId="composer-aha-unit"
+                          answer={correctAnswer}
+                          unit={answerUnit}
+                          onAnswer={(v) => {
+                            setCorrectAnswer(v);
+                            if (stepHint.includes("答え") || stepHint.includes("正解")) setStepHint("");
+                            if (postError.includes("答え") || postError.includes("正解")) setPostError("");
+                          }}
+                          onUnit={setAnswerUnit}
+                          answerLabel={postMode === "challenge" ? "正解" : "答え"}
+                        />
                       )}
                       <textarea
                         value={solutionDraft}
@@ -1124,15 +1146,17 @@ export function CreateSheet() {
                 </div>
                 <div id={COMPOSER_KB_DOCK_ID} className="shrink-0" />
                 <div className="composer-footer flex flex-col items-stretch gap-2 border-t border-gray-800 px-4 py-2">
-                  {quotingChallenge && (
+                  {quotingGradable && (
                     <div>
-                      <input
+                      <label className="text-xs font-bold text-muted" htmlFor="composer-solver-answer">
+                        答え
+                      </label>
+                      <SolverAnswerField
+                        id="composer-solver-answer"
                         value={solverAnswer}
-                        onChange={(e) => setSolverAnswer(e.target.value)}
-                        placeholder="あなたの答え"
-                        className="w-full border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
+                        onChange={setSolverAnswer}
+                        unit={quotePost?.answerUnit}
                       />
-                      <p className="mt-1 text-xs text-muted">※単位は書かなくていいです</p>
                     </div>
                   )}
                   <div className="flex items-center justify-end gap-3">
@@ -1141,11 +1165,11 @@ export function CreateSheet() {
                     disabled={
                       posting ||
                       (inputMode === "typed" && !typedPages.some((p) => p.latex.trim())) ||
-                      (quotingChallenge && !solverAnswer.trim())
+                      (quotingGradable && !solverAnswer.trim())
                     }
                     onClick={() => {
                       if (!quotePostId || postingRef.current) return;
-                      if (quotingChallenge) unlockCorrectFeedback();
+                      if (quotingGradable) unlockCorrectFeedback();
                       postingRef.current = true;
                       void (async () => {
                         setPosting(true);
@@ -1168,7 +1192,7 @@ export function CreateSheet() {
                             problemId: quotePostId,
                             solutionFormat: "typed",
                             photo,
-                            solverAnswer: quotingChallenge ? solverAnswer : undefined,
+                            solverAnswer: quotingGradable ? solverAnswer : undefined,
                           });
                         } else {
                           const captured = await captureHandwriting();
@@ -1193,7 +1217,7 @@ export function CreateSheet() {
                             problemId: quotePostId,
                             solutionFormat: "handwriting",
                             photo,
-                            solverAnswer: quotingChallenge ? solverAnswer : undefined,
+                            solverAnswer: quotingGradable ? solverAnswer : undefined,
                           });
                         }
                         postingRef.current = false;

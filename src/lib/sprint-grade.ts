@@ -1,3 +1,5 @@
+import { parseLooseNumber, numbersClose } from "./answer-normalize";
+
 export const SPRINT_ANSWER_TYPES = ["number", "expression", "text", "choice", "multiple"] as const;
 export type SprintAnswerType = (typeof SPRINT_ANSWER_TYPES)[number];
 export type SprintGrade = "correct" | "maybe_correct" | "incorrect";
@@ -35,25 +37,11 @@ export function normalizeSprintAnswer(raw: string): string {
 }
 
 function parseNumeric(raw: string): number | null {
-  let s = normalizeSprintAnswer(raw);
-  s = s.replace(/^x=/, "");
-  if (!s || s === "-" || s === ".") return null;
-  if (s === "-0") return 0;
-  const frac = /^(-?\d+)\/(-?\d+)$/.exec(s);
-  if (frac) {
-    const den = Number(frac[2]);
-    if (!den) return null;
-    return Number(frac[1]) / den;
-  }
-  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  return parseLooseNumber(normalizeSprintAnswer(raw).replace(/^x=/, ""));
 }
 
 function numbersEqual(a: number, b: number) {
-  if (a === 0 && b === 0) return true;
-  const scale = Math.max(1, Math.abs(a), Math.abs(b));
-  return Math.abs(a - b) <= 1e-8 * scale;
+  return numbersClose(a, b);
 }
 
 function extractEmbeddedNumber(raw: string): number | null {

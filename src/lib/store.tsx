@@ -30,6 +30,7 @@ import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./consta
 import { getDeviceIdentity, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
 import { playCorrectFeedback } from "./correct-feedback";
+import { modeStoresAnswer } from "./challenge";
 import { referralFetch } from "./referral-client";
 import {
   isVerifiedCreator,
@@ -191,6 +192,10 @@ type Store = {
     photo?: string;
     solverAnswer?: string;
   }) => Promise<{ error?: string }>;
+  gradeProblemAnswer: (
+    problemId: string,
+    answer: string,
+  ) => Promise<{ error?: string; graded?: boolean; correct?: boolean | null }>;
   addReply: (input: { replyToId: string; text: string }) => Promise<{ error?: string }>;
   deleteComment: (id: string) => Promise<{ error?: string }>;
   startSprint: () => void;
@@ -1217,6 +1222,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return {};
   }, [remotePosts, extra]);
 
+  const gradeProblemAnswer = useCallback(
+    async (problemId: string, answer: string) => {
+      const trimmed = answer.trim();
+      if (!trimmed) return { error: "答えを入力してください" };
+      const res = await referralFetch("/api/challenge/grade", {
+        method: "POST",
+        body: JSON.stringify({ problemId, answer: trimmed }),
+      });
+      if (res.error) return { error: res.error };
+      const graded = res.data?.graded === true;
+      const correct = res.data?.correct === true;
+      if (graded && correct) playCorrectFeedback();
+      const grade = graded ? (correct ? "correct" : "incorrect") : "ungraded";
+      const last = lastAttempts[problemId];
+      const isRevenge = Boolean(last?.grade === "incorrect" && !last.revengeCompletedAt);
+      const startedAt = attemptStarts[problemId];
+      void submitProblemAttempt({
+        problemId,
+        grade,
+        solverAnswer: trimmed,
+        startedAt,
+        isRevenge,
+      }).then(() => {
+        setLastAttempts((prev) => ({
+          ...prev,
+          [problemId]: {
+            grade,
+            durationSeconds: startedAt
+              ? Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000))
+              : null,
+            submittedAt: new Date().toISOString(),
+            isRevenge,
+            revengeAvailableAt: null,
+            revengeCompletedAt: correct ? new Date().toISOString() : null,
+          },
+        }));
+        if (correct) {
+          setRevengeDue((prev) => prev.filter((r) => r.problemId !== problemId));
+        }
+      });
+      return { graded, correct: graded ? correct : null };
+    },
+    [attemptStarts, lastAttempts],
+  );
+
   const addSolution = useCallback(
     async (input: {
       subject: Subject;
@@ -1237,22 +1287,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return { error: "投稿するにはログインしてください" };
       }
       const problem = getPost(input.problemId);
-      const isChallenge = problem?.problemMode === "challenge";
+      const isGradable =
+        !!problem &&
+        problem.kind !== "sprint" &&
+        !problem.isSprint &&
+        modeStoresAnswer(problem.problemMode ?? "question");
       const solverAnswer = (input.solverAnswer ?? "").trim();
-      if (isChallenge && !solverAnswer) {
-        return { error: "答えを入力してください（単位は不要です）" };
+      if (isGradable && !solverAnswer) {
+        return { error: "答えを入力してください" };
       }
       let challengeGrade: Post["challengeGrade"];
-      if (isChallenge) {
-        const res = await referralFetch("/api/challenge/grade", {
-          method: "POST",
-          body: JSON.stringify({ problemId: input.problemId, answer: solverAnswer }),
-        });
-        if (res.error) return { error: res.error };
-        if (res.data && res.data.graded === true) {
-          challengeGrade = res.data.correct === true ? "correct" : "incorrect";
-          if (challengeGrade === "correct") playCorrectFeedback();
-        }
+      if (isGradable) {
+        const graded = await gradeProblemAnswer(input.problemId, solverAnswer);
+        if (graded.error) return { error: graded.error };
+        if (graded.correct === true) challengeGrade = "correct";
+        else if (graded.graded) challengeGrade = "incorrect";
       }
       const hydrated = await persistHandwritingPages(authorId, input.pages, input.drawingBlobs);
       if (hydrated.error) return { error: hydrated.error };
@@ -1277,7 +1326,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         pages,
         problemId: input.problemId,
         solutionFormat: format,
-        solverAnswer: isChallenge ? solverAnswer : undefined,
+        solverAnswer: isGradable ? solverAnswer : undefined,
         challengeGrade,
         createdAt: new Date().toISOString(),
         replyCount: 0,
@@ -1314,7 +1363,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
         ...a,
       ]);
-      if (input.problemId) {
+      if (input.problemId && !isGradable) {
         const startedAt = attemptStarts[input.problemId];
         const last = lastAttempts[input.problemId];
         const isRevenge = Boolean(
@@ -1322,35 +1371,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
         void submitProblemAttempt({
           problemId: input.problemId,
-          grade: challengeGrade ?? (isChallenge ? "ungraded" : "ungraded"),
-          solverAnswer: isChallenge ? solverAnswer : undefined,
+          grade: "ungraded",
           startedAt,
           isRevenge,
         }).then(() => {
           setLastAttempts((prev) => ({
             ...prev,
             [input.problemId!]: {
-              grade: challengeGrade ?? "ungraded",
+              grade: "ungraded",
               durationSeconds: startedAt
                 ? Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000))
                 : null,
               submittedAt: new Date().toISOString(),
               isRevenge,
               revengeAvailableAt: null,
-              revengeCompletedAt: challengeGrade === "correct" ? new Date().toISOString() : null,
+              revengeCompletedAt: null,
             },
           }));
-          if (challengeGrade === "correct") {
-            setRevengeDue((prev) => prev.filter((r) => r.problemId !== input.problemId));
-          }
         });
+        void notifyConfusedReactors(input.problemId).then(() => {
+          void fetchNotifications().then(setNotifications);
+        });
+      } else if (input.problemId) {
         void notifyConfusedReactors(input.problemId).then(() => {
           void fetchNotifications().then(setNotifications);
         });
       }
       return {};
     },
-    [supabaseUid, getPost, attemptStarts, lastAttempts],
+    [supabaseUid, getPost, attemptStarts, lastAttempts, gradeProblemAnswer],
   );
 
   const addReply = useCallback(async (input: { replyToId: string; text: string }) => {
@@ -1939,6 +1988,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     closeFeedback,
     feedbackOpen,
     addSolution,
+    gradeProblemAnswer,
     addReply,
     deleteComment,
     startSprint,

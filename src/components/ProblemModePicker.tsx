@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProblemMode } from "@/lib/types";
+import { modeStoresAnswer } from "@/lib/challenge";
 import { HelpCircle } from "lucide-react";
 import { useState } from "react";
 
@@ -95,15 +96,14 @@ export function ProblemModePicker({
           </div>
         );
       })}
-      {showAnswer && value === "challenge" && (
+      {showAnswer && modeStoresAnswer(value) && (
         <div className="col-span-3">
           <input
             value={correctAnswer}
             onChange={(e) => onCorrectAnswer(e.target.value)}
-            placeholder="正解"
+            placeholder={value === "challenge" ? "正解（必須）" : "答え（必須）"}
             className="w-full border-0 border-b border-gray-800 bg-transparent px-0 py-2 text-sm outline-none"
           />
-          <p className="mt-0.5 text-xs text-muted">※単位は書かなくていいです</p>
         </div>
       )}
       </div>

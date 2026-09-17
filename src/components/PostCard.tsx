@@ -39,6 +39,8 @@ import { VerifiedBadge } from "./VerifiedBadge";
 import { SaveProblemButton } from "./SaveProblemButton";
 import { canSavePost, saveTargetId } from "@/lib/save-post";
 import { SpoilerReveal } from "./SpoilerReveal";
+import { ProblemAnswerBox } from "./ProblemAnswerBox";
+import { modeStoresAnswer } from "@/lib/challenge";
 import { FeltDifficulty } from "./FeltDifficulty";
 import { AttemptTime } from "./RevengeBanner";
 import { SimilarProblems } from "./SimilarProblems";
@@ -470,10 +472,13 @@ export function PostCard({
             </p>
           )}
 
-          {isMe && post.problemMode === "challenge" && post.correctAnswer != null && post.correctAnswer !== "" && (
+          {isMe &&
+            modeStoresAnswer(post.problemMode ?? "question") &&
+            post.correctAnswer != null &&
+            post.correctAnswer !== "" && (
             <p className="mt-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-100">
               設定した正解: {post.correctAnswer}
-              <span className="mt-0.5 block text-[10px] text-orange-200/70">※単位は書かなくていいです</span>
+              {post.answerUnit ? ` ${post.answerUnit}` : ""}
             </p>
           )}
 
@@ -512,6 +517,11 @@ export function PostCard({
 
           {(post.kind === "problem" || post.kind === "sprint") && (
             <>
+              {post.kind === "problem" &&
+              modeStoresAnswer(post.problemMode ?? "question") &&
+              !pulseLocked ? (
+                <ProblemAnswerBox post={post} />
+              ) : null}
               <SeriesNav post={post} />
               <SpoilerReveal
                 post={post}

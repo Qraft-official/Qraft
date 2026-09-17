@@ -16,6 +16,7 @@ export type ComposerDraft = {
   postMode: ProblemMode;
   difficultyLevel: Tier;
   correctAnswer: string;
+  answerUnit?: string;
   solutionDraft: string;
   hints: string[];
   inputMode: "hand" | "typed";

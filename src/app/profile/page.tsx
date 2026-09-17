@@ -175,7 +175,7 @@ export default function ProfilePage() {
         ) : (
           <EmptyState
             title="まだ解法がありません"
-            body="気になる問題のリポストから「引用して解法を投稿」できます。"
+            body="気になる問題の「解法を書く」から投稿できます。"
             actionHref="/"
             actionLabel="問題を見にいく"
           />

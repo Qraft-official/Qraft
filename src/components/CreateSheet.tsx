@@ -38,6 +38,7 @@ import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { ComposerExpandOverlay } from "./NotebookExpandControls";
 import { ProblemModePicker } from "./ProblemModePicker";
 import { QuoteEmbed, QuotedProblemPeek } from "./QuoteEmbed";
+import { withQuoteRef } from "@/lib/quote-ref";
 import type { TextSizeId } from "@/lib/text-size";
 import type { TypedPage } from "./TypedNotebook";
 
@@ -61,6 +62,7 @@ export function CreateSheet() {
   const { composer, closeComposer, addProblem, addSolution, getPost, hasPremium, openPaywall, me } =
     useApp();
   const quotePostId = composer.open && composer.mode === "solution" ? composer.quotePostId : undefined;
+  const problemQuoteId = composer.open && composer.mode === "problem" ? composer.quotePostId : undefined;
   const openProblem = composer.open && composer.mode === "problem";
   const isSprintProblem = openProblem && !!composer.isSprint;
   const openSolution = composer.open && composer.mode === "solution" && !!quotePostId;
@@ -192,7 +194,7 @@ export function CreateSheet() {
   };
 
   const composerSession = openProblem
-    ? `problem:${isSprintProblem ? "sprint" : "normal"}`
+    ? `problem:${isSprintProblem ? "sprint" : "normal"}:${problemQuoteId ?? ""}`
     : openSolution
       ? `solution:${quotePostId ?? ""}`
       : "";
@@ -225,6 +227,8 @@ export function CreateSheet() {
       setStepHint("");
       setNotebookTextSize("md");
       capturedDrawingRef.current = null;
+      const q = problemQuoteId ? getPost(problemQuoteId) : undefined;
+      if (q) setSubject(q.subject);
       return;
     }
     setText("");
@@ -239,17 +243,17 @@ export function CreateSheet() {
     capturedDrawingRef.current = null;
     const q = quotePostId ? getPost(quotePostId) : undefined;
     if (q) setSubject(q.subject);
-  }, [composerSession, getPost, quotePostId]);
+  }, [composerSession, getPost, quotePostId, problemQuoteId]);
 
   useEffect(() => {
     if (!open || !composerSession || !me.id) return;
     if (askedRestore.current === composerSession) return;
     askedRestore.current = composerSession;
     const kind = openProblem ? "problem" : "solution";
-    const draft = readComposerDraft(me.id, kind, quotePostId);
+    const draft = readComposerDraft(me.id, kind, openProblem ? problemQuoteId : quotePostId);
     if (!draft || draftIsEmpty(draft)) return;
     applyDraft(draft);
-  }, [composerSession, open, me.id, openProblem, quotePostId]);
+  }, [composerSession, open, me.id, openProblem, quotePostId, problemQuoteId]);
 
   const applyDraft = (d: ComposerDraft) => {
     setTitle(d.title);
@@ -280,7 +284,7 @@ export function CreateSheet() {
         v: 1,
         userId: me.id,
         kind,
-        quotePostId,
+        quotePostId: openProblem ? problemQuoteId : quotePostId,
         isSprint: isSprintProblem,
         savedAt: Date.now(),
         title,
@@ -312,6 +316,7 @@ export function CreateSheet() {
     posting,
     openProblem,
     quotePostId,
+    problemQuoteId,
     isSprintProblem,
     title,
     subject,
@@ -370,7 +375,7 @@ export function CreateSheet() {
 
   const clearDraft = () => {
     if (!me.id) return;
-    clearComposerDraft(me.id, openProblem ? "problem" : "solution", quotePostId);
+    clearComposerDraft(me.id, openProblem ? "problem" : "solution", openProblem ? problemQuoteId : quotePostId);
   };
 
   const persistDraftNow = (): boolean => {
@@ -380,7 +385,7 @@ export function CreateSheet() {
       v: 1,
       userId: me.id,
       kind,
-      quotePostId,
+      quotePostId: openProblem ? problemQuoteId : quotePostId,
       isSprint: isSprintProblem,
       savedAt: Date.now(),
       title,
@@ -654,7 +659,7 @@ export function CreateSheet() {
         }
         payload = {
           subject,
-          text: wrapMathliveLatex(joined),
+          text: withQuoteRef(wrapMathliveLatex(joined), isSprintProblem ? undefined : problemQuoteId),
           title,
           solution: solutionDraft,
           photo,
@@ -694,7 +699,7 @@ export function CreateSheet() {
         }
         payload = {
           subject,
-          text: title.trim() || "手書きの問題",
+          text: withQuoteRef(title.trim() || "手書きの問題", isSprintProblem ? undefined : problemQuoteId),
           title,
           solution: solutionDraft,
           photo,
@@ -773,7 +778,13 @@ export function CreateSheet() {
                 <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-2 md:px-4">
                   <ComposerProblemWizardHeader
                     step={problemStep}
-                    heading={isSprintProblem ? "21時問題を応募" : "問題を投稿"}
+                    heading={
+                      isSprintProblem
+                        ? "21時問題を応募"
+                        : problemQuoteId
+                          ? "引用して投稿"
+                          : "問題を投稿"
+                    }
                   />
                   <div className="flex shrink-0 items-center gap-1">
                     <button
@@ -799,6 +810,11 @@ export function CreateSheet() {
                   className="composer-scroll flex w-full min-w-0 max-w-full flex-col gap-1 sm:gap-2"
                   onFocusCapture={scrollFocusedField}
                 >
+                  {problemQuoteId ? (
+                    <div className="px-3 md:px-4">
+                      <QuoteEmbed postId={problemQuoteId} compact />
+                    </div>
+                  ) : null}
                   {inputMode === "hand" && !editorExpanded && (
                     <div
                       className={
@@ -1038,7 +1054,7 @@ export function CreateSheet() {
                     ) : (
                       <Keyboard size={16} className="shrink-0 text-aha" />
                     )}
-                    <p className="truncate text-sm font-bold">引用して解法を投稿</p>
+                    <p className="truncate text-sm font-bold">解法を書く</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <select

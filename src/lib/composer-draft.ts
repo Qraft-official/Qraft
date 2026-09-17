@@ -32,6 +32,7 @@ export type ComposerDraft = {
 
 function keyFor(userId: string, kind: "problem" | "solution", quotePostId?: string) {
   if (kind === "solution") return `qraft.draft.v1.${userId}.solution.${quotePostId ?? "none"}`;
+  if (quotePostId) return `qraft.draft.v1.${userId}.problem.quote.${quotePostId}`;
   return `qraft.draft.v1.${userId}.problem`;
 }
 

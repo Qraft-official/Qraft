@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { PenLine, Repeat2, Undo2, X } from "lucide-react";
+import { Quote, Repeat2, Undo2, X } from "lucide-react";
 import { useEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
@@ -10,16 +10,16 @@ export function QuoteActionMenu({
   onClose,
   reposted,
   onRepost,
-  showQuoteSolution,
-  onQuoteSolution,
+  showQuotePost,
+  onQuotePost,
   anchorRef,
 }: {
   open: boolean;
   onClose: () => void;
   reposted: boolean;
   onRepost: () => void;
-  showQuoteSolution: boolean;
-  onQuoteSolution: () => void;
+  showQuotePost: boolean;
+  onQuotePost: () => void;
   anchorRef?: RefObject<HTMLElement | null>;
 }) {
   const [wide, setWide] = useState(false);
@@ -38,7 +38,7 @@ export function QuoteActionMenu({
     const place = () => {
       const el = anchorRef?.current;
       const menuW = 288;
-      const menuH = 168;
+      const menuH = 140;
       if (!el) {
         setPos({
           top: Math.max(16, window.innerHeight / 2 - menuH / 2),
@@ -88,20 +88,17 @@ export function QuoteActionMenu({
         {reposted ? <Undo2 size={18} className="text-emerald-400" /> : <Repeat2 size={18} />}
         <span className="font-bold">{reposted ? "リポストを取り消す" : "リポスト"}</span>
       </button>
-      {showQuoteSolution && (
+      {showQuotePost && (
         <button
           type="button"
           onClick={() => {
-            onQuoteSolution();
+            onQuotePost();
             onClose();
           }}
           className="flex min-h-12 w-full items-center gap-3 border-t border-gray-800 px-4 py-3 text-left text-sm hover:bg-white/5"
         >
-          <PenLine size={18} className="text-aha" />
-          <span>
-            <span className="block font-bold text-aha">引用して解法を投稿</span>
-            <span className="text-[11px] text-muted">この問題を引用して解法を書く</span>
-          </span>
+          <Quote size={18} />
+          <span className="font-bold">引用して投稿</span>
         </button>
       )}
     </>
@@ -120,7 +117,7 @@ export function QuoteActionMenu({
           {wide ? (
             <motion.div
               role="dialog"
-              aria-label="引用・リポスト"
+              aria-label="リポスト"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 6 }}
@@ -134,7 +131,7 @@ export function QuoteActionMenu({
             <motion.div
               role="dialog"
               aria-modal="true"
-              aria-label="引用・リポスト"
+              aria-label="リポスト"
               initial={{ y: 24, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 24, opacity: 0 }}
@@ -142,7 +139,7 @@ export function QuoteActionMenu({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 pt-3">
-                <p className="text-sm font-black">引用・リポスト</p>
+                <p className="text-sm font-black">リポスト</p>
                 <button
                   type="button"
                   className="flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-white/10"

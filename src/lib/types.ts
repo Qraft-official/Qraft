@@ -152,6 +152,6 @@ export type ActivityItem = {
 
 export type Composer =
   | { open: false }
-  | { open: true; mode: "problem"; isSprint?: boolean }
+  | { open: true; mode: "problem"; isSprint?: boolean; quotePostId?: string }
   | { open: true; mode: "solution"; quotePostId: string }
   | { open: true; mode: "reply"; replyToId: string };

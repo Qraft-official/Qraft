@@ -22,6 +22,7 @@ import {
   Pencil,
   Repeat2,
   Share2,
+  SquarePen,
   Star,
   Trash2,
 } from "lucide-react";
@@ -46,6 +47,7 @@ import { AttemptTime } from "./RevengeBanner";
 import { SimilarProblems } from "./SimilarProblems";
 import { SeriesAssignSheet, SeriesNav } from "./SeriesNav";
 import { ProblemSolveStats } from "./ProblemSolveStats";
+import { readQuoteRef, stripQuoteRef } from "@/lib/quote-ref";
 
 function isTypedNotebook(post: Post) {
   if (post.solutionFormat === "typed") return true;
@@ -56,7 +58,7 @@ function isTypedNotebook(post: Post) {
 function cardMeta(post: Post) {
   const title = post.title?.trim() ?? "";
   const memo = post.solution?.trim() ?? "";
-  let body = post.text ?? "";
+  let body = stripQuoteRef(post.text ?? "");
   if (title) {
     const prefix = `**${title}**\n\n`;
     if (body.startsWith(prefix)) body = body.slice(prefix.length);
@@ -72,7 +74,7 @@ function typedNotebookPages(post: Post) {
     return pages;
   }
   const { body } = cardMeta(post);
-  const latex = body.trim() || (!post.title?.trim() ? post.text.trim() : "");
+  const latex = body.trim() || (!post.title?.trim() ? stripQuoteRef(post.text).trim() : "");
   if (latex) {
     return [{ id: `${post.id}-typed`, latex, doodle: 0 }];
   }
@@ -144,7 +146,12 @@ export function PostCard({
   const eleganceAvg = avgStars(post.eleganceSum, post.eleganceCount);
   const eleganceCount = post.eleganceCount ?? 0;
   const tier = author.tiers[post.subject];
-  const quoted = post.kind === "solution" && post.problemId;
+  const quoted =
+    (post.kind === "solution" && post.problemId) ||
+    ((post.kind === "problem" || post.kind === "sprint") && readQuoteRef(post.text));
+  const quotedPostId =
+    post.kind === "solution" ? post.problemId : readQuoteRef(post.text);
+  const canWriteSolution = post.kind === "problem" || post.kind === "sprint";
   const comments = repliesTo(post.id).filter((p) => p.kind === "reply");
   const typed = isTypedNotebook(post);
   const typedPages = typed ? typedNotebookPages(post) : [];
@@ -457,7 +464,7 @@ export function PostCard({
             </Link>
           )}
 
-          {quoted && <QuoteEmbed postId={post.problemId!} />}
+          {quoted && quotedPostId ? <QuoteEmbed postId={quotedPostId} /> : null}
 
           {post.kind === "solution" && post.challengeGrade && (
             <p
@@ -554,14 +561,14 @@ export function PostCard({
             </div>
           )}
 
-          <div className="mt-1 flex max-w-md min-w-0 items-center justify-between gap-0.5 overflow-hidden text-muted">
+          <div className="mt-1 flex max-w-md min-w-0 items-center justify-between gap-0 overflow-hidden text-muted">
             <button
               type="button"
               onClick={openComments}
-              className={`flex min-h-11 min-w-0 flex-1 items-center justify-center gap-0.5 px-0.5 text-[11px] hover:text-sky-400 ${threadOpen ? "text-sky-400" : ""}`}
+              className={`flex min-h-11 min-w-0 flex-1 items-center justify-center gap-0.5 px-0 text-[11px] hover:text-sky-400 ${threadOpen ? "text-sky-400" : ""}`}
               aria-label="コメント"
             >
-              <MessageCircle size={16} /> {comments.length}
+              <MessageCircle size={15} /> {comments.length}
             </button>
 
             <div className="relative flex min-w-0 flex-1 justify-center">
@@ -569,11 +576,11 @@ export function PostCard({
                 type="button"
                 ref={quoteBtnRef}
                 onClick={() => setRepostOpen((v) => !v)}
-                className={`flex min-h-11 min-w-11 items-center justify-center ${reposted ? "text-emerald-400" : "hover:text-emerald-400"}`}
-                aria-label="引用・リポスト"
+                className={`flex min-h-11 min-w-0 items-center justify-center ${reposted ? "text-emerald-400" : "hover:text-emerald-400"}`}
+                aria-label="リポスト"
                 aria-expanded={repostOpen}
               >
-                <Repeat2 size={16} />
+                <Repeat2 size={15} />
               </button>
               <QuoteActionMenu
                 open={repostOpen}
@@ -581,16 +588,34 @@ export function PostCard({
                 anchorRef={quoteBtnRef}
                 reposted={reposted}
                 onRepost={() => toggleRepost(post.id)}
-                showQuoteSolution={post.kind === "problem" || post.kind === "sprint"}
-                onQuoteSolution={() =>
+                showQuotePost={post.kind === "problem" || post.kind === "sprint"}
+                onQuotePost={() =>
+                  openComposer({
+                    open: true,
+                    mode: "problem",
+                    quotePostId: post.id,
+                  })
+                }
+              />
+            </div>
+
+            {canWriteSolution ? (
+              <button
+                type="button"
+                onClick={() =>
                   openComposer({
                     open: true,
                     mode: "solution",
                     quotePostId: post.id,
                   })
                 }
-              />
-            </div>
+                className="flex min-h-11 min-w-0 flex-[1.35] items-center justify-center gap-0.5 whitespace-nowrap px-0 text-[10px] font-bold hover:text-aha"
+                aria-label="解法を書く"
+              >
+                <SquarePen size={14} className="shrink-0" />
+                <span className="max-w-[2.6rem] truncate leading-none">解法</span>
+              </button>
+            ) : null}
 
             {(post.kind === "problem" || post.kind === "sprint") && (
               <button
@@ -625,7 +650,7 @@ export function PostCard({
               aria-label="Aha"
               aria-pressed={liked}
             >
-              <Brain size={16} fill={liked ? "#A855F7" : "none"} />
+              <Brain size={15} fill={liked ? "#A855F7" : "none"} />
               {post.likeCount + (liked ? 1 : 0)}
             </motion.button>
 
@@ -657,10 +682,10 @@ export function PostCard({
                   }
                 });
               }}
-              className="flex min-h-11 min-w-0 flex-1 items-center justify-center px-0.5 text-[11px] hover:text-aha"
+              className="flex min-h-11 min-w-0 flex-1 items-center justify-center px-0 text-[11px] hover:text-aha"
               aria-label="共有"
             >
-              <Share2 size={16} />
+              <Share2 size={15} />
             </button>
           </div>
 

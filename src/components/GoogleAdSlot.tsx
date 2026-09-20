@@ -5,10 +5,8 @@ import {
   ADSENSE_INFEED_FORMAT,
   ADSENSE_INFEED_LAYOUT_KEY,
   ADSENSE_INFEED_SLOT,
-  adsenseScriptSrc,
   isGoogleInFeedPath,
 } from "@/lib/adsense";
-import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
@@ -63,15 +61,6 @@ export function GoogleAdSlot({
   return (
     <aside className="ad-slot" aria-label={label}>
       <p className="ad-slot-label">{label}</p>
-      <Script
-        id="adsense-sdk"
-        src={adsenseScriptSrc(ADSENSE_CLIENT_ID)}
-        strategy="afterInteractive"
-        crossOrigin="anonymous"
-        onError={() => {
-          /* blocked scripts must not break the timeline */
-        }}
-      />
       <ins
         ref={insRef}
         className="adsbygoogle"

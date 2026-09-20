@@ -1,7 +1,5 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 function inline(text: string): ReactNode[] {
@@ -191,27 +189,11 @@ export function LegalMarkdown({ markdown }: { markdown: string }) {
 }
 
 export function LegalDocument({ title, markdown }: { title: string; markdown: string }) {
-  const router = useRouter();
   return (
-    <div className="flex min-h-dvh flex-col bg-black">
-      <header className="sticky top-0 z-30 shrink-0 border-b border-gray-900 bg-black/95 px-4 py-3 backdrop-blur">
-        <button
-          type="button"
-          aria-label="戻る"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) router.back();
-            else router.push("/");
-          }}
-          className="-ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-muted"
-        >
-          <ArrowLeft size={20} />
-        </button>
-      </header>
-      <main className="mx-auto w-full max-w-lg flex-1 px-4 py-6 md:max-w-2xl">
-        <p className="text-[11px] font-bold tracking-wide text-muted">Qraft</p>
-        <h1 className="mt-1 text-2xl font-black">{title}</h1>
-        <LegalMarkdown markdown={markdown} />
-      </main>
-    </div>
+    <main className="mx-auto w-full min-w-0 max-w-lg flex-1 overflow-x-hidden px-4 py-6 md:max-w-2xl">
+      <p className="text-[11px] font-bold tracking-wide text-muted">Qraft</p>
+      <h1 className="mt-1 text-2xl font-black">{title}</h1>
+      <LegalMarkdown markdown={markdown} />
+    </main>
   );
 }

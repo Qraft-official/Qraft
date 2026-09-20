@@ -1,7 +1,7 @@
 {
   "name": "Qraft",
   "short_name": "Qraft",
-  "description": "STEM creators のためのドパミン SNS",
+  "description": "数学・物理・化学の問題を投稿し、挑戦し、解法を共有する問題SNS",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b1220",

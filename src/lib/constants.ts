@@ -12,6 +12,11 @@ export const OFFICIAL_HANDLE = "qraft";
 export const PREMIUM_PRICE_JPY = 400;
 /** Canonical public origin for share URLs (never preview/vercel.app). */
 export const CANONICAL_ORIGIN = "https://qrafters.jp";
+/** Public contact address (same as terms / developer mail). */
+export const CONTACT_EMAIL = "qraft.study@gmail.com";
+export const SITE_TITLE = "Qraft（クラフト）| ひらめきを競う問題SNS";
+export const SITE_DESCRIPTION =
+  "Qraftは面白い問題を見つけ、自分で解き、みんなの結果や解法を楽しむ問題SNSです。数学・物理・化学のオリジナル問題に挑戦できます。";
 
 export function problemShareUrl(problemId: string) {
   return `${CANONICAL_ORIGIN}/p/${encodeURIComponent(problemId)}`;

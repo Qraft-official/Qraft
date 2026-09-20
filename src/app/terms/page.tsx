@@ -6,8 +6,17 @@ import { join } from "node:path";
 
 export const metadata: Metadata = {
   title: "利用規約",
+  description: "Qraft（クラフト）の利用規約です。",
   robots: { index: true, follow: true },
   alternates: { canonical: `${CANONICAL_ORIGIN}/terms` },
+  openGraph: {
+    title: "利用規約 | Qraft",
+    description: "Qraft（クラフト）の利用規約です。",
+    siteName: "Qraft",
+    type: "website",
+    locale: "ja_JP",
+    url: `${CANONICAL_ORIGIN}/terms`,
+  },
 };
 
 export default function TermsPage() {

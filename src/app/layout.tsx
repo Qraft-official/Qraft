@@ -4,8 +4,8 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AppDialogHost } from "@/components/AppDialogHost";
 import { AppProvider } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
-import { ADSENSE_CLIENT_ID } from "@/lib/adsense";
-import { CANONICAL_ORIGIN } from "@/lib/constants";
+import { ADSENSE_CLIENT_ID, adsenseScriptSrc } from "@/lib/adsense";
+import { CANONICAL_ORIGIN, SITE_DESCRIPTION, SITE_TITLE } from "@/lib/constants";
 import "./globals.css";
 import React from "react";
 
@@ -28,12 +28,19 @@ const noto = Noto_Sans_JP({
 export const metadata: Metadata = {
   metadataBase: new URL(CANONICAL_ORIGIN),
   title: {
-    default: "Qraft（クラフト）| ひらめきを競う問題SNS",
+    default: SITE_TITLE,
     template: "%s | Qraft",
   },
-  description:
-    "Qraftは面白い問題を見つけ、自分で解き、みんなの結果や解法を楽しむ問題SNSです。数学・物理・化学のオリジナル問題に挑戦できます。",
+  description: SITE_DESCRIPTION,
   robots: { index: true, follow: true },
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    siteName: "Qraft",
+    type: "website",
+    locale: "ja_JP",
+    url: CANONICAL_ORIGIN,
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
@@ -75,6 +82,15 @@ export default function RootLayout({
       style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}
       suppressHydrationWarning
     >
+      {ADSENSE_CLIENT_ID ? (
+        <head>
+          <script
+            async
+            src={adsenseScriptSrc(ADSENSE_CLIENT_ID)}
+            crossOrigin="anonymous"
+          />
+        </head>
+      ) : null}
       <body
         className="bg-[#0b1220] text-[#e7e9ea] antialiased"
         style={{ minHeight: "100vh", backgroundColor: "#0b1220", color: "#e7e9ea" }}

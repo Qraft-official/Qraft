@@ -6,8 +6,17 @@ import { join } from "node:path";
 
 export const metadata: Metadata = {
   title: "プライバシーポリシー",
+  description: "Qraft（クラフト）のプライバシーポリシーです。",
   robots: { index: true, follow: true },
   alternates: { canonical: `${CANONICAL_ORIGIN}/privacy` },
+  openGraph: {
+    title: "プライバシーポリシー | Qraft",
+    description: "Qraft（クラフト）のプライバシーポリシーです。",
+    siteName: "Qraft",
+    type: "website",
+    locale: "ja_JP",
+    url: `${CANONICAL_ORIGIN}/privacy`,
+  },
 };
 
 export default function PrivacyPage() {

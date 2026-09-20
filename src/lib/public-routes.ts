@@ -3,6 +3,7 @@ export function isIndexablePublicPath(pathname: string | null | undefined) {
   if (!pathname) return false;
   if (pathname === "/" || pathname === "/discover") return true;
   if (pathname === "/terms" || pathname === "/privacy") return true;
+  if (pathname === "/about" || pathname === "/contact") return true;
   if (/^\/p\/[^/]+$/.test(pathname)) return true;
   return false;
 }

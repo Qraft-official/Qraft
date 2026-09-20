@@ -21,6 +21,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      url: `${CANONICAL_ORIGIN}/about`,
+      lastModified: lastMod,
+      changeFrequency: "yearly",
+      priority: 0.5,
+    },
+    {
+      url: `${CANONICAL_ORIGIN}/contact`,
+      lastModified: lastMod,
+      changeFrequency: "yearly",
+      priority: 0.5,
+    },
+    {
       url: `${CANONICAL_ORIGIN}/terms`,
       lastModified: lastMod,
       changeFrequency: "yearly",

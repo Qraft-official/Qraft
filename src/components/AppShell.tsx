@@ -9,6 +9,7 @@ import { useApp } from "@/lib/store";
 import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { isPublicBrowsePath } from "@/lib/public-routes";
 import { AppBootSkeleton } from "@/components/UiStates";
+import { PublicSiteFooter } from "@/components/PublicSiteFooter";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -62,17 +63,7 @@ function PublicChrome({ children }: { children: React.ReactNode }) {
         </nav>
       </header>
       {children}
-      <footer className="border-t border-gray-800 px-4 py-8 text-xs text-muted">
-        <p>Qraft（クラフト）· ひらめきを競う問題SNS</p>
-        <p className="mt-2 flex flex-wrap gap-3">
-          <Link href="/terms" className="text-sky-400">
-            利用規約
-          </Link>
-          <Link href="/privacy" className="text-sky-400">
-            プライバシー
-          </Link>
-        </p>
-      </footer>
+      <PublicSiteFooter />
     </div>
   );
 }
@@ -101,7 +92,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [loadFeedback, setLoadFeedback] = useState(false);
   const hideChrome = path.startsWith("/sprint");
   const isAuthCallback = path.startsWith("/auth/callback");
-  const isLegal = path === "/terms" || path === "/privacy";
   const isInvite = path.startsWith("/i/");
   const isDevPreview = process.env.NODE_ENV !== "production" && path.startsWith("/dev/");
   const publicBrowse = isPublicBrowsePath(path);
@@ -141,7 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </Suspense>
   );
 
-  if (isAuthCallback || isLegal || isInvite || isDevPreview) {
+  if (isAuthCallback || isInvite || isDevPreview) {
     return (
       <>
         {capture}

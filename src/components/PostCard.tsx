@@ -12,6 +12,7 @@ import { LatexText } from "@/lib/latex";
 import { avgStars, useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
 import { verifiedBadgeTone } from "@/lib/verified";
+import { isPulseOpenAt, jstDateString } from "@/lib/jst";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Brain,
@@ -157,7 +158,11 @@ export function PostCard({
   const typedPages = typed ? typedNotebookPages(post) : [];
   const meta = cardMeta(post);
   const showCaption = !typed && Boolean(meta.body.trim());
-  const pulseLocked = post.kind === "sprint" && !sprintUnlocked && !isMe;
+  const isTodayLivePulse =
+    post.kind === "sprint" &&
+    post.sprintDay === jstDateString() &&
+    isPulseOpenAt(post.sprintDay ?? "");
+  const pulseLocked = isTodayLivePulse && !sprintUnlocked && !isMe;
   const lastAttempt = lastAttempts[post.id];
 
   useEffect(() => {

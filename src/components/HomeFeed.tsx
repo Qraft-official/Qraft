@@ -3,7 +3,7 @@
 import { IosNotice } from "@/components/IosNotice";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PostCard } from "@/components/PostCard";
-import { SprintBanner } from "@/components/SprintBanner";
+import { PulseHome } from "@/components/PulseHome";
 import { GoogleAdSlot } from "@/components/GoogleAdSlot";
 import { ReferralCampaignBanner } from "@/components/ReferralCampaignBanner";
 import { HomeNextStep } from "@/components/HomeNextStep";
@@ -23,9 +23,6 @@ export function HomeFeed() {
     posts,
     follows,
     me,
-    officialPost,
-    sprintUnlocked,
-    community,
     reposts,
     hasPremium,
     openPremium,
@@ -47,7 +44,7 @@ export function HomeFeed() {
     const others = posts.filter((p) => p.authorId !== myId);
     if (tab === "following") {
       const followed = others.filter(
-        (p) => p.kind !== "reply" && follows.includes(p.authorId),
+        (p) => p.kind !== "reply" && p.kind !== "sprint" && follows.includes(p.authorId),
       );
       const boosted = others.filter(
         (p) =>
@@ -57,21 +54,12 @@ export function HomeFeed() {
       );
       return [...boosted, ...followed];
     }
-    if (tab === "sprint") {
-      const ahaFeed = posts.filter(
-        (p) =>
-          p.problemMode === "aha" &&
-          p.kind !== "reply" &&
-          p.id !== officialPost.id,
-      );
-      const extra = sprintUnlocked ? community.filter((c) => !ahaFeed.some((d) => d.id === c.id)) : [];
-      return [officialPost, ...ahaFeed, ...extra];
-    }
+    if (tab === "sprint") return [];
     if (tab === "lounge") return loungePosts;
     const pool = others.filter((p) => p.kind !== "sprint" && p.kind !== "reply");
     const level = inferUserLevel(me.tiers, posts, myId);
     return sortRecommended(pool, level);
-  }, [tab, posts, follows, myId, officialPost, sprintUnlocked, community, reposts, loungePosts, me.tiers]);
+  }, [tab, posts, follows, myId, reposts, loungePosts, me.tiers]);
 
   return (
     <div>
@@ -121,7 +109,7 @@ export function HomeFeed() {
 
       <IosNotice />
 
-      {tab === "sprint" ? <SprintBanner /> : null}
+      {tab === "sprint" ? <PulseHome /> : null}
 
       {tab === "foryou" && (
         <div className="px-4 pb-1">
@@ -136,22 +124,6 @@ export function HomeFeed() {
         <p className="px-4 py-1.5 text-xs text-amber-200/80">Premium限定イベント · デイリーチャレンジ開催中</p>
       )}
 
-      {tab === "sprint" && (
-        <div className="border-b border-gray-800 px-4 py-2">
-          <button
-            type="button"
-            onClick={() => openComposer({ open: true, mode: "problem", isSprint: true })}
-            className="min-h-11 w-full rounded-full bg-aha text-sm font-black text-black"
-          >
-            21時問題を投稿
-          </button>
-        </div>
-      )}
-      {tab === "sprint" && !sprintUnlocked && (
-        <p className="px-4 py-4 text-sm text-muted">
-          挑戦を提出（またはタイムアウト）すると、この日の「みんなの解答」が開放されます。
-        </p>
-      )}
 
       {tab === "lounge" && hasPremium && (
         <p className="border-b border-gray-800 px-4 py-2 text-xs text-muted">
@@ -159,7 +131,7 @@ export function HomeFeed() {
         </p>
       )}
 
-      {feed.length === 0 ? (
+      {tab === "sprint" ? null : feed.length === 0 ? (
         tab === "following" ? (
           <EmptyState
             title="フォロー中の投稿はまだありません"

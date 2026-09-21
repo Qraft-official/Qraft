@@ -3,13 +3,15 @@
 import { PostCard } from "@/components/PostCard";
 import { PULSE_BLURB, PULSE_NAME } from "@/lib/constants";
 import { playCorrectFeedback, unlockCorrectFeedback } from "@/lib/correct-feedback";
+import { getNextPulseRelease, isPulseOpenAt, jstDateString } from "@/lib/jst";
 import { referralFetch } from "@/lib/referral-client";
 import { formatTimer, remainingMs } from "@/lib/sprint";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
 import { ArrowLeft, PenLine } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function SprintPage() {
   const router = useRouter();
@@ -19,14 +21,12 @@ export default function SprintPage() {
     startSprint,
     submitSprint,
     timeoutSprint,
-    community,
     sprintUnlocked,
     hasPremium,
     bgmOn,
     setBgmOn,
     openPaywall,
     openComposer,
-    posts,
   } = useApp();
   const [now, setNow] = useState(Date.now());
   const [answer, setAnswer] = useState("");
@@ -38,6 +38,9 @@ export default function SprintPage() {
     return () => clearInterval(id);
   }, []);
 
+  const today = jstDateString(new Date(now));
+  const live = isPulseOpenAt(today, new Date(now));
+  const todayPost = live && officialPost.sprintDay === today && officialPost.title ? officialPost : null;
   const left = sprint.startedAt ? remainingMs(sprint.startedAt, now) : null;
   const running = !!sprint.startedAt && !sprint.submittedAt && !sprint.timedOut;
 
@@ -45,19 +48,48 @@ export default function SprintPage() {
     if (running && left !== null && left <= 0) timeoutSprint();
   }, [running, left, timeoutSprint]);
 
-  const live = useMemo(() => {
-    const accuracy = sprint.submittedAt ? 91 : sprint.timedOut ? 0 : 0;
-    const avg = "6:18";
-    return { accuracy, avg, n: 12840 };
-  }, [sprint.submittedAt, sprint.timedOut]);
-
   const openQuoteComposer = () => {
+    if (!todayPost) return;
     openComposer({
       open: true,
       mode: "solution",
-      quotePostId: officialPost.id,
+      quotePostId: todayPost.id,
     });
   };
+
+  if (!live || !todayPost) {
+    const remain = Math.max(0, getNextPulseRelease(new Date(now)).getTime() - now);
+    const h = Math.floor(remain / 3600000);
+    const m = Math.floor((remain % 3600000) / 60000);
+    const s = Math.floor((remain % 60000) / 1000);
+    return (
+      <div className="flex min-h-dvh flex-col px-5 py-6">
+        <button onClick={() => router.push("/")} className="self-start text-muted">
+          <ArrowLeft size={20} />
+        </button>
+        <p className="mt-8 text-sm font-bold text-orange-400">🔥 {PULSE_NAME}</p>
+        <h1 className="mt-2 text-3xl font-black">今日のPULSEは21:00に公開</h1>
+        <p className="mt-3 text-sm text-muted">{PULSE_BLURB}</p>
+        <p className="mt-6 font-mono text-4xl font-black text-aha">
+          {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
+        </p>
+        <div className="mt-8 flex flex-col gap-2">
+          <Link
+            href="/sprint/archive"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-gray-700 text-sm font-bold"
+          >
+            過去のPULSEを見る
+          </Link>
+          <Link
+            href="/sprint/stats"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-gray-700 text-sm font-bold"
+          >
+            戦績
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (sprintUnlocked) {
     return (
@@ -68,44 +100,7 @@ export default function SprintPage() {
           </button>
           <p className="font-bold">{PULSE_NAME} 結果</p>
         </header>
-        <div className="mx-4 mt-4 rounded-2xl border border-gray-800 bg-panel p-4">
-          <p className="text-xs text-muted">LIVE</p>
-          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-2xl font-black text-aha">
-                {sprint.timedOut ? "—" : `${live.accuracy}%`}
-              </p>
-              <p className="text-[11px] text-muted">正解率</p>
-            </div>
-            <div>
-              <p className="text-2xl font-black text-white">{live.avg}</p>
-              <p className="text-[11px] text-muted">平均解答時間</p>
-            </div>
-            <div>
-              <p className="text-2xl font-black text-purple-300">
-                {live.n.toLocaleString()}
-              </p>
-              <p className="text-[11px] text-muted">挑戦者</p>
-            </div>
-          </div>
-          <p className="mt-3 text-center text-sm font-bold text-aha">
-            みんなの解答 開放
-          </p>
-        </div>
-        <PostCard post={officialPost} />
-        {posts
-          .filter(
-            (p) =>
-              p.problemMode === "aha" &&
-              p.kind !== "reply" &&
-              p.id !== officialPost.id,
-          )
-          .map((p) => (
-            <PostCard key={p.id} post={p} />
-          ))}
-        {community.map((p) => (
-          <PostCard key={p.id} post={p} />
-        ))}
+        <PostCard post={todayPost} />
       </div>
     );
   }
@@ -119,18 +114,8 @@ export default function SprintPage() {
         <p className="mt-8 text-sm font-bold text-orange-400">🔥 {PULSE_NAME}</p>
         <h1 className="mt-2 text-3xl font-black">10分一本勝負</h1>
         <p className="mt-3 text-sm text-muted">{PULSE_BLURB}</p>
-        <button
-          type="button"
-          onClick={() => openComposer({ open: true, mode: "problem", isSprint: true })}
-          className="mt-4 w-full rounded-full border border-aha/50 bg-aha/10 py-3 text-sm font-bold text-aha"
-        >
-          21時問題を投稿
-        </button>
-        <p className="mt-2 text-sm text-muted">
-          開始した瞬間からカウントダウン。提出しなければタイムアウト。次の配信まで待てますが、一度スタートしたら逃げられません。
-        </p>
         <div className="mt-6 rounded-2xl border border-gray-800 bg-panel p-4">
-          <PostCard post={officialPost} />
+          <PostCard post={todayPost} />
         </div>
         <motion.button
           whileTap={{ scale: 0.97 }}
@@ -191,10 +176,10 @@ export default function SprintPage() {
         🎵 BGM {hasPremium ? (bgmOn ? "ON" : "OFF") : "Premium"}
       </button>
       <p className="px-4 pb-2 text-xs leading-relaxed text-muted">
-        通常の引用投稿と同じ流れで、手書きノートまたは打ち込み式ノートを選んで解答できます。解法を投稿するとフィードが開放されます。
+        通常の引用投稿と同じ流れで、手書きノートまたは打ち込み式ノートを選んで解答できます。
       </p>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <PostCard post={officialPost} />
+        <PostCard post={todayPost} />
       </div>
       <div className="space-y-2 px-4 pt-2">
         <label className="block text-xs font-bold text-muted">
@@ -216,7 +201,7 @@ export default function SprintPage() {
             setGradeBusy(true);
             void referralFetch("/api/sprint/grade", {
               method: "POST",
-              body: JSON.stringify({ problemId: officialPost.id, answer }),
+              body: JSON.stringify({ problemId: todayPost.id, answer }),
             }).then((res) => {
               setGradeBusy(false);
               if (res.error) {

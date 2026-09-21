@@ -90,7 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [loadPremium, setLoadPremium] = useState(false);
   const [loadPaywall, setLoadPaywall] = useState(false);
   const [loadFeedback, setLoadFeedback] = useState(false);
-  const hideChrome = path.startsWith("/sprint");
+  const hideChrome = path === "/sprint";
   const isAuthCallback = path.startsWith("/auth/callback");
   const isInvite = path.startsWith("/i/");
   const isDevPreview = process.env.NODE_ENV !== "production" && path.startsWith("/dev/");

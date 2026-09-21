@@ -251,14 +251,18 @@ export async function fetchProblems(): Promise<{
   error: string | null;
 }> {
   const viewerTask = supabase.auth.getSession();
+  const now = Date.now();
+  const iso = new Date(now).toISOString();
   let problemsTask = await supabase
     .from("problems")
     .select(PROBLEM_COLUMNS)
+    .or(`is_sprint.eq.false,publish_at.lte.${iso}`)
     .order("created_at", { ascending: false });
   if (problemsTask.error && /answer_unit|hints|felt_easy|series_id|duration_sum|grade_correct|publish_at|topic/i.test(problemsTask.error.message)) {
     problemsTask = (await supabase
       .from("problems")
       .select(PROBLEM_COLUMNS_LEGACY)
+      .or(`is_sprint.eq.false,publish_at.lte.${iso}`)
       .order("created_at", { ascending: false })) as typeof problemsTask;
   }
 
@@ -272,7 +276,6 @@ export async function fetchProblems(): Promise<{
     return { posts: [], profiles: {}, error: error.message };
   }
 
-  const now = Date.now();
   const listed = ((data ?? []) as ProblemRow[]).filter((row) => isProblemListedForFeed(row, now));
   const rows = await attachAuthorAnswers(listed, viewerId);
   const seriesIds = [...new Set(rows.map((r) => r.series_id).filter((id): id is string => !!id))];

@@ -1,17 +1,15 @@
-import { SPRINT_HOUR, SPRINT_MS } from "./constants";
+import { SPRINT_MS } from "./constants";
+import { getNextPulseRelease, isPulseOpenAt, jstDateString } from "./jst";
 import type { Post, Subject } from "./types";
 
+/** JST calendar date of the live PULSE (empty before 21:00). */
 export function getSprintDayId(now = new Date()): string {
-  const d = new Date(now);
-  if (d.getHours() < SPRINT_HOUR) d.setDate(d.getDate() - 1);
-  return formatDay(d);
+  const today = jstDateString(now);
+  return isPulseOpenAt(today, now) ? today : today;
 }
 
 export function getNextRelease(now = new Date()): Date {
-  const d = new Date(now);
-  d.setHours(SPRINT_HOUR, 0, 0, 0);
-  if (now.getTime() >= d.getTime()) d.setDate(d.getDate() + 1);
-  return d;
+  return getNextPulseRelease(now);
 }
 
 export function formatDay(d: Date): string {
@@ -109,27 +107,32 @@ export function makeOfficialPost(dayId: string): Post {
     isSprint: true,
     problemMode: "aha",
     difficultyLevel: bank.difficultyLevel,
-    correctAnswer: bank.correctAnswer,
-    hints: bank.hints,
-    solution: bank.solution,
+    correctAnswer: undefined,
+    hints: [],
+    solution: undefined,
   };
 }
 
-/** Live PULSE: published is_sprint for that JST day. No random Aha fallback. */
+/** Today's live PULSE only. Never returns unpublished or a sample fallback. */
 export function pickAhaPulsePost(posts: Post[], dayId: string, fallback: Post, now = Date.now()): Post {
+  const today = jstDateString(new Date(now));
+  if (!isPulseOpenAt(today, new Date(now))) {
+    return { ...fallback, text: "", title: "", correctAnswer: undefined, hints: [], solution: undefined };
+  }
   const live = posts.filter((p) => {
     if (!(p.isSprint || p.kind === "sprint")) return false;
-    if (p.sprintDay && p.sprintDay !== dayId) return false;
+    if (p.sprintDay !== today) return false;
     if (p.publishAt) {
       const at = Date.parse(p.publishAt);
       if (!Number.isFinite(at) || at > now) return false;
+    } else {
+      return false;
     }
-    return p.sprintDay === dayId || p.kind === "sprint";
+    return true;
   });
-  const forDay = live.filter((p) => p.sprintDay === dayId);
-  const picked = forDay[0] ?? live[0];
+  const picked = live[0];
   if (!picked) {
-    return { ...fallback, problemMode: "aha" };
+    return { ...fallback, text: "", title: "", correctAnswer: undefined, hints: [], solution: undefined, sprintDay: today };
   }
-  return { ...picked, kind: "sprint", problemMode: picked.problemMode ?? "aha" };
+  return { ...picked, kind: "sprint", problemMode: picked.problemMode ?? "aha", correctAnswer: undefined };
 }

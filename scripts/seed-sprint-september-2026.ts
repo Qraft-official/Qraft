@@ -5,7 +5,7 @@
  * Does not touch the existing 2026-09-12 PULSE.
  *
  *   npx tsx scripts/seed-sprint-september-2026.ts --dry-run
- *   npx tsx scripts/seed-sprint-september-2026.ts --execute --author-handle qrafterd
+ *   npx tsx scripts/seed-sprint-september-2026.ts --execute --author-handle qraft
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
@@ -116,7 +116,7 @@ async function main() {
   if (!execute) {
     console.log("\nNo database writes (dry-run).");
     console.log("本番投入は許可後にだけ:");
-    console.log("  npx tsx scripts/seed-sprint-september-2026.ts --execute --author-handle qrafterd");
+    console.log("  npx tsx scripts/seed-sprint-september-2026.ts --execute --author-handle qraft");
     return;
   }
 

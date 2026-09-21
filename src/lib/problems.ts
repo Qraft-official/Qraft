@@ -357,7 +357,7 @@ export async function fetchProblems(): Promise<{
 
   const listed = (error
     ? [latestOk!]
-    : ((data ?? []) as ProblemRow[]).filter((row) => isProblemListedForFeed(row, now))
+    : ((data ?? []) as unknown as ProblemRow[]).filter((row) => isProblemListedForFeed(row, now))
   ).map(withPublicAuthor);
   if (latestOk && !listed.some((row) => row.id === latestOk.id)) {
     listed.unshift(withPublicAuthor(latestOk));

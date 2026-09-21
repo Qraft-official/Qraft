@@ -114,6 +114,11 @@ export function makeOfficialPost(dayId: string): Post {
   };
 }
 
+function asSprintDay(value?: string) {
+  const raw = String(value ?? "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
+}
+
 /** Latest published PULSE. Before 21:00 JST this is yesterday's (or the previous existing day). */
 export function pickAhaPulsePost(posts: Post[], dayId: string, fallback: Post, now = Date.now()): Post {
   const published = posts.filter((p) => {
@@ -123,15 +128,23 @@ export function pickAhaPulsePost(posts: Post[], dayId: string, fallback: Post, n
     return true;
   });
   published.sort((a, b) => {
-    const da = a.sprintDay ?? "";
-    const db = b.sprintDay ?? "";
-    if (da !== db) return db.localeCompare(da);
-    return Date.parse(b.publishAt ?? "") - Date.parse(a.publishAt ?? "");
+    const tb = Date.parse(b.publishAt ?? "") || 0;
+    const ta = Date.parse(a.publishAt ?? "") || 0;
+    if (tb !== ta) return tb - ta;
+    return asSprintDay(b.sprintDay).localeCompare(asSprintDay(a.sprintDay));
   });
-  const forDay = published.filter((p) => p.sprintDay === dayId);
+  const forDay = published.filter((p) => asSprintDay(p.sprintDay) === dayId);
   const picked = forDay[0] ?? published[0];
   if (!picked) {
     return { ...fallback, text: "", title: "", correctAnswer: undefined, hints: [], solution: undefined };
   }
-  return { ...picked, kind: "sprint", problemMode: picked.problemMode ?? "aha", correctAnswer: undefined };
+  return {
+    ...picked,
+    kind: "sprint",
+    sprintDay: asSprintDay(picked.sprintDay) || picked.sprintDay,
+    problemMode: picked.problemMode ?? "aha",
+    correctAnswer: undefined,
+    hints: [],
+    solution: undefined,
+  };
 }

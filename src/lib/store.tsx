@@ -544,17 +544,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setProfileHydrated(true);
         }
         const uid = data.session?.user?.id;
-        if (uid) {
-          const [remote, mine] = await Promise.all([
-            loadRemoteFeed(),
-            fetchMyConfusedProblemIds(uid),
-          ]);
-          if (cancelled) return;
-          setRemotePosts(remote.posts);
-          setRemoteUsers(remote.profiles);
-          if (remote.error) console.warn("Failed to load problems:", remote.error);
-          setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
-        }
+        const [remote, mine] = await Promise.all([
+          loadRemoteFeed(),
+          uid ? fetchMyConfusedProblemIds(uid) : Promise.resolve([] as string[]),
+        ]);
+        if (cancelled) return;
+        setRemotePosts(remote.posts);
+        setRemoteUsers(remote.profiles);
+        if (remote.error) console.warn("Failed to load problems:", remote.error);
+        if (uid) setConfusedMine(Object.fromEntries(mine.map((id) => [id, true])));
       } catch (err) {
         console.warn("Auth bootstrap failed:", err);
         if (!cancelled) {
@@ -588,6 +586,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           applySession(null);
           setReferralReady(true);
           setConfusedMine({});
+          void loadRemoteFeed().then((remote) => {
+            setRemotePosts(remote.posts);
+            setRemoteUsers((prev) => ({ ...prev, ...remote.profiles }));
+          });
         }
       } catch (err) {
         console.warn("onAuthStateChange failed:", err);

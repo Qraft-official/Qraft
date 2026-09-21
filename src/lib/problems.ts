@@ -83,6 +83,7 @@ export type ProblemPatch = {
   photo?: string;
   format?: "handwriting" | "typed";
   hints?: string[];
+  solution?: string;
 };
 
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
@@ -550,6 +551,7 @@ export async function updateProblem(
   }
 
   if (patch.hints !== undefined) updates.hints = sanitizeHints(patch.hints);
+  if (patch.solution !== undefined) updates.solution = patch.solution.trim() || null;
   if (patch.format !== undefined) {
     updates.problem_format = patch.format;
   }

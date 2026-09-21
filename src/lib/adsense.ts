@@ -9,7 +9,7 @@ export const ADSENSE_INFEED_SLOT = (
 export const ADSENSE_INFEED_FORMAT = "fluid";
 export const ADSENSE_INFEED_LAYOUT_KEY = "-h6-3+1f-3d+2z";
 /** Insert one Google in-feed unit after every N posts. Never before the first post. */
-export const ADSENSE_INFEED_EVERY = 4;
+export const ADSENSE_INFEED_EVERY = 8;
 
 export function shouldInsertInFeedAd(index: number, totalPosts: number, every = ADSENSE_INFEED_EVERY) {
   if (totalPosts < every || every < 1) return false;

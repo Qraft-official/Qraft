@@ -75,6 +75,7 @@ export function EditProblemModal({
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [answerUnit, setAnswerUnit] = useState("");
   const [hints, setHints] = useState<string[]>([]);
+  const [solution, setSolution] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [inputMode, setInputMode] = useState<"hand" | "typed">("typed");
@@ -97,6 +98,7 @@ export function EditProblemModal({
     setCorrectAnswer(post.correctAnswer ?? "");
     setAnswerUnit(post.answerUnit ?? "");
     setHints(post.hints ?? []);
+    setSolution(post.solution ?? "");
     setError("");
     setSaving(false);
     setEditorExpanded(false);
@@ -191,11 +193,12 @@ export function EditProblemModal({
         correctAnswer !== (post.correctAnswer ?? "") ||
         (answerUnit.trim() !== (post.answerUnit ?? "").trim());
       const hintsDirty = (hints.join("\n") !== (post.hints ?? []).join("\n"));
+      const solutionDirty = solution.trim() !== (post.solution ?? "").trim();
       const inkDirty = pages.some(
         (p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0,
       );
       const formatDirty = (inputMode === "hand") !== isHandwritingPost(post);
-      const dirty = titleDirty || modeDirty || answerDirty || hintsDirty || typedDirty || inkDirty || formatDirty;
+      const dirty = titleDirty || modeDirty || answerDirty || hintsDirty || solutionDirty || typedDirty || inkDirty || formatDirty;
       if (!dirty) {
         onClose();
         return;
@@ -209,7 +212,7 @@ export function EditProblemModal({
       });
       if (ok) onClose();
     })();
-  }, [post, title, typedPages, pages, onClose, mode, correctAnswer, inputMode, hints]);
+  }, [post, title, typedPages, pages, onClose, mode, correctAnswer, inputMode, hints, solution]);
 
   useEffect(() => {
     if (!open) return;
@@ -252,6 +255,7 @@ export function EditProblemModal({
         answerUnit: mode === "challenge" || mode === "aha" ? answerUnit : null,
         format: "typed",
         hints,
+        solution,
         pages: typedPages.map((p, i) => ({
           id: p.id,
           latex: wrapMathliveLatex(p.latex),
@@ -292,6 +296,7 @@ export function EditProblemModal({
       answerUnit: mode === "challenge" || mode === "aha" ? answerUnit : null,
       format: "handwriting",
       hints,
+      solution,
       drawingBlobs: packed.drawingBlobs,
       pages: packed.pages,
     });
@@ -380,6 +385,19 @@ export function EditProblemModal({
                   </div>
                 )}
                 <HintEditor hints={hints} onChange={setHints} />
+                <div className="border-b border-gray-800 px-3 py-2 md:px-4">
+                  <label className="text-xs font-bold text-muted" htmlFor="edit-explanation">
+                    解説・考え方
+                  </label>
+                  <p className="mt-0.5 text-[11px] text-muted">答えにたどり着く考え方を書いてみよう（任意）</p>
+                  <textarea
+                    id="edit-explanation"
+                    value={solution}
+                    onChange={(e) => setSolution(e.target.value)}
+                    rows={4}
+                    className="mt-1.5 w-full resize-none rounded-xl border border-gray-800 bg-black/30 px-3 py-2 text-sm outline-none"
+                  />
+                </div>
                 {modeTabs}
                 {inputMode === "hand" ? (
                   <div className="flex min-w-0 w-full max-w-full flex-col">

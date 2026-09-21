@@ -1,7 +1,7 @@
 import { GoogleAdSlot } from "@/components/GoogleAdSlot";
 import { PublicProblemCard } from "@/components/PublicProblemCard";
-import { ADSENSE_INFEED_EVERY, shouldInsertInFeedAd } from "@/lib/adsense";
-import type { PublicProblemPreview } from "@/lib/public-catalog";
+import { shouldInsertInFeedAd } from "@/lib/adsense";
+import { PUBLIC_FEED_AD_EVERY, type PublicProblemPreview } from "@/lib/public-catalog";
 
 export function PublicProblemFeed({
   problems,
@@ -17,7 +17,7 @@ export function PublicProblemFeed({
       {problems.map((preview, index) => (
         <div key={preview.id} className="min-w-0 max-w-full">
           <PublicProblemCard preview={preview} href={`/p/${preview.id}`} compact={compact} />
-          {shouldInsertInFeedAd(index, problems.length, ADSENSE_INFEED_EVERY) ? (
+          {shouldInsertInFeedAd(index, problems.length, PUBLIC_FEED_AD_EVERY) ? (
             <GoogleAdSlot enabled label="広告" />
           ) : null}
         </div>

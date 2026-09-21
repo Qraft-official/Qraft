@@ -8,17 +8,22 @@ export function SpoilerReveal({
   post,
   locked,
   isAuthor,
+  attempted,
   onRevealed,
 }: {
   post: Post;
   locked?: boolean;
   isAuthor: boolean;
+  attempted?: boolean;
   onRevealed?: () => void;
 }) {
   const hints = sanitizeHints(post.hints);
+  const unlocked = Boolean(isAuthor || attempted);
   const hasAhaAnswer =
-    (post.problemMode === "aha" || post.kind === "sprint") && Boolean(post.correctAnswer?.trim());
-  const hasExplain = Boolean(post.solution?.trim());
+    unlocked &&
+    (post.problemMode === "aha" || post.kind === "sprint") &&
+    Boolean(post.correctAnswer?.trim());
+  const hasExplain = unlocked && Boolean(post.solution?.trim());
   const [hintStep, setHintStep] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [showExplain, setShowExplain] = useState(false);
@@ -90,7 +95,7 @@ export function SpoilerReveal({
               onRevealed?.();
             }}
           >
-            解説を見る
+            解説・考え方
           </button>
         ))}
     </div>

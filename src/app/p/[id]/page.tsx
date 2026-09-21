@@ -1,7 +1,7 @@
 import { ProblemGate } from "@/components/ProblemGate";
 import { PublicProblemView } from "@/components/PublicProblemView";
 import { CANONICAL_ORIGIN } from "@/lib/constants";
-import { fetchPublicProblemPreview } from "@/lib/public-catalog";
+import { fetchPublicProblemPreview, fetchRelatedPublicProblems } from "@/lib/public-catalog";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ id: string }> };
@@ -17,8 +17,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       robots: { index: false, follow: true },
     };
   }
-  const description = (preview.body || preview.title || "Qraftの公開問題").slice(0, 160);
-  const title = preview.title || "問題";
+  const description = (preview.body || preview.title || "Qraftの公開問題").replace(/\s+/g, " ").trim().slice(0, 160);
+  const title = preview.title.trim() || "問題";
   return {
     title,
     description,
@@ -38,9 +38,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PostPage({ params }: Props) {
   const { id } = await params;
   const preview = await fetchPublicProblemPreview(id);
+  const related = preview ? await fetchRelatedPublicProblems(preview, 5) : [];
   return (
     <ProblemGate>
-      <PublicProblemView preview={preview} />
+      <PublicProblemView preview={preview} related={related} />
     </ProblemGate>
   );
 }

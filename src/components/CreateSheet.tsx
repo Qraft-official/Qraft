@@ -991,12 +991,17 @@ export function CreateSheet() {
                           answerLabel={postMode === "challenge" ? "正解" : "答え"}
                         />
                       )}
+                      <label className="text-xs font-bold text-muted" htmlFor="composer-explanation">
+                        解説・考え方
+                      </label>
+                      <p className="mt-0.5 text-[11px] text-muted">答えにたどり着く考え方を書いてみよう（任意）</p>
                       <textarea
+                        id="composer-explanation"
                         value={solutionDraft}
                         onChange={(e) => setSolutionDraft(e.target.value)}
-                        placeholder="解答メモ（任意・非公開でも可）"
-                        rows={3}
-                        className="w-full resize-none border-0 border-b border-gray-800 bg-transparent py-2 text-sm outline-none"
+                        placeholder="例：十角形の各頂点から7本引けるが、各対角線を2回数えるので70÷2=35"
+                        rows={4}
+                        className="mt-1 w-full resize-none rounded-xl border border-gray-800 bg-black/30 px-3 py-2 text-sm outline-none"
                       />
                       {!isSprintProblem && <HintEditor hints={hints} onChange={setHints} />}
                     </div>

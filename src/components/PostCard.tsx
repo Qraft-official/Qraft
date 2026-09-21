@@ -95,9 +95,11 @@ function timeAgo(iso: string) {
 export function PostCard({
   post,
   showRepostLabel,
+  hideStudy,
 }: {
   post: Post;
   showRepostLabel?: boolean;
+  hideStudy?: boolean;
 }) {
   const {
     me,
@@ -534,11 +536,14 @@ export function PostCard({
               !pulseLocked ? (
                 <ProblemAnswerBox post={post} />
               ) : null}
+              {hideStudy ? null : (
+                <>
               <SeriesNav post={post} />
               <SpoilerReveal
                 post={post}
                 locked={pulseLocked}
                 isAuthor={isMe}
+                attempted={Boolean(lastAttempt?.submittedAt)}
                 onRevealed={() => setRevealed(true)}
               />
               {(revealed || lastAttempt?.submittedAt || isMe) && !pulseLocked ? (
@@ -548,6 +553,8 @@ export function PostCard({
                   <SimilarProblems post={post} visible={Boolean(revealed || lastAttempt?.submittedAt)} />
                 </>
               ) : null}
+                </>
+              )}
             </>
           )}
 

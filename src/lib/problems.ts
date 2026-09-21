@@ -100,6 +100,10 @@ const PROBLEM_COLUMNS_WITH_ANSWER = `${PROBLEM_COLUMNS}, correct_answer`;
 const PROBLEM_COLUMNS_LEGACY =
   "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, publish_at, pages, problem_format, created_at, mode, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at";
 
+/** anon column grants omit author_id and stats; PULSE still needs publish_at. */
+const PROBLEM_COLUMNS_ANON =
+  "id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, publish_at, topic, pages, problem_format, created_at, mode, difficulty_level, hints";
+
 const PULSE_LIVE_COLUMNS = PROBLEM_COLUMNS_CORE;
 
 function listedProblemsOrFilter(iso: string) {
@@ -109,6 +113,25 @@ function listedProblemsOrFilter(iso: string) {
 function asSprintDay(value: unknown): string | undefined {
   const raw = String(value ?? "").slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+}
+
+const SELECT_FALLBACK_ERROR =
+  /answer_unit|hints|felt_easy|series_id|duration_sum|grade_correct|publish_at|topic|permission denied|author_id|confused_count|promoted/i;
+
+function withPublicAuthor(row: ProblemRow): ProblemRow {
+  if (row.author_id) return row;
+  return {
+    ...row,
+    author_id: row.is_sprint ? OFFICIAL_PROFILE_ID : row.author_id,
+  };
+}
+
+async function selectListedProblems(columns: string, iso: string) {
+  return supabase
+    .from("problems")
+    .select(columns)
+    .or(listedProblemsOrFilter(iso))
+    .order("created_at", { ascending: false });
 }
 
 export function asSubject(value: string): Subject {
@@ -277,7 +300,7 @@ export function problemToPost(
 /** Latest PULSE that has already reached publish_at. Never keyed to "today". */
 export async function fetchLatestPublishedPulse(now = Date.now()): Promise<ProblemRow | null> {
   const iso = new Date(now).toISOString();
-  const selects = [PULSE_LIVE_COLUMNS, PROBLEM_COLUMNS_LEGACY];
+  const selects = [PULSE_LIVE_COLUMNS, PROBLEM_COLUMNS_LEGACY, PROBLEM_COLUMNS_ANON];
   for (const columns of selects) {
     const { data, error } = await supabase
       .from("problems")
@@ -288,14 +311,14 @@ export async function fetchLatestPublishedPulse(now = Date.now()): Promise<Probl
       .limit(1)
       .maybeSingle();
     if (error) {
-      if (/answer_unit|hints|felt_easy|series_id|duration_sum|grade_correct|publish_at|topic/i.test(error.message)) {
+      if (SELECT_FALLBACK_ERROR.test(error.message)) {
         continue;
       }
       console.warn("fetchLatestPublishedPulse:", error.message);
       return null;
     }
     const row = data as ProblemRow | null;
-    if (row && isProblemListedForFeed(row, now)) return row;
+    if (row && isProblemListedForFeed(row, now)) return withPublicAuthor(row);
     return null;
   }
   return null;
@@ -309,25 +332,15 @@ export async function fetchProblems(): Promise<{
   const viewerTask = supabase.auth.getSession();
   const now = Date.now();
   const iso = new Date(now).toISOString();
-  const orFilter = listedProblemsOrFilter(iso);
-  let problemsTask = await supabase
-    .from("problems")
-    .select(PROBLEM_COLUMNS)
-    .or(orFilter)
-    .order("created_at", { ascending: false });
+  let problemsTask = await selectListedProblems(PROBLEM_COLUMNS, iso);
   if (problemsTask.error && /felt_easy|series_id|duration_sum|grade_correct/i.test(problemsTask.error.message)) {
-    problemsTask = (await supabase
-      .from("problems")
-      .select(PROBLEM_COLUMNS_CORE)
-      .or(orFilter)
-      .order("created_at", { ascending: false })) as typeof problemsTask;
+    problemsTask = (await selectListedProblems(PROBLEM_COLUMNS_CORE, iso)) as typeof problemsTask;
   }
   if (problemsTask.error && /answer_unit|hints|felt_easy|series_id|duration_sum|grade_correct|publish_at|topic/i.test(problemsTask.error.message)) {
-    problemsTask = (await supabase
-      .from("problems")
-      .select(PROBLEM_COLUMNS_LEGACY)
-      .or(orFilter)
-      .order("created_at", { ascending: false })) as typeof problemsTask;
+    problemsTask = (await selectListedProblems(PROBLEM_COLUMNS_LEGACY, iso)) as typeof problemsTask;
+  }
+  if (problemsTask.error && SELECT_FALLBACK_ERROR.test(problemsTask.error.message)) {
+    problemsTask = (await selectListedProblems(PROBLEM_COLUMNS_ANON, iso)) as typeof problemsTask;
   }
 
   const [{ data: sessionWrap }, { data, error }, latestPulse] = await Promise.all([
@@ -342,11 +355,12 @@ export async function fetchProblems(): Promise<{
     return { posts: [], profiles: {}, error: error.message };
   }
 
-  const listed = error
+  const listed = (error
     ? [latestOk!]
-    : ((data ?? []) as ProblemRow[]).filter((row) => isProblemListedForFeed(row, now));
+    : ((data ?? []) as ProblemRow[]).filter((row) => isProblemListedForFeed(row, now))
+  ).map(withPublicAuthor);
   if (latestOk && !listed.some((row) => row.id === latestOk.id)) {
-    listed.unshift(latestOk);
+    listed.unshift(withPublicAuthor(latestOk));
   }
   const rows = await attachAuthorAnswers(listed, viewerId);
   const seriesIds = [...new Set(rows.map((r) => r.series_id).filter((id): id is string => !!id))];

@@ -1,6 +1,5 @@
-import { USER_MAP } from "./mock-data";
-import { ME_ID } from "./constants";
 import { ensureProfile } from "./auth";
+import { OFFICIAL_HANDLE, OFFICIAL_NAME, OFFICIAL_PROFILE_ID, OFFICIAL_USER_ID } from "./constants";
 import { asProblemMode, modeStoresAnswer, sanitizeAnswerUnit, type ProblemMode } from "./challenge";
 import { asDifficulty } from "./difficulty";
 import { sanitizeHints } from "./learn";
@@ -101,19 +100,33 @@ export function asSubject(value: string): Subject {
 }
 
 export function fallbackUser(id: string, profile?: ProfileRow | null): User {
-  const base = USER_MAP[ME_ID];
   const rawHandle = profile?.handle;
-  const handle =
+  const parsedHandle =
     typeof rawHandle === "string" && rawHandle.replace(/^@/, "")
       ? rawHandle.replace(/^@/, "")
-      : id.replace(/-/g, "").slice(0, 8);
+      : "";
+  const isOfficial =
+    id === OFFICIAL_PROFILE_ID ||
+    id === OFFICIAL_USER_ID ||
+    parsedHandle.toLowerCase() === OFFICIAL_HANDLE;
+  const handle = isOfficial
+    ? OFFICIAL_HANDLE
+    : parsedHandle || id.replace(/-/g, "").slice(0, 8);
   const user: User = {
-    ...base,
     id,
-    name: typeof profile?.name === "string" && profile.name.trim() ? profile.name.trim() : "Qraft ユーザー",
+    name:
+      isOfficial
+        ? (typeof profile?.name === "string" && profile.name.trim() ? profile.name.trim() : OFFICIAL_NAME)
+        : typeof profile?.name === "string" && profile.name.trim()
+          ? profile.name.trim()
+          : "Qraft ユーザー",
     handle,
     bio: "",
     school: "",
+    avatar: isOfficial ? "🔥" : "🧠",
+    banner: "from-[#2e1065] via-[#000] to-[#365314]",
+    accent: "#A855F7",
+    tiers: { math: 1, physics: 1, chemistry: 1 },
     titles: [],
     activeTitles: [],
     age: null,
@@ -308,6 +321,16 @@ export async function fetchProblems(): Promise<{
       for (const p of (profileRes.data ?? []) as ProfileRow[]) {
         profiles[p.id] = fallbackUser(p.id, p);
       }
+    }
+  }
+  if (!Object.values(profiles).some((u) => u.handle === "qraft")) {
+    let official = await supabase.from("profiles").select("id, name, handle, is_sample").eq("handle", "qraft").maybeSingle();
+    if (official.error && /is_sample/i.test(official.error.message)) {
+      official = await supabase.from("profiles").select("id, name, handle").eq("handle", "qraft").maybeSingle();
+    }
+    if (official.data) {
+      const row = official.data as ProfileRow;
+      profiles[row.id] = fallbackUser(row.id, row);
     }
   }
 

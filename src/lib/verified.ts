@@ -1,4 +1,4 @@
-import { OFFICIAL_HANDLE, OFFICIAL_USER_ID } from "./constants";
+import { OFFICIAL_HANDLE, OFFICIAL_PROFILE_ID, OFFICIAL_USER_ID } from "./constants";
 import { isAdvertisementHandle } from "./handle";
 import { isComplimentaryPremiumAccount, isVerifiedCreator } from "./premium";
 
@@ -13,7 +13,7 @@ export type VerifiableUser = {
 
 export function isOfficialAccount(user?: VerifiableUser | null): boolean {
   if (!user) return false;
-  if (user.id === OFFICIAL_USER_ID) return true;
+  if (user.id === OFFICIAL_USER_ID || user.id === OFFICIAL_PROFILE_ID) return true;
   const handle = (user.handle ?? "").trim().toLowerCase().replace(/^@+/, "");
   if (handle === OFFICIAL_HANDLE) return true;
   const name = (user.name ?? "").trim();

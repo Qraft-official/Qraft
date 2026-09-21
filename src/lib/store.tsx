@@ -26,7 +26,7 @@ import {
 } from "./auth";
 import { displayNameError } from "./display-name";
 import { handleValidationError, sanitizeHandleInput } from "./handle";
-import { ME_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
+import { ME_ID, OFFICIAL_HANDLE, OFFICIAL_NAME, OFFICIAL_PROFILE_ID, OFFICIAL_USER_ID, PREMIUM_PRICE_JPY, PREMIUM_TITLES, STORAGE_KEYS } from "./constants";
 import { getDeviceIdentity, hasReferralAppliedOnDevice, markReferralAppliedOnDevice, takePendingReferralCode } from "./device-id";
 import type { ReferralMe } from "./referral";
 import { playCorrectFeedback } from "./correct-feedback";
@@ -722,8 +722,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const userOf = useCallback(
     (id: string) => {
       if (id === me.id) return me;
-      if (USER_MAP[id]) return USER_MAP[id];
+      if (id === OFFICIAL_USER_ID || id === OFFICIAL_PROFILE_ID) {
+        const official =
+          remoteUsers[OFFICIAL_PROFILE_ID] ??
+          Object.values(remoteUsers).find(
+            (u) => u.handle.replace(/^@/, "").toLowerCase() === OFFICIAL_HANDLE,
+          );
+        if (official) return official;
+        return fallbackUser(OFFICIAL_PROFILE_ID, {
+          id: OFFICIAL_PROFILE_ID,
+          name: OFFICIAL_NAME,
+          handle: OFFICIAL_HANDLE,
+        });
+      }
       if (remoteUsers[id]) return remoteUsers[id];
+      if (USER_MAP[id]) return USER_MAP[id];
       return fallbackUser(id);
     },
     [me, remoteUsers],

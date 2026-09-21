@@ -23,6 +23,7 @@ import {
 import { isDiscoverStatsSort } from "@/lib/problem-stats";
 import { ADSENSE_INFEED_EVERY, shouldInsertInFeedAd } from "@/lib/adsense";
 import { fetchDiscoverProblems } from "@/lib/problems";
+import { suggestUsers } from "@/lib/recommend-users";
 import { useApp } from "@/lib/store";
 import type { Post, Tier, User } from "@/lib/types";
 import { userIsVerified, verifiedBadgeTone } from "@/lib/verified";
@@ -35,7 +36,7 @@ import { WeeklyBoards } from "@/components/WeeklyBoards";
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { createPortal } from "react-dom";
 
 type ViewTab = "posts" | "users" | "newest";
@@ -79,9 +80,21 @@ function asLevel(v: string | null): LevelFilter {
 }
 
 export function DiscoverFeed() {
+  const [q, setQ] = useState("");
+  const [isComposing, setIsComposing] = useState(false);
+  const composingRef = useRef(false);
+  const focusedRef = useRef(false);
+
   return (
     <Suspense fallback={<DiscoverFallback />}>
-      <DiscoverInner />
+      <DiscoverInner
+        q={q}
+        setQ={setQ}
+        isComposing={isComposing}
+        setIsComposing={setIsComposing}
+        composingRef={composingRef}
+        focusedRef={focusedRef}
+      />
     </Suspense>
   );
 }
@@ -90,8 +103,22 @@ function DiscoverFallback() {
   return <DiscoverSkeleton />;
 }
 
-function DiscoverInner() {
-  const { posts, users, me, follows, toggleFollow, searchUsers, userOf, ratings, reposts, hydrateRemoteUsers } = useApp();
+function DiscoverInner({
+  q,
+  setQ,
+  isComposing,
+  setIsComposing,
+  composingRef,
+  focusedRef,
+}: {
+  q: string;
+  setQ: (value: string) => void;
+  isComposing: boolean;
+  setIsComposing: (value: boolean) => void;
+  composingRef: MutableRefObject<boolean>;
+  focusedRef: MutableRefObject<boolean>;
+}) {
+  const { posts, users, me, follows, toggleFollow, searchUsers, userOf, ratings, reposts, hydrateRemoteUsers, saved, lastAttempts, likes } = useApp();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -104,10 +131,8 @@ function DiscoverInner() {
   const mode = asMode(searchParams.get("mode"));
   const level = asLevel(searchParams.get("lv"));
   const qParam = searchParams.get("q") ?? "";
-  const [q, setQ] = useState(qParam);
-  const [isComposing, setIsComposing] = useState(false);
-  const composingRef = useRef(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [userLimit, setUserLimit] = useState(8);
   const [boosts, setBoosts] = useState<{
     byProblem: Record<string, number>;
     byAuthor: Record<string, number>;
@@ -120,9 +145,9 @@ function DiscoverInner() {
   const statsSort = isDiscoverStatsSort(sort) && view === "posts";
 
   useEffect(() => {
-    if (composingRef.current) return;
-    setQ((prev) => (prev === qParam ? prev : qParam));
-  }, [qParam]);
+    if (composingRef.current || focusedRef.current) return;
+    setQ(qParam);
+  }, [qParam, composingRef, focusedRef, setQ]);
 
   useEffect(() => {
     void fetchWeeklyReactionBoosts().then(setBoosts);
@@ -152,31 +177,29 @@ function DiscoverInner() {
 
   const commitQuery = useCallback(
     (value: string) => {
+      if (composingRef.current) return;
       const trimmed = value.trim();
       if (trimmed === qParam) return;
       patchParams({ q: trimmed || null });
     },
-    [patchParams, qParam],
+    [patchParams, qParam, composingRef],
   );
-
-  useEffect(() => {
-    if (composingRef.current || isComposing) return;
-    const t = window.setTimeout(() => commitQuery(q), 280);
-    return () => window.clearTimeout(t);
-  }, [q, isComposing, commitQuery]);
 
   useEffect(() => {
     if (view !== "users") return;
     if (composingRef.current || isComposing) return;
+    const needle = q.trim();
+    if (!needle) return;
     const t = window.setTimeout(() => {
-      void searchUsers(q);
-    }, 280);
+      void searchUsers(needle);
+    }, 320);
     return () => window.clearTimeout(t);
-  }, [q, view, searchUsers, isComposing]);
+  }, [q, view, searchUsers, isComposing, composingRef]);
 
   const effectiveSort: DiscoverSortKey = view === "newest" ? "newest" : sort;
 
-  const filterQuery = (isComposing ? qParam : q).trim();
+  const liveQuery = q.trim();
+  const filterQuery = isComposing ? qParam.trim() : liveQuery;
 
   const sortCtx = useMemo(
     () => ({ ratings, repostedIds: reposts }),
@@ -186,11 +209,11 @@ function DiscoverInner() {
   const filteredPosts = useMemo(
     () =>
       sortDiscoverPosts(
-        filterDiscoverPosts(posts, { subject, mode, level, q: filterQuery, kind }),
+        filterDiscoverPosts(posts, { subject, mode, level, q: liveQuery, kind }),
         effectiveSort,
         sortCtx,
       ),
-    [posts, subject, mode, level, filterQuery, kind, effectiveSort, sortCtx],
+    [posts, subject, mode, level, liveQuery, kind, effectiveSort, sortCtx],
   );
 
   useEffect(() => {
@@ -231,21 +254,33 @@ function DiscoverInner() {
 
   const matchedUsers = useMemo(() => {
     const n = filterQuery.toLowerCase().replace(/^@/, "");
+    if (!n) return [] as User[];
     const seen = new Set<string>();
     const out: User[] = [];
     for (const u of users) {
-      if (seen.has(u.id)) continue;
+      if (seen.has(u.id) || u.id === me.id) continue;
       seen.add(u.id);
-      if (!n) {
-        out.push(u);
-        continue;
-      }
       if (u.name.toLowerCase().includes(n) || u.handle.toLowerCase().includes(n)) {
         out.push(u);
       }
     }
     return out;
-  }, [users, filterQuery]);
+  }, [users, filterQuery, me.id]);
+
+  const recommendedUsers = useMemo(
+    () =>
+      suggestUsers({
+        meId: me.id,
+        follows,
+        posts,
+        users,
+        savedIds: Object.keys(saved),
+        attemptedIds: Object.keys(lastAttempts),
+        likedIds: likes,
+        limit: 16,
+      }),
+    [me.id, follows, posts, users, saved, lastAttempts, likes],
+  );
 
   const weekly = useMemo(
     () => computeWeeklyRankings(posts, userOf, boosts.byProblem, boosts.byAuthor),
@@ -296,7 +331,13 @@ function DiscoverInner() {
             <Search size={16} className="shrink-0 text-muted" />
             <input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onFocus={() => {
+                focusedRef.current = true;
+              }}
+              onChange={(e) => {
+                const next = e.target.value;
+                setQ(next);
+              }}
               onCompositionStart={() => {
                 composingRef.current = true;
                 setIsComposing(true);
@@ -309,8 +350,12 @@ function DiscoverInner() {
                 setIsComposing(false);
                 const next = e.currentTarget.value;
                 setQ(next);
-                commitQuery(next);
-                if (view === "users") void searchUsers(next);
+              }}
+              onBlur={() => {
+                focusedRef.current = false;
+                composingRef.current = false;
+                setIsComposing(false);
+                commitQuery(q);
               }}
               onKeyDown={(e) => {
                 if (e.key !== "Enter") return;
@@ -561,37 +606,70 @@ function DiscoverInner() {
 
       {view === "users" ? (
         <div>
-          {!searching && <WeeklyBoards qrafters={weekly.weeklyQrafters} questions={weekly.weeklyQuestions} />}
-          {searching && (
-            <p className="px-4 py-2 text-xs text-muted">「{q.trim()}」を検索中</p>
-          )}
-          <div className="divide-y divide-gray-800">
-            {matchedUsers.length === 0 ? (
-              <EmptyState
-                title={q.trim() ? "一致するユーザーがいません" : "ユーザーが見つかりません"}
-                body="キーワードを変えるか、フィルターをリセットしてみてください。"
-                actionLabel={q.trim() || filtersActive ? "条件をリセット" : undefined}
-                onAction={
-                  q.trim() || filtersActive
-                    ? () => {
-                        setQ("");
-                        patchParams({ q: null, sort: null, subject: null, mode: null, lv: null, kind: null });
-                      }
-                    : undefined
-                }
-              />
-            ) : (
-              matchedUsers.map((u) => (
-                <UserResultCard
-                  key={u.id}
-                  user={u}
-                  isMe={u.id === me.id}
-                  following={follows.includes(u.id)}
-                  onFollow={() => toggleFollow(u.id)}
+          {!searching && (
+            <>
+              <WeeklyBoards qrafters={weekly.weeklyQrafters} questions={weekly.weeklyQuestions} />
+              <p className="px-4 pb-1 pt-3 text-xs font-black tracking-wide text-muted">おすすめユーザー</p>
+              {recommendedUsers.length === 0 ? (
+                <EmptyState
+                  title="おすすめできるユーザーがまだいません"
+                  body="問題を解く・保存する・投稿すると、関連するQrafterが表示されます。"
                 />
-              ))
-            )}
-          </div>
+              ) : (
+                <div className="divide-y divide-gray-800">
+                  {recommendedUsers.slice(0, userLimit).map((row) => (
+                    <UserResultCard
+                      key={row.user.id}
+                      user={row.user}
+                      reason={row.reason}
+                      isMe={row.user.id === me.id}
+                      following={follows.includes(row.user.id)}
+                      onFollow={() => toggleFollow(row.user.id)}
+                    />
+                  ))}
+                </div>
+              )}
+              {recommendedUsers.length > userLimit ? (
+                <div className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setUserLimit((n) => n + 8)}
+                    className="min-h-11 w-full rounded-full border border-gray-700 text-sm font-bold"
+                  >
+                    もっと見る
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
+          {searching && (
+            <>
+              <p className="px-4 py-2 text-xs text-muted">「{q.trim()}」を検索中</p>
+              <div className="divide-y divide-gray-800">
+                {matchedUsers.length === 0 ? (
+                  <EmptyState
+                    title="一致するユーザーがいません"
+                    body="キーワードを変えるか、検索を消すとおすすめユーザーに戻ります。"
+                    actionLabel="検索をクリア"
+                    onAction={() => {
+                      setQ("");
+                      patchParams({ q: null });
+                    }}
+                  />
+                ) : (
+                  matchedUsers.map((u) => (
+                    <UserResultCard
+                      key={u.id}
+                      user={u}
+                      isMe={u.id === me.id}
+                      following={follows.includes(u.id)}
+                      onFollow={() => toggleFollow(u.id)}
+                    />
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div>
@@ -733,11 +811,13 @@ function UserResultCard({
   isMe,
   following,
   onFollow,
+  reason,
 }: {
   user: User;
   isMe: boolean;
   following: boolean;
   onFollow: () => void;
+  reason?: string;
 }) {
   const verified = userIsVerified(user);
   return (
@@ -751,6 +831,7 @@ function UserResultCard({
           <VerifiedBadge show={verified} tone={verifiedBadgeTone(user)} />
         </div>
         <p className="truncate text-xs text-muted">@{user.handle}</p>
+        {reason ? <p className="mt-0.5 truncate text-[11px] text-aha/80">{reason}</p> : null}
       </Link>
       {!isMe && (
         <button

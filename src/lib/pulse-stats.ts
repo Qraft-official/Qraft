@@ -11,6 +11,7 @@ export type PulseAttempt = {
 
 export type PublishedPulse = {
   id: string;
+  authorId: string;
   sprintDay: string;
   title: string;
   subject: string;

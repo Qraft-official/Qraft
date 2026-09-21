@@ -8,7 +8,9 @@ export const COMPLIMENTARY_PREMIUM_IDENTIFIERS = ["qrafter"] as const;
 export const GUARDIAN_CONSENT_AGE = 15;
 export const VERIFIED_CREATOR_IDS = ["u-official", "u-mirai"] as const;
 export const OFFICIAL_USER_ID = "u-official";
+export const OFFICIAL_PROFILE_ID = "5b0a91f3-8717-4386-b44d-6935550fece9";
 export const OFFICIAL_HANDLE = "qraft";
+export const OFFICIAL_NAME = "Qraft";
 export const PREMIUM_PRICE_JPY = 400;
 /** Canonical public origin for share URLs (never preview/vercel.app). */
 export const CANONICAL_ORIGIN = "https://qrafters.jp";

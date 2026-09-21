@@ -2,7 +2,7 @@
 
 import { PostCard } from "@/components/PostCard";
 import { EmptyState } from "@/components/UiStates";
-import { SUBJECT_LABEL } from "@/lib/constants";
+import { OFFICIAL_PROFILE_ID, SUBJECT_LABEL } from "@/lib/constants";
 import { asSubject } from "@/lib/problems";
 import { fetchMyPulseAttempts, fetchPublishedPulses } from "@/lib/pulse";
 import { attemptByDay, labelForVisual, type PulseAttempt, type PublishedPulse } from "@/lib/pulse-stats";
@@ -75,7 +75,7 @@ export function PulseArchive() {
               live ??
               ({
                 id: pulse.id,
-                authorId: "",
+                authorId: pulse.authorId || OFFICIAL_PROFILE_ID,
                 kind: "sprint",
                 subject: asSubject(pulse.subject),
                 text: `**${pulse.title}**`,

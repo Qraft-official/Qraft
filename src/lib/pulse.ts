@@ -17,6 +17,7 @@ function mapPulse(row: Record<string, unknown>): PublishedPulse | null {
   if (!sprintDay || !row.id) return null;
   return {
     id: String(row.id),
+    authorId: typeof row.author_id === "string" ? row.author_id : "",
     sprintDay,
     title: typeof row.title === "string" ? row.title : "",
     subject: asSubject(String(row.subject ?? "math")),
@@ -97,11 +98,13 @@ export async function fetchMyPulseAttempts() {
       problem_id: string;
       grade?: string | null;
       submitted_at?: string | null;
-      problems?: { sprint_day?: string; is_sprint?: boolean; publish_at?: string } | { sprint_day?: string }[];
+      problems?: { sprint_day?: string; is_sprint?: boolean; publish_at?: string } | { sprint_day?: string; is_sprint?: boolean; publish_at?: string }[];
     };
     const rel = Array.isArray(row.problems) ? row.problems[0] : row.problems;
     const sprintDay = asDay(rel?.sprint_day);
     if (!sprintDay) continue;
+    const opens = rel?.publish_at ? Date.parse(rel.publish_at) : NaN;
+    if (Number.isFinite(opens) && opens > Date.now()) continue;
     attempts.push({
       problemId: row.problem_id,
       sprintDay,

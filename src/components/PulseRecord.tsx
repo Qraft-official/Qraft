@@ -20,6 +20,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+const VISUAL_MARK: Record<string, string> = {
+  correct: "○",
+  incorrect: "×",
+  pending: "△",
+  unattempted: "・",
+  none: "–",
+  future: "",
+};
+
 const VISUAL_CLASS: Record<string, string> = {
   correct: "bg-aha text-black",
   incorrect: "bg-neon/80 text-white",
@@ -149,11 +158,13 @@ export function PulseRecord() {
               key={cell.date}
               type="button"
               onClick={() => setSelected(cell.date)}
+              aria-label={`${Number(cell.date.slice(-2))}日 ${labelForVisual(visual)}`}
               className={`aspect-square rounded-md text-[11px] font-bold ${VISUAL_CLASS[visual]} ${
                 isSel ? "ring-2 ring-white" : ""
               }`}
             >
-              {Number(cell.date.slice(-2))}
+              <span className="block leading-none">{Number(cell.date.slice(-2))}</span>
+              <span className="block text-[9px] leading-none opacity-80">{VISUAL_MARK[visual]}</span>
             </button>
           );
         })}

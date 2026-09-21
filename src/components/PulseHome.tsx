@@ -2,34 +2,34 @@
 
 import { PostCard } from "@/components/PostCard";
 import { PULSE_NAME } from "@/lib/constants";
-import { getNextPulseRelease, isPulseOpenAt, jstDateString } from "@/lib/jst";
+import { getNextPulseRelease } from "@/lib/jst";
 import { useApp } from "@/lib/store";
 import { Flame } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-function formatCountdown(ms: number) {
-  const clamped = Math.max(0, ms);
-  const h = Math.floor(clamped / 3600000);
-  const m = Math.floor((clamped % 3600000) / 60000);
-  const s = Math.floor((clamped % 60000) / 1000);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+function nextPulseLabel(now = Date.now()) {
+  const next = getNextPulseRelease(new Date(now));
+  const ms = Math.max(0, next.getTime() - now);
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h <= 0 && m <= 0) return "次のPULSEは21:00";
+  if (h <= 0) return `次の問題まで ${m}分`;
+  return `次の問題まで ${h}時間${m}分`;
 }
 
 export function PulseHome() {
   const { officialPost, authenticated, openComposer } = useApp();
-  const [now, setNow] = useState(() => Date.now());
+  const [label, setLabel] = useState(() => nextPulseLabel());
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    const tick = () => setLabel(nextPulseLabel());
+    tick();
+    const id = window.setInterval(tick, 60000);
     return () => window.clearInterval(id);
   }, []);
 
-  const today = jstDateString(new Date(now));
-  const live = isPulseOpenAt(today, new Date(now));
-  const next = getNextPulseRelease(new Date(now));
-  const remain = formatCountdown(next.getTime() - now);
-  const todayPost = live && officialPost?.sprintDay === today ? officialPost : null;
+  const livePost = officialPost.title ? officialPost : null;
 
   return (
     <div>
@@ -38,32 +38,28 @@ export function PulseHome() {
           <Flame size={16} className="text-orange-400" />
           {PULSE_NAME}
         </p>
-        {live && todayPost ? (
-          <>
-            <p className="mt-1 text-xs text-muted">本日 {today} · 21:00 公開</p>
-            <Link
-              href="/sprint"
-              className="mt-3 inline-flex min-h-11 items-center rounded-full bg-aha px-4 text-sm font-black text-black"
-            >
-              今日のPULSEに挑戦
-            </Link>
-          </>
-        ) : (
-          <>
-            <p className="mt-2 text-lg font-black text-white">今日のPULSEは21:00に公開</p>
-            <p className="mt-1 text-sm text-muted">公開まで {remain}</p>
-          </>
-        )}
+        <p className="mt-1 text-xs text-muted">毎日21時の共通問題</p>
+        <p className="mt-2 text-sm font-bold text-white">{label}</p>
+        {livePost ? (
+          <Link
+            href="/sprint"
+            className="mt-3 inline-flex min-h-11 items-center rounded-full bg-aha px-4 text-sm font-black text-black"
+          >
+            このPULSEに挑戦
+          </Link>
+        ) : null}
       </div>
 
-      {todayPost ? <PostCard post={todayPost} /> : null}
+      {livePost ? <PostCard post={livePost} /> : (
+        <p className="px-4 py-6 text-sm text-muted">公開済みのPULSEはまだありません。</p>
+      )}
 
       <div className="grid grid-cols-2 gap-2 px-4 py-4">
         <Link
           href="/sprint/archive"
           className="inline-flex min-h-11 items-center justify-center rounded-full border border-gray-700 text-sm font-bold"
         >
-          過去のPULSE
+          過去のPULSEを見る
         </Link>
         {authenticated ? (
           <Link

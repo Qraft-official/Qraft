@@ -4,6 +4,7 @@ import { GoogleAdSlot } from "@/components/GoogleAdSlot";
 import { PostCard } from "@/components/PostCard";
 import { ProblemSolveStats } from "@/components/ProblemSolveStats";
 import { useApp } from "@/lib/store";
+import { isProblemListedForFeed } from "@/lib/publish-at";
 import { ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -11,7 +12,15 @@ export function ProblemThread() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { getPost, repliesTo } = useApp();
-  const post = getPost(id);
+  const found = getPost(id);
+  const post =
+    found &&
+    isProblemListedForFeed({
+      is_sprint: found.isSprint || found.kind === "sprint",
+      publish_at: found.publishAt ?? null,
+    })
+      ? found
+      : undefined;
 
   if (!post) {
     return (

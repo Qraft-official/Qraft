@@ -1,17 +1,11 @@
 import { userFromRequest, clip } from "@/lib/api-auth";
 import { adminSupabase } from "@/lib/admin-supabase";
-import { answersMatch } from "@/lib/challenge";
-import { asProblemAnswerType } from "@/lib/problem-answer";
+import { gradeProblemAnswerRecord, type ProblemGradeRecord } from "@/lib/problem-grading";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-type GradeRow = {
-  mode: string | null;
-  correct_answer: string | null;
-  answer_unit?: string | null;
-  answer_type?: string | null;
-  answer_options?: { id?: string }[] | null;
+type GradeRow = ProblemGradeRecord & {
   publish_at: string | null;
   is_sprint: boolean | null;
 };
@@ -24,28 +18,7 @@ function gradePayload(data: GradeRow, answer: string) {
   if (data.is_sprint) {
     return NextResponse.json({ graded: false, correct: null });
   }
-  const expected = String(data.correct_answer ?? "").trim();
-  if (!expected) {
-    return NextResponse.json({ graded: false, correct: null });
-  }
-  const answerType = asProblemAnswerType(data.answer_type);
-  if (answerType === "written") {
-    return NextResponse.json({ graded: false, correct: null });
-  }
-  if (answerType === "choice") {
-    const isValidOption = (data.answer_options ?? []).some((option) => option.id === answer);
-    return NextResponse.json({
-      graded: true,
-      correct: isValidOption && expected === answer,
-    });
-  }
-  if (!data.answer_type && data.mode !== "challenge" && data.mode !== "aha") {
-    return NextResponse.json({ graded: false, correct: null });
-  }
-  return NextResponse.json({
-    graded: true,
-    correct: answersMatch(expected, answer, data.answer_unit),
-  });
+  return NextResponse.json(gradeProblemAnswerRecord(data, answer));
 }
 
 export async function POST(request: Request) {
@@ -77,7 +50,7 @@ export async function POST(request: Request) {
 
   const primary = await admin
     .from("problems")
-    .select("mode, correct_answer, answer_unit, answer_type, answer_options, publish_at, is_sprint")
+    .select("mode, correct_answer, accepted_answers, answer_unit, answer_type, answer_options, publish_at, is_sprint")
     .eq("id", problemId)
     .maybeSingle();
 

@@ -95,7 +95,10 @@ export function numbersClose(a: number, b: number) {
 function stripUnitSuffix(value: string, unit: string | null | undefined) {
   const u = normalizeAnswerLiteral(unit ?? "");
   if (!u) return value;
-  if (value.endsWith(u) && value.length > u.length) return value.slice(0, -u.length);
+  if (value.endsWith(u) && value.length > u.length) {
+    const number = value.slice(0, -u.length);
+    if (parseLooseNumber(number) != null) return number;
+  }
   return value;
 }
 

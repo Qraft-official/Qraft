@@ -31,6 +31,8 @@ create table if not exists public.problems (
   mode text not null default 'question'
     check (mode in ('question', 'challenge', 'aha')),
   correct_answer text,
+  accepted_answers jsonb not null default '[]'::jsonb
+    check (jsonb_typeof(accepted_answers) = 'array'),
   answer_unit text
     check (answer_unit is null or char_length(btrim(answer_unit)) <= 12)
 );

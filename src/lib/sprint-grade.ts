@@ -1,4 +1,4 @@
-import { parseLooseNumber, numbersClose } from "./answer-normalize";
+import { normalizeAnswerLiteral, parseLooseNumber, numbersClose } from "./answer-normalize";
 
 export const SPRINT_ANSWER_TYPES = ["number", "expression", "text", "choice", "multiple"] as const;
 export type SprintAnswerType = (typeof SPRINT_ANSWER_TYPES)[number];
@@ -32,8 +32,7 @@ export function normalizeSprintAnswer(raw: string): string {
   s = s.replace(/^(答え(は)?|解答(は)?|正解(は)?|answer\s*(is|=|:)?)\s*/i, "");
   s = s.replace(/^[=\s：:]+/, "");
   s = s.replace(/[。．.、]+$/g, "");
-  s = s.replace(/\s+/g, "");
-  return s.toLowerCase();
+  return normalizeAnswerLiteral(s);
 }
 
 function parseNumeric(raw: string): number | null {
@@ -120,7 +119,7 @@ function evalExpr(expr: string, x: number): number | null {
       eat();
       return x;
     }
-    let start = i;
+    const start = i;
     if (peek() === ".") eat();
     while (peek() >= "0" && peek() <= "9") eat();
     if (peek() === "." && start === i) eat();
@@ -216,13 +215,6 @@ export function gradeSprintAnswer(input: {
   for (const t of targets) {
     const nt = normalizeSprintAnswer(t);
     if (nt && nt === ng) return "correct";
-  }
-  for (const t of targets) {
-    const nt = normalizeSprintAnswer(t);
-    if (nt.length >= 2 && ng.length >= 2 && (ng.includes(nt) || nt.includes(ng))) {
-      const ratio = Math.min(nt.length, ng.length) / Math.max(nt.length, ng.length);
-      if (ratio >= 0.4) return "maybe_correct";
-    }
   }
   return "incorrect";
 }

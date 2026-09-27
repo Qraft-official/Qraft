@@ -1,9 +1,10 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { asProblemMode, type ProblemMode } from "@/lib/challenge";
+import { asProblemMode, sanitizeAnswerUnit, type ProblemMode } from "@/lib/challenge";
 import { asDifficulty } from "@/lib/difficulty";
 import { asNotePages, asSubject } from "@/lib/problems";
 import { isProblemListedForFeed } from "@/lib/publish-at";
 import { sanitizeHints } from "@/lib/learn";
+import { asProblemAnswerType, sanitizeAnswerOptions, type AnswerOption, type ProblemAnswerType } from "@/lib/problem-answer";
 import { rankRelatedProblems, type RelatedProblemCard } from "@/lib/related-problems";
 import type { NotePage, Subject } from "@/lib/types";
 
@@ -13,7 +14,7 @@ import type { NotePage, Subject } from "@/lib/types";
  * hints / solution (explanation) are listed-row study fields; still hidden in the first viewport.
  */
 const PUBLIC_LIST_COLUMNS =
-  "id, title, problem_text, subject, photo, is_sprint, sprint_day, publish_at, topic, created_at, mode, difficulty_level";
+  "id, title, problem_text, subject, photo, is_sprint, sprint_day, publish_at, topic, created_at, mode, difficulty_level, answer_type, answer_options, answer_available, answer_unit";
 
 const PUBLIC_LIST_COLUMNS_MIN =
   "id, title, problem_text, subject, photo, is_sprint, created_at, mode, difficulty_level";
@@ -34,6 +35,10 @@ export type PublicProblemPreview = {
   topic?: string;
   difficultyLevel: number;
   mode: ProblemMode;
+  answerType: ProblemAnswerType;
+  answerOptions: AnswerOption[];
+  answerAvailable: boolean;
+  answerUnit?: string;
   createdAt: string;
   pages?: NotePage[];
   photo?: string;
@@ -56,6 +61,10 @@ type PublicProblemRow = {
   problem_format?: string | null;
   created_at: string;
   mode?: string | null;
+  answer_type?: string | null;
+  answer_options?: unknown;
+  answer_available?: boolean | null;
+  answer_unit?: string | null;
   difficulty_level?: number | null;
   hints?: unknown;
   solution?: string | null;
@@ -97,6 +106,10 @@ function rowToPreview(row: PublicProblemRow, includePages: boolean): PublicProbl
     topic: topic || undefined,
     difficultyLevel: asDifficulty(row.difficulty_level),
     mode: asProblemMode(row.mode),
+    answerType: asProblemAnswerType(row.answer_type),
+    answerOptions: sanitizeAnswerOptions(row.answer_options),
+    answerAvailable: row.answer_available ?? false,
+    answerUnit: sanitizeAnswerUnit(row.answer_unit) ?? undefined,
     createdAt: row.created_at,
     pages: includePages ? asNotePages(row.pages) : undefined,
     photo: row.photo ?? undefined,
@@ -170,7 +183,7 @@ export async function fetchPublicProblemPreview(id: string): Promise<PublicProbl
     .eq("id", id)
     .maybeSingle();
   const { data, error } =
-    primary.error && /topic|pages|problem_format|publish_at|hints|solution/i.test(primary.error.message)
+    primary.error && /topic|pages|problem_format|publish_at|hints|solution|answer_type|answer_options|answer_available|answer_unit/i.test(primary.error.message)
       ? await supabase.from("problems").select(PUBLIC_LIST_COLUMNS_MIN).eq("id", id).maybeSingle()
       : primary;
   if (error) {

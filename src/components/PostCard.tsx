@@ -39,9 +39,11 @@ import { StarRating } from "./StarRating";
 import { UserAvatar } from "./UserAvatar";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { SaveProblemButton } from "./SaveProblemButton";
+import { ProblemSetAddButton } from "./ProblemSetAddButton";
 import { canSavePost, saveTargetId } from "@/lib/save-post";
 import { SpoilerReveal } from "./SpoilerReveal";
 import { ProblemAnswerBox } from "./ProblemAnswerBox";
+import { WrittenAnswerBox } from "./WrittenAnswerBox";
 import { modeStoresAnswer } from "@/lib/challenge";
 import { FeltDifficulty } from "./FeltDifficulty";
 import { AttemptTime } from "./RevengeBanner";
@@ -531,9 +533,10 @@ export function PostCard({
 
           {(post.kind === "problem" || post.kind === "sprint") && (
             <>
-              {post.kind === "problem" &&
-              modeStoresAnswer(post.problemMode ?? "question") &&
-              !pulseLocked ? (
+              {post.kind === "problem" && !pulseLocked && post.answerType === "written" ? (
+                <WrittenAnswerBox post={post} />
+              ) : post.kind === "problem" && !pulseLocked &&
+                (post.answerType === "choice" || post.answerAvailable || modeStoresAnswer(post.problemMode ?? "question")) ? (
                 <ProblemAnswerBox post={post} />
               ) : null}
               {hideStudy ? null : (
@@ -700,6 +703,12 @@ export function PostCard({
               <Share2 size={15} />
             </button>
           </div>
+
+          {post.kind === "problem" && !post.isSprint ? (
+            <div className="mt-2 flex justify-end">
+              <ProblemSetAddButton problemId={post.id} />
+            </div>
+          ) : null}
 
           {shareToast && (
             <p className="mt-2 rounded-full bg-aha/15 px-3 py-1 text-center text-[11px] font-bold text-aha">

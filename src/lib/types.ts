@@ -1,4 +1,5 @@
 import type { ProblemMode } from "./challenge";
+import type { AnswerOption, ProblemAnswerType } from "./problem-answer";
 
 export type Subject = "math" | "physics" | "chemistry";
 export type Tier = 1 | 2 | 3 | 4 | 5;
@@ -78,6 +79,9 @@ export type Post = {
   topic?: string;
   /** question = 教えてQrafter!, challenge = Challenger, aha = Aha! */
   problemMode?: ProblemMode;
+  answerType?: ProblemAnswerType;
+  answerOptions?: AnswerOption[];
+  answerAvailable?: boolean;
   /** Author-only. Never sent to other clients from fetch. */
   correctAnswer?: string;
   solverAnswer?: string;

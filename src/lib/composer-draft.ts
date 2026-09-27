@@ -1,6 +1,7 @@
 import { DRAFT_MAX_CHARS } from "./learn";
 import type { TextSizeId } from "./text-size";
 import type { CanvasPage, ProblemMode, Subject, Tier } from "./types";
+import type { AnswerOption, ProblemAnswerType } from "./problem-answer";
 
 type TypedPage = { id: string; latex: string };
 
@@ -16,6 +17,8 @@ export type ComposerDraft = {
   postMode: ProblemMode;
   difficultyLevel: Tier;
   correctAnswer: string;
+  answerType?: ProblemAnswerType;
+  answerOptions?: AnswerOption[];
   answerUnit?: string;
   solutionDraft: string;
   hints: string[];
@@ -121,6 +124,8 @@ export function draftIsEmpty(d: ComposerDraft) {
     return false;
   }
   if (d.hints.some((h) => h.trim()) || d.typedPages.some((p) => p.latex.trim())) return false;
+  if (d.answerType && d.answerType !== "answer") return false;
+  if (d.answerOptions?.some((option) => option.text.trim())) return false;
   if (d.photo || d.hadHandwriting) return false;
   if (d.pages?.some((p) => p.strokes.length || p.texts?.length || p.backgroundImage)) return false;
   return true;

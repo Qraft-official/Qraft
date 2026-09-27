@@ -101,6 +101,13 @@ function stripUnitSuffix(value: string, unit: string | null | undefined) {
 
 const UNITISH = /^[a-zA-Z%°µμℓ²³円人個冊問台本巻点秒分時年月日個組組]+$/;
 
+const POWERED_UNIT_TOKEN = /^(?:mm|cm|km|m|mg|kg|g|ml|l|s|min|h)(?:2|3)?$/;
+
+function isKnownPoweredUnit(unit: string) {
+  const parts = unit.split("/");
+  return parts.length <= 3 && parts.every((part) => POWERED_UNIT_TOKEN.test(part));
+}
+
 function splitLegacyNumberAndUnit(normalized: string): { value: string; unit: string } | null {
   const m = /^((?:[〇零一二三四五六七八九十百千万億]+)|(?:-?\d+(?:\.\d+)?(?:\/-?\d+)?))([^0-9+\-*/=].*)$/.exec(
     normalized,
@@ -110,7 +117,11 @@ function splitLegacyNumberAndUnit(normalized: string): { value: string; unit: st
   const unit = m[2];
   if (!unit || unit.length > ANSWER_UNIT_MAX) return null;
   if (/[とや・,]/.test(unit)) return null;
-  if (!UNITISH.test(unit) && !/^[a-z%°µμℓ²³\/]+$/.test(unit)) return null;
+  if (
+    !UNITISH.test(unit) &&
+    !/^[a-z%°µμℓ²³\/]+$/.test(unit) &&
+    !isKnownPoweredUnit(unit)
+  ) return null;
   if (parseLooseNumber(value) == null) return null;
   return { value, unit };
 }

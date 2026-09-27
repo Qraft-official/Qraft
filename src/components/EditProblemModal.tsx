@@ -18,12 +18,13 @@ import { X, ChevronDown } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
 import { modeStoresAnswer } from "@/lib/challenge";
-import { AuthorAnswerFields } from "./AnswerFields";
+import { AnswerFormatEditor } from "./AnswerFormatEditor";
 import { ComposerModeTabs } from "./ComposerModeTabs";
 import type { MultiPageCanvasHandle } from "./MultiPageCanvas";
 import { ComposerExpandOverlay } from "./NotebookExpandControls";
 import { ProblemModePicker } from "./ProblemModePicker";
 import { HintEditor } from "./HintEditor";
+import { createAnswerOptionId, validChoiceAnswer, type AnswerOption, type ProblemAnswerType } from "@/lib/problem-answer";
 import type { TextSizeId } from "@/lib/text-size";
 import type { TypedPage } from "./TypedNotebook";
 
@@ -74,6 +75,8 @@ export function EditProblemModal({
   const [mode, setMode] = useState<ProblemMode>("question");
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [answerUnit, setAnswerUnit] = useState("");
+  const [answerType, setAnswerType] = useState<ProblemAnswerType>("answer");
+  const [answerOptions, setAnswerOptions] = useState<AnswerOption[]>([]);
   const [hints, setHints] = useState<string[]>([]);
   const [solution, setSolution] = useState("");
   const [error, setError] = useState("");
@@ -97,6 +100,8 @@ export function EditProblemModal({
     setMode(post.problemMode ?? "question");
     setCorrectAnswer(post.correctAnswer ?? "");
     setAnswerUnit(post.answerUnit ?? "");
+    setAnswerType(post.answerType ?? "answer");
+    setAnswerOptions(post.answerOptions ?? []);
     setHints(post.hints ?? []);
     setSolution(post.solution ?? "");
     setError("");
@@ -189,6 +194,8 @@ export function EditProblemModal({
         typedPages.some((p, i) => p.latex !== (origTyped[i] ?? ""));
       const titleDirty = title.trim() !== (post.title ?? "").trim();
       const modeDirty = mode !== (post.problemMode ?? "question");
+      const answerTypeDirty = answerType !== (post.answerType ?? "answer");
+      const optionsDirty = JSON.stringify(answerOptions) !== JSON.stringify(post.answerOptions ?? []);
       const answerDirty =
         correctAnswer !== (post.correctAnswer ?? "") ||
         (answerUnit.trim() !== (post.answerUnit ?? "").trim());
@@ -198,7 +205,7 @@ export function EditProblemModal({
         (p) => p.strokes.length > 0 || (p.texts?.length ?? 0) > 0,
       );
       const formatDirty = (inputMode === "hand") !== isHandwritingPost(post);
-      const dirty = titleDirty || modeDirty || answerDirty || hintsDirty || solutionDirty || typedDirty || inkDirty || formatDirty;
+      const dirty = titleDirty || modeDirty || answerTypeDirty || optionsDirty || answerDirty || hintsDirty || solutionDirty || typedDirty || inkDirty || formatDirty;
       if (!dirty) {
         onClose();
         return;
@@ -212,7 +219,7 @@ export function EditProblemModal({
       });
       if (ok) onClose();
     })();
-  }, [post, title, typedPages, pages, onClose, mode, correctAnswer, inputMode, hints, solution]);
+  }, [post, title, typedPages, pages, onClose, mode, correctAnswer, answerType, answerOptions, answerUnit, inputMode, hints, solution]);
 
   useEffect(() => {
     if (!open) return;
@@ -230,13 +237,32 @@ export function EditProblemModal({
 
   const save = async () => {
     if (saving) return;
-    if (mode === "challenge" && !correctAnswer.trim()) {
+    if (answerType === "choice" && !validChoiceAnswer(answerOptions, correctAnswer)) {
+      setError("選択肢を2〜6個追加し、正解を選んでください");
+      return;
+    }
+    if (answerType === "answer" && mode === "challenge" && !correctAnswer.trim()) {
       setError("Challenger モードでは正解の入力が必須です");
       return;
     }
-    if (mode === "aha" && !correctAnswer.trim()) {
+    if (answerType === "answer" && mode === "aha" && !correctAnswer.trim()) {
       setError("答えを入力してください");
       return;
+    }
+    const answerSettingsChanged =
+      mode !== (post.problemMode ?? "question") ||
+      answerType !== (post.answerType ?? "answer") ||
+      correctAnswer !== (post.correctAnswer ?? "") ||
+      answerUnit.trim() !== (post.answerUnit ?? "").trim() ||
+      JSON.stringify(answerOptions) !== JSON.stringify(post.answerOptions ?? []);
+    if (answerSettingsChanged) {
+      const confirmed = await confirmDialog({
+        title: "回答設定を変更しますか？",
+        message: "既に回答がある問題では形式・正解・単位を変更できません。回答済みの場合は保存時に変更を拒否します。",
+        confirmLabel: "変更を続ける",
+        cancelLabel: "戻る",
+      });
+      if (!confirmed) return;
     }
     setSaving(true);
     setError("");
@@ -251,8 +277,10 @@ export function EditProblemModal({
         title,
         text: wrapMathliveLatex(joined) || title.trim(),
         mode,
-        correctAnswer: mode === "challenge" || mode === "aha" ? correctAnswer : null,
-        answerUnit: mode === "challenge" || mode === "aha" ? answerUnit : null,
+        answerType,
+        answerOptions,
+        correctAnswer: correctAnswer.trim() || null,
+        answerUnit: answerType === "answer" ? answerUnit : null,
         format: "typed",
         hints,
         solution,
@@ -292,8 +320,10 @@ export function EditProblemModal({
       title,
       text: title.trim() || "手書きの問題",
       mode,
-      correctAnswer: mode === "challenge" || mode === "aha" ? correctAnswer : null,
-      answerUnit: mode === "challenge" || mode === "aha" ? answerUnit : null,
+      answerType,
+      answerOptions,
+      correctAnswer: correctAnswer.trim() || null,
+      answerUnit: answerType === "answer" ? answerUnit : null,
       format: "handwriting",
       hints,
       solution,
@@ -371,19 +401,31 @@ export function EditProblemModal({
                   onCorrectAnswer={setCorrectAnswer}
                   showAnswer={false}
                 />
-                {modeStoresAnswer(mode) && (
-                  <div className="border-b border-gray-800 px-3 py-2 md:px-4">
-                    <AuthorAnswerFields
-                      answerId="edit-aha-answer"
-                      unitId="edit-aha-unit"
-                      answer={correctAnswer}
-                      unit={answerUnit}
-                      onAnswer={setCorrectAnswer}
-                      onUnit={setAnswerUnit}
-                      answerLabel={mode === "challenge" ? "正解" : "答え"}
-                    />
-                  </div>
-                )}
+                <AnswerFormatEditor
+                  value={answerType}
+                  onChange={(next) => {
+                    if (next !== answerType) {
+                      setCorrectAnswer("");
+                      if (next === "choice") {
+                        setAnswerOptions((current) => current.length >= 2 ? current : [
+                          ...current,
+                          ...Array.from({ length: 2 - current.length }, () => ({ id: createAnswerOptionId(), text: "" })),
+                        ]);
+                      } else if (answerType === "choice") {
+                        setAnswerOptions([]);
+                      }
+                    }
+                    setAnswerType(next);
+                    setError("");
+                  }}
+                  answer={correctAnswer}
+                  onAnswer={setCorrectAnswer}
+                  unit={answerUnit}
+                  onUnit={setAnswerUnit}
+                  options={answerOptions}
+                  onOptions={setAnswerOptions}
+                  optionalAnswer={!modeStoresAnswer(mode)}
+                />
                 <HintEditor hints={hints} onChange={setHints} />
                 <div className="border-b border-gray-800 px-3 py-2 md:px-4">
                   <label className="text-xs font-bold text-muted" htmlFor="edit-explanation">

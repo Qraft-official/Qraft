@@ -46,21 +46,45 @@ export function ProblemAnswerBox({ post }: { post: Post }) {
 
   return (
     <div className="mt-3 rounded-2xl border border-gray-800 bg-panel px-3 py-3">
-      <label htmlFor={`aha-answer-${post.id}`} className="text-xs font-bold text-muted">
-        答え
+      <label className="text-xs font-bold text-muted">
+        {post.answerType === "choice" ? "選択肢" : "答え"}
       </label>
-      <SolverAnswerField
-        id={`aha-answer-${post.id}`}
-        value={answer}
-        onChange={(next) => {
-          setAnswer(next);
-          if (error) setError("");
-          if (status === "incorrect" || status === "ungraded") setStatus("idle");
-        }}
-        onSubmit={submit}
-        unit={post.answerUnit}
-        disabled={busy}
-      />
+      {post.answerType === "choice" ? (
+        <div className="mt-2 grid gap-2">
+          {(post.answerOptions ?? []).map((option, index) => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={answer === option.id}
+              disabled={busy}
+              onClick={() => {
+                setAnswer(option.id);
+                if (error) setError("");
+                if (status === "incorrect" || status === "ungraded") setStatus("idle");
+              }}
+              className={`min-h-12 w-full rounded-xl border px-3 text-left text-sm ${
+                answer === option.id ? "border-aha bg-aha/10 text-white" : "border-gray-800 bg-black text-white"
+              }`}
+            >
+              <span className="mr-2 font-black text-aha">{String.fromCharCode(65 + index)}.</span>
+              {option.text}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <SolverAnswerField
+          id={`aha-answer-${post.id}`}
+          value={answer}
+          onChange={(next) => {
+            setAnswer(next);
+            if (error) setError("");
+            if (status === "incorrect" || status === "ungraded") setStatus("idle");
+          }}
+          onSubmit={submit}
+          unit={post.answerUnit}
+          disabled={busy}
+        />
+      )}
       {status === "correct" ? (
         <p className="mt-2 text-sm font-black text-emerald-300">正解！</p>
       ) : null}

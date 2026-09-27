@@ -1,6 +1,13 @@
 import { ensureProfile } from "./auth";
 import { OFFICIAL_HANDLE, OFFICIAL_NAME, OFFICIAL_PROFILE_ID, OFFICIAL_USER_ID } from "./constants";
 import { asProblemMode, modeStoresAnswer, sanitizeAnswerUnit, type ProblemMode } from "./challenge";
+import {
+  asProblemAnswerType,
+  sanitizeAnswerOptions,
+  validChoiceAnswer,
+  type AnswerOption,
+  type ProblemAnswerType,
+} from "./problem-answer";
 import { asDifficulty } from "./difficulty";
 import { sanitizeHints } from "./learn";
 import { HANDWRITING_UPLOAD_ERROR } from "./handwriting-export";
@@ -26,6 +33,9 @@ export type ProblemRow = {
   created_at: string;
   pages?: NotePage[] | null;
   problem_format?: string | null;
+  answer_type?: string | null;
+  answer_options?: unknown;
+  answer_available?: boolean | null;
   mode?: string | null;
   correct_answer?: string | null;
   answer_unit?: string | null;
@@ -35,6 +45,8 @@ export type ProblemRow = {
   promoted?: boolean | null;
   promoted_at?: string | null;
   hints?: unknown;
+  answerType?: ProblemAnswerType;
+  answerOptions?: AnswerOption[];
   felt_easy?: number | null;
   felt_normal?: number | null;
   felt_hard?: number | null;
@@ -59,6 +71,8 @@ export type NewProblem = {
   text: string;
   title?: string;
   solution?: string;
+  answerType?: ProblemAnswerType;
+  answerOptions?: AnswerOption[];
   photo?: string;
   isSprint?: boolean;
   pages?: NotePage[];
@@ -75,6 +89,8 @@ export type NewProblem = {
 export type ProblemPatch = {
   title?: string;
   text?: string;
+  answerType?: ProblemAnswerType;
+  answerOptions?: AnswerOption[];
   correctAnswer?: string | null;
   answerUnit?: string | null;
   mode?: ProblemMode;
@@ -89,12 +105,10 @@ export type ProblemPatch = {
 const SUBJECTS: Subject[] = ["math", "physics", "chemistry"];
 
 const PROBLEM_COLUMNS_CORE =
-  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, publish_at, topic, pages, problem_format, created_at, mode, answer_unit, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, hints";
+  "id, author_id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, publish_at, topic, pages, problem_format, created_at, mode, answer_unit, answer_type, answer_options, answer_available, difficulty_level, confused_count, is_hard_spotlight, promoted, promoted_at, hints";
 
 const PROBLEM_COLUMNS =
   `${PROBLEM_COLUMNS_CORE}, felt_easy, felt_normal, felt_hard, duration_sum, duration_n, grade_correct, grade_n, series_id, series_ord`;
-
-const PROBLEM_COLUMNS_WITH_ANSWER = `${PROBLEM_COLUMNS}, correct_answer`;
 
 /** Older DBs may lack stats columns; never drop publish_at or PULSE rows fail the listed filter. */
 const PROBLEM_COLUMNS_LEGACY =
@@ -102,7 +116,7 @@ const PROBLEM_COLUMNS_LEGACY =
 
 /** anon column grants omit author_id and stats; PULSE still needs publish_at. */
 const PROBLEM_COLUMNS_ANON =
-  "id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, publish_at, topic, pages, problem_format, created_at, mode, difficulty_level, hints";
+  "id, title, problem_text, solution, subject, photo, is_sprint, sprint_day, publish_at, topic, pages, problem_format, created_at, mode, difficulty_level, hints, answer_type, answer_options, answer_available, answer_unit";
 
 const PULSE_LIVE_COLUMNS = PROBLEM_COLUMNS_CORE;
 
@@ -116,7 +130,7 @@ function asSprintDay(value: unknown): string | undefined {
 }
 
 const SELECT_FALLBACK_ERROR =
-  /answer_unit|hints|felt_easy|series_id|duration_sum|grade_correct|publish_at|topic|permission denied|author_id|confused_count|promoted/i;
+  /answer_unit|answer_type|answer_options|hints|felt_easy|series_id|duration_sum|grade_correct|publish_at|topic|permission denied|author_id|confused_count|promoted/i;
 
 function withPublicAuthor(row: ProblemRow): ProblemRow {
   if (row.author_id) return row;
@@ -211,11 +225,11 @@ async function attachAuthorAnswers(rows: ProblemRow[], viewerId: string | null):
   if (!ownIds.length) {
     return rows.map((row) => ({ ...row, correct_answer: undefined }));
   }
-  const { data } = await supabase
-    .from("problems")
-    .select("id, correct_answer")
-    .eq("author_id", viewerId)
-    .in("id", ownIds);
+  const { data, error } = await supabase.rpc("my_problem_answer_keys", { p_ids: ownIds });
+  if (error) {
+    console.warn("my_problem_answer_keys:", error.message);
+    return rows.map((row) => ({ ...row, correct_answer: undefined }));
+  }
   const answers = new Map(
     ((data ?? []) as { id: string; correct_answer?: string | null }[]).map((row) => [
       row.id,
@@ -239,6 +253,7 @@ export function problemToPost(
       ? row.problem_format
       : undefined;
   const problemMode = asProblemMode(row.mode);
+  const answerType = asProblemAnswerType(row.answer_type);
   const isAuthor = !!viewerId && viewerId === row.author_id;
   const topic = typeof row.topic === "string" ? row.topic.trim() : "";
   let body = row.problem_text ?? "";
@@ -271,11 +286,14 @@ export function problemToPost(
     eleganceCount: 0,
     sprintDay: isSprint ? asSprintDay(row.sprint_day) : undefined,
     problemMode,
+    answerType,
+    answerOptions: sanitizeAnswerOptions(row.answer_options),
+    answerAvailable: row.answer_available ?? modeStoresAnswer(problemMode),
     correctAnswer:
       isSprint
         ? undefined
-        : isAuthor && (problemMode === "aha" || problemMode === "challenge")
-          ? (row.correct_answer ?? "")
+        : isAuthor
+          ? row.correct_answer ?? undefined
           : undefined,
     answerUnit: isSprint ? undefined : sanitizeAnswerUnit(row.answer_unit) ?? undefined,
     difficultyLevel: asDifficulty(row.difficulty_level),
@@ -471,11 +489,11 @@ export async function fetchDiscoverProblems(input: {
 
 function answerPayload(input: NewProblem) {
   const mode = asProblemMode(input.mode);
-  const correctAnswer = modeStoresAnswer(mode)
-    ? (input.correctAnswer ?? "").trim() || null
-    : null;
-  const answerUnit = modeStoresAnswer(mode) ? sanitizeAnswerUnit(input.answerUnit) : null;
-  return { mode, correct_answer: correctAnswer, answer_unit: answerUnit };
+  const answerType = asProblemAnswerType(input.answerType);
+  const answerOptions = answerType === "choice" ? sanitizeAnswerOptions(input.answerOptions) : [];
+  const correctAnswer = (input.correctAnswer ?? "").trim() || null;
+  const answerUnit = answerType === "answer" ? sanitizeAnswerUnit(input.answerUnit) : null;
+  return { mode, answerType, answerOptions, correct_answer: correctAnswer, answer_unit: answerUnit };
 }
 
 export async function insertProblem(input: NewProblem): Promise<{
@@ -501,10 +519,13 @@ export async function insertProblem(input: NewProblem): Promise<{
   }
 
   const challenge = answerPayload(input);
-  if (challenge.mode === "challenge" && !challenge.correct_answer) {
+  if (challenge.answerType === "choice" && !validChoiceAnswer(challenge.answerOptions, challenge.correct_answer ?? "")) {
+    return { post: null, error: "選択肢を2〜6個追加し、正解を選んでください" };
+  }
+  if (challenge.answerType === "answer" && challenge.mode === "challenge" && !challenge.correct_answer) {
     return { post: null, error: "Challenger モードでは正解の入力が必須です" };
   }
-  if (challenge.mode === "aha" && !challenge.correct_answer) {
+  if (challenge.answerType === "answer" && challenge.mode === "aha" && !challenge.correct_answer) {
     return { post: null, error: "答えを入力してください" };
   }
 
@@ -538,12 +559,14 @@ export async function insertProblem(input: NewProblem): Promise<{
     pages,
     problem_format: input.format ?? null,
     mode: challenge.mode,
+    answer_type: challenge.answerType,
+    answer_options: challenge.answerOptions,
     correct_answer: challenge.correct_answer,
     answer_unit: challenge.answer_unit,
     difficulty_level: asDifficulty(input.difficultyLevel),
     hints: sanitizeHints(input.hints),
   };
-  let { data, error } = await supabase.from("problems").insert(row).select(PROBLEM_COLUMNS_WITH_ANSWER).single();
+  let { data, error } = await supabase.from("problems").insert(row).select(PROBLEM_COLUMNS).single();
   if (error && /answer_unit/i.test(error.message)) {
     const { answer_unit: _unit, ...withoutUnit } = row;
     void _unit;
@@ -570,7 +593,9 @@ export async function insertProblem(input: NewProblem): Promise<{
   }
 
   if (error) return { post: null, error: error.message };
-  return { post: problemToPost(data as ProblemRow, authorId), error: null };
+  const post = problemToPost(data as ProblemRow, authorId);
+  post.correctAnswer = challenge.correct_answer ?? undefined;
+  return { post, error: null };
 }
 
 export async function updateProblem(
@@ -588,10 +613,29 @@ export async function updateProblem(
   const updates: Record<string, unknown> = {};
   if (patch.title !== undefined) updates.title = patch.title.trim();
   if (patch.text !== undefined) updates.problem_text = patch.text;
+  if (patch.answerType !== undefined) {
+    const answerType = asProblemAnswerType(patch.answerType);
+    const mode = asProblemMode(patch.mode);
+    const options = answerType === "choice" ? sanitizeAnswerOptions(patch.answerOptions) : [];
+    const answer = (patch.correctAnswer ?? "").trim();
+    if (answerType === "choice" && !validChoiceAnswer(options, answer)) {
+      return { post: null, error: "選択肢を2〜6個追加し、正解を選んでください" };
+    }
+    if (answerType === "answer" && modeStoresAnswer(mode) && !answer) {
+      return {
+        post: null,
+        error: mode === "aha" ? "答えを入力してください" : "Challenger モードでは正解の入力が必須です",
+      };
+    }
+    updates.answer_type = answerType;
+    updates.answer_options = options;
+    updates.correct_answer = answer || null;
+    updates.answer_unit = answerType === "answer" ? sanitizeAnswerUnit(patch.answerUnit) : null;
+  }
   if (patch.mode !== undefined) {
     const nextMode = asProblemMode(patch.mode);
     updates.mode = nextMode;
-    if (modeStoresAnswer(nextMode)) {
+    if (patch.answerType === undefined && modeStoresAnswer(nextMode)) {
       if (patch.correctAnswer !== undefined) {
         const trimmed = (patch.correctAnswer ?? "").trim();
         if (!trimmed) {
@@ -605,11 +649,11 @@ export async function updateProblem(
         }
         updates.correct_answer = trimmed;
       }
-    } else {
+    } else if (patch.answerType === undefined) {
       updates.correct_answer = null;
       updates.answer_unit = null;
     }
-  } else if (patch.correctAnswer !== undefined) {
+  } else if (patch.answerType === undefined && patch.correctAnswer !== undefined) {
     const trimmed = (patch.correctAnswer ?? "").trim();
     if (!trimmed) {
       return { post: null, error: "答えを入力してください" };
@@ -617,7 +661,7 @@ export async function updateProblem(
     updates.correct_answer = trimmed;
   }
 
-  if (patch.answerUnit !== undefined) {
+  if (patch.answerType === undefined && patch.answerUnit !== undefined) {
     updates.answer_unit = sanitizeAnswerUnit(patch.answerUnit);
   }
 
@@ -651,7 +695,7 @@ export async function updateProblem(
     .update(updates)
     .eq("id", id)
     .eq("author_id", viewerId)
-    .select(PROBLEM_COLUMNS_WITH_ANSWER)
+    .select(PROBLEM_COLUMNS)
     .single();
 
   if (error && /answer_unit/i.test(error.message)) {
@@ -669,7 +713,11 @@ export async function updateProblem(
   }
 
   if (error) return { post: null, error: error.message };
-  return { post: problemToPost(data as ProblemRow, viewerId), error: null };
+  const post = problemToPost(data as ProblemRow, viewerId);
+  post.correctAnswer = patch.correctAnswer ?? undefined;
+  if (patch.answerType) post.answerType = patch.answerType;
+  if (patch.answerOptions) post.answerOptions = sanitizeAnswerOptions(patch.answerOptions);
+  return { post, error: null };
 }
 
 export async function deleteProblem(id: string): Promise<{ error: string | null }> {
@@ -703,9 +751,12 @@ export async function promoteProblem(id: string): Promise<{ post: Post | null; e
 
   const { data, error: readError } = await supabase
     .from("problems")
-    .select(PROBLEM_COLUMNS_WITH_ANSWER)
+    .select(PROBLEM_COLUMNS)
     .eq("id", id)
     .maybeSingle();
   if (readError || !data) return { post: null, error: readError?.message || "更新に失敗しました" };
-  return { post: problemToPost(data as ProblemRow, viewerId), error: null };
+  const post = problemToPost(data as ProblemRow, viewerId);
+  const { data: keys } = await supabase.rpc("my_problem_answer_keys", { p_ids: [id] });
+  post.correctAnswer = Array.isArray(keys) ? keys[0]?.correct_answer ?? undefined : undefined;
+  return { post, error: null };
 }

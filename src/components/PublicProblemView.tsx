@@ -1,6 +1,7 @@
 import { GoogleAdSlot } from "@/components/GoogleAdSlot";
 import { ProblemStudyBlocks } from "@/components/ProblemStudyBlocks";
 import { PublicProblemCard } from "@/components/PublicProblemCard";
+import { ProblemDetailInteractions } from "@/components/ProblemDetailInteractions";
 import { RelatedProblemCards } from "@/components/RelatedProblemCards";
 import type { PublicProblemPreview } from "@/lib/public-catalog";
 import type { RelatedProblemCard } from "@/lib/related-problems";
@@ -63,6 +64,7 @@ export function PublicProblemView({
         </p>
       </div>
       <PublicProblemCard preview={preview} />
+      <ProblemDetailInteractions preview={preview} />
       <section className="border-b border-gray-800 px-4 py-5">
         <p className="text-xs font-bold text-muted">
           {hints.length ? "ヒントあり · " : ""}

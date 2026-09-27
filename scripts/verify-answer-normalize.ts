@@ -43,6 +43,10 @@ assert.equal(answersMatch("30", "31", "cm"), false);
 assert.equal(answersMatch("30cm", "30"), true);
 assert.equal(answersMatch("30 cm", "３０"), true);
 assert.equal(answersMatch("30㎝", "三十"), true);
+assert.equal(answersMatch("30cm²", "30"), true);
+assert.equal(answersMatch("30 cm²", "３０"), true);
+assert.equal(answersMatch("30m³", "三十"), true);
+assert.equal(answersMatch("30abc2", "30"), false);
 
 assert.equal(answersMatch("7と13", "7と13"), true);
 assert.equal(answersMatch("7と13", "7"), false);

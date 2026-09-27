@@ -15,7 +15,7 @@ import { useApp } from "@/lib/store";
 import { verifiedBadgeTone } from "@/lib/verified";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Settings } from "lucide-react";
+import { BookOpen, Settings } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
 type Tab = "posts" | "solutions" | "learn" | "analytics" | "titles";
@@ -92,6 +92,9 @@ export default function ProfilePage() {
           </div>
         </div>
         <ReferralCampaignBanner className="mt-3" />
+        <Link href="/problem-sets" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-gray-700 px-4 text-sm font-bold">
+          <BookOpen size={16} /> 自分の問題集
+        </Link>
         <p className="mt-3 text-sm">{me.bio}</p>
 
         <div className="mt-2 flex flex-wrap gap-1">

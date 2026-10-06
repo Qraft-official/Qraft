@@ -2,6 +2,7 @@ import { CONTACT_EMAIL } from "@/lib/constants";
 import Link from "next/link";
 
 const LINKS = [
+  { href: "/blog", label: "Qraftコラム" },
   { href: "/about", label: "Qraftについて" },
   { href: "/contact", label: "お問い合わせ" },
   { href: "/terms", label: "利用規約" },

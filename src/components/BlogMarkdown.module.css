@@ -1,0 +1,19 @@
+.prose { color: #cfd6de; font-size: 1rem; line-height: 1.95; overflow-wrap: anywhere; }
+.prose h2 { margin: 2.5rem 0 1rem; color: white; font-size: 1.4rem; font-weight: 800; line-height: 1.5; }
+.prose h3 { margin: 2rem 0 .75rem; color: white; font-size: 1.15rem; font-weight: 700; line-height: 1.6; }
+.prose p { margin: 1.25rem 0; }
+.prose ul, .prose ol { margin: 1.25rem 0; padding-left: 1.6rem; }
+.prose ul { list-style: disc; }
+.prose ol { list-style: decimal; }
+.prose li { margin: .5rem 0; }
+.prose blockquote { margin: 1.5rem 0; border-left: 3px solid #ccff00; padding: .1rem 1rem; background: #ffffff05; }
+.prose strong { color: white; font-weight: 700; }
+.prose a { color: #38bdf8; text-decoration: underline; text-underline-offset: .2em; }
+.prose a:focus-visible { outline: 2px solid #ccff00; outline-offset: 4px; }
+.prose code { border-radius: .25rem; background: #ffffff0d; padding: .15rem .3rem; font-size: .9em; }
+.prose pre { margin: 1.5rem 0; max-width: 100%; overflow-x: auto; border: 1px solid #1f2937; border-radius: .75rem; background: #0b1220; padding: 1rem; line-height: 1.7; }
+.prose pre code { background: transparent; padding: 0; }
+.prose hr { margin: 2rem 0; border-color: #1f2937; }
+.prose img { max-width: 100%; height: auto; border-radius: .75rem; }
+.prose :global(.katex-display) { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: .5rem 0; }
+@media (min-width: 640px) { .prose { font-size: 1.0625rem; } }

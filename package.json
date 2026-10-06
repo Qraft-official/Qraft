@@ -16,16 +16,23 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
     "framer-motion": "^13.1.1",
+    "gray-matter": "^4.0.3",
     "html-to-image": "^1.11.13",
-    "katex": "^0.18.4",
+    "katex": "0.18.4",
     "lucide-react": "^1.37.0",
     "mathlive": "^0.110.0",
     "next": "16.3.3",
     "nodemailer": "^9.1.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.10.1",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0",
     "stripe": "^22.6.0"
+  },
+  "overrides": {
+    "katex": "$katex"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

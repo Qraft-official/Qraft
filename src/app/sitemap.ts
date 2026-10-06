@@ -1,4 +1,5 @@
 import { CANONICAL_ORIGIN } from "@/lib/constants";
+import { getBlogArticles } from "@/lib/blog";
 import { fetchPublicProblemIdsForSitemap } from "@/lib/public-catalog";
 import type { MetadataRoute } from "next";
 
@@ -8,6 +9,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const problems = await fetchPublicProblemIdsForSitemap(80);
   const lastMod = new Date();
   return [
+    { url: `${CANONICAL_ORIGIN}/blog`, changeFrequency: "weekly", priority: 0.6 },
+    ...getBlogArticles().map((article) => ({
+      url: `${CANONICAL_ORIGIN}/blog/${article.slug}`,
+      lastModified: article.updatedAt ?? article.publishedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    })),
     {
       url: CANONICAL_ORIGIN,
       lastModified: lastMod,

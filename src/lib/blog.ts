@@ -30,7 +30,7 @@ export function getBlogArticles(): BlogArticle[] {
     const source = readFileSync(join(directory, file), "utf8");
     if (!/^---\r?\n/.test(source)) throw new Error(`${file}: YAML front matter must start with ---`);
     const { data, content } = matter(source);
-    for (const field of ["title", "slug", "description"]) {
+    for (const field of ["title", "slug", "description", "category"]) {
       if (typeof data[field] !== "string" || !data[field].trim()) throw new Error(`${file}: missing ${field}`);
     }
     const slug = data.slug as string;
@@ -42,10 +42,7 @@ export function getBlogArticles(): BlogArticle[] {
     const publishedAt = date(data.publishedAt, "publishedAt", file);
     const updatedAt = data.updatedAt === undefined ? undefined : date(data.updatedAt, "updatedAt", file);
     if (updatedAt && updatedAt < publishedAt) throw new Error(`${file}: updatedAt precedes publishedAt`);
-    if (data.category !== undefined && (typeof data.category !== "string" || !data.category.trim())) {
-      throw new Error(`${file}: invalid category`);
-    }
-    return { title: data.title.trim(), slug, description: data.description.trim(), publishedAt, updatedAt, category: data.category, content };
+    return { title: data.title.trim(), slug, description: data.description.trim(), publishedAt, updatedAt, category: (data.category as string).trim(), content };
   }).sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || a.slug.localeCompare(b.slug));
 }
 

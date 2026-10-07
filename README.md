@@ -14,7 +14,7 @@ category: "考え方"
 ---
 ```
 
-- `title`、`slug`、`description`、`publishedAt`、空でない本文が必須。`category` と `updatedAt` は任意です。日付は実際の公開・更新日を引用符付きの `YYYY-MM-DD` で書きます。
+- `title`、`slug`、`description`、`publishedAt`、`category`、空でない本文が必須。`updatedAt` は任意です。日付は実際の公開・更新日を引用符付きの `YYYY-MM-DD` で書きます。
 - slugは半角英小文字・数字・区切りのハイフンを使用し、ファイル名と一致させます。URLは `/blog/<slug>`。公開後のslug変更は既存リンクに影響します。
 - 本文は通常のMarkdown。見出しは `##` / `###` を使い、段落、箇条書き、番号付きリスト、引用、太字、インラインコード、コードブロック、リンクが使えます。数式は `$...$`、独立した数式は別行の `$$` で囲みます。
 - HTML・JavaScript・MDXは実行しません。数式は既存のKaTeX/CSSを使用し、危険なリンク・数式コマンドを許可しません。

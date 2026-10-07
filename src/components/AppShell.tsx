@@ -10,6 +10,7 @@ import { rememberPremiumReturnPath } from "@/lib/premium-navigation";
 import { isPublicBrowsePath } from "@/lib/public-routes";
 import { AppBootSkeleton } from "@/components/UiStates";
 import { PublicSiteFooter } from "@/components/PublicSiteFooter";
+import { PublicResourceNav } from "@/components/PublicResourceNav";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -40,7 +41,7 @@ const FocusBgm = dynamic(
   { ssr: false },
 );
 
-function PublicChrome({ children }: { children: React.ReactNode }) {
+function PublicChrome({ children, showResourceNav }: { children: React.ReactNode; showResourceNav: boolean }) {
   return (
     <div className="mx-auto min-h-dvh w-full max-w-lg overflow-x-hidden bg-black text-[#e7e9ea] md:max-w-2xl lg:max-w-4xl">
       <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-gray-800 bg-black/80 px-4 py-3 backdrop-blur">
@@ -62,6 +63,7 @@ function PublicChrome({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
       </header>
+      {showResourceNav ? <PublicResourceNav /> : null}
       {children}
       <PublicSiteFooter />
     </div>
@@ -145,7 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return (
         <>
           {capture}
-          <PublicChrome>{children}</PublicChrome>
+          <PublicChrome showResourceNav={path === "/" || path === "/discover"}>{children}</PublicChrome>
         </>
       );
     }
@@ -164,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return (
         <>
           {capture}
-          <PublicChrome>{children}</PublicChrome>
+          <PublicChrome showResourceNav={path === "/" || path === "/discover"}>{children}</PublicChrome>
         </>
       );
     }

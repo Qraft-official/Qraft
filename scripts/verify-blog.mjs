@@ -5,7 +5,11 @@ import { isIndexablePublicPath, isNoIndexPath, isPublicBrowsePath } from "../src
 
 const origin = process.argv[2] ?? "http://127.0.0.1:3100";
 const articles = getBlogArticles();
-assert.ok(articles.length > 0);
+assert.equal(articles.length, 15, "published article count");
+assert.equal(new Set(articles.map((article) => article.slug)).size, 15, "unique article slugs");
+for (const article of articles) {
+  assert.ok(article.title && article.description && article.publishedAt && article.category && article.content.trim());
+}
 assert.equal(getBlogArticle("../../.env.local"), undefined);
 assert.equal(isIndexablePublicPath("/blogger"), false);
 assert.equal(isIndexablePublicPath("/blog/a/b"), false);
@@ -35,12 +39,14 @@ async function page(path) {
   assert.match(html, /<meta name="description"/);
   assert.doesNotMatch(html, /<meta name="robots" content="[^"]*noindex/);
   assert.match(html, /<meta property="og:title"/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/qrafters.jp\/blog/);
+  const canonical = path === "/" ? "https://qrafters.jp" : `https://qrafters.jp${path}`;
+  assert.ok(html.includes(`<link rel="canonical" href="${canonical}"`), `${path}: canonical`);
   return { html, visible };
 }
 
 const list = await page("/blog");
 assert.match(list.visible, /<h1[^>]*>Qraftコラム<\/h1>/);
+assert.equal((list.visible.match(/aria-label="[^"]+を続きを読む"/g) ?? []).length, 15);
 for (const article of articles) {
   assert.ok(list.visible.includes(`href="/blog/${article.slug}"`));
   const { html, visible } = await page(`/blog/${article.slug}`);
@@ -60,7 +66,16 @@ await read("/blog/this-article-does-not-exist", 404);
 const sitemap = await read("/sitemap.xml");
 assert.ok(sitemap.includes("https://qrafters.jp/blog</loc>"));
 for (const article of articles) assert.ok(sitemap.includes(`https://qrafters.jp/blog/${article.slug}</loc>`));
+assert.equal((sitemap.match(/<loc>https:\/\/qrafters\.jp\/blog\/[^<]+<\/loc>/g) ?? []).length, 15);
 assert.ok(sitemap.includes("https://qrafters.jp/about</loc>"));
 const robots = await read("/robots.txt");
 assert.match(robots, /Allow: \/blog/);
+const home = await page("/");
+assert.match(home.visible, /href="\/blog"[^>]*>[\s\S]*?Qraftコラムを見る/);
+assert.match(home.visible, /href="\/terms"[^>]*>[\s\S]*?利用規約を見る/);
+assert.match(home.visible, /href="\/privacy"[^>]*>[\s\S]*?プライバシーポリシーを見る/);
+const discover = await page("/discover");
+assert.match(discover.visible, /Qraftコラムを見る/);
+assert.match(discover.visible, /利用規約を見る/);
+assert.match(discover.visible, /プライバシーポリシーを見る/);
 console.log(`PASS: ${articles.length} article(s), guest HTML, math, metadata, JSON-LD, footer, 404, sitemap, robots and route boundaries`);

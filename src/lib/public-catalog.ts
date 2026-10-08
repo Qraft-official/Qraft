@@ -7,6 +7,7 @@ import { sanitizeHints } from "@/lib/learn";
 import { asProblemAnswerType, sanitizeAnswerOptions, type AnswerOption, type ProblemAnswerType } from "@/lib/problem-answer";
 import { rankRelatedProblems, type RelatedProblemCard } from "@/lib/related-problems";
 import type { NotePage, Subject } from "@/lib/types";
+import { getOfficialProblemPreview, getOfficialProblemPreviews } from "@/lib/official-problems";
 
 /**
  * Safe public columns only.
@@ -45,6 +46,9 @@ export type PublicProblemPreview = {
   isSprint: boolean;
   hints?: string[];
   explanation?: string;
+  imageAlt?: string;
+  isOfficial?: boolean;
+  officialSourceId?: string;
 };
 
 type PublicProblemRow = {
@@ -175,6 +179,11 @@ export async function fetchPublicProblemPreviews(
 }
 
 export async function fetchPublicProblemPreview(id: string): Promise<PublicProblemPreview | null> {
+  const official = getOfficialProblemPreview(id);
+  if (official) return official;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    return null;
+  }
   const supabase = createPublicSupabase();
   if (!supabase || !id) return null;
   const primary = await supabase
@@ -221,7 +230,10 @@ export async function fetchRelatedPublicProblems(
   current: PublicProblemPreview,
   limit = PUBLIC_RELATED_LIMIT,
 ): Promise<RelatedProblemCard[]> {
-  const pool = await fetchPublicProblemPreviews(80);
+  const databaseRows = await fetchPublicProblemPreviews(80);
+  const pool = [...getOfficialProblemPreviews(), ...databaseRows].filter(
+    (row, index, rows) => rows.findIndex((candidate) => candidate.id === row.id) === index,
+  );
   const cards: RelatedProblemCard[] = pool.map((row) => ({
     id: row.id,
     title: row.title.trim() || "問題",
@@ -249,6 +261,13 @@ export async function fetchRelatedPublicProblems(
 export async function fetchPublicProblemIdsForSitemap(
   limit = 80,
 ): Promise<{ id: string; createdAt: string }[]> {
-  const rows = await fetchPublicProblemPreviews(limit);
+  const databaseRows = await fetchPublicProblemPreviews(limit);
+  const rows = [...getOfficialProblemPreviews(), ...databaseRows].filter(
+    (row, index, allRows) => allRows.findIndex((candidate) => candidate.id === row.id) === index,
+  );
   return rows.map((row) => ({ id: row.id, createdAt: row.createdAt }));
+}
+
+export function fetchOfficialProblemPreviews() {
+  return getOfficialProblemPreviews();
 }

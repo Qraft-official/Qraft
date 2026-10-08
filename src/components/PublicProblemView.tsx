@@ -60,7 +60,9 @@ export function PublicProblemView({
           ← Discover
         </Link>
         <p className="mt-3 text-sm leading-relaxed text-[#c5cdd6]">
-          まず自分で考えてから、ヒント・解説・他の人の解法へ進む学習ページです。答えは最初から開きません。
+          {preview.isOfficial
+            ? "Qraftが選んだ公式問題です。まず自分で考え、答え合わせのあとに解説を確かめてみてください。"
+            : "まず自分で考えてから、ヒント・解説・他の人の解法へ進む学習ページです。答えは最初から開きません。"}
         </p>
       </div>
       <PublicProblemCard preview={preview} />
@@ -80,12 +82,21 @@ export function PublicProblemView({
           />
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <Link
-            href={`/login?next=/p/${encodeURIComponent(preview.id)}`}
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-aha px-5 text-sm font-black text-black"
-          >
-            ログインして解答する
-          </Link>
+          {preview.isOfficial ? (
+            <Link
+              href="/signup"
+              className="inline-flex min-h-11 items-center justify-center rounded-full bg-aha px-5 text-sm font-black text-black"
+            >
+              Qraftを始める
+            </Link>
+          ) : (
+            <Link
+              href={`/login?next=/p/${encodeURIComponent(preview.id)}`}
+              className="inline-flex min-h-11 items-center justify-center rounded-full bg-aha px-5 text-sm font-black text-black"
+            >
+              ログインして解答する
+            </Link>
+          )}
           <Link
             href="/discover"
             className="inline-flex min-h-11 items-center justify-center rounded-full border border-gray-700 px-5 text-sm font-bold"

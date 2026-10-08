@@ -3,6 +3,7 @@ import { PublicProblemView } from "@/components/PublicProblemView";
 import { CANONICAL_ORIGIN } from "@/lib/constants";
 import { fetchPublicProblemPreview, fetchRelatedPublicProblems } from "@/lib/public-catalog";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -38,9 +39,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PostPage({ params }: Props) {
   const { id } = await params;
   const preview = await fetchPublicProblemPreview(id);
-  const related = preview ? await fetchRelatedPublicProblems(preview, 5) : [];
+  if (!preview) notFound();
+  const related = await fetchRelatedPublicProblems(preview, 5);
   return (
-    <ProblemGate>
+    <ProblemGate forcePublic={preview.isOfficial}>
       <PublicProblemView preview={preview} related={related} />
     </ProblemGate>
   );

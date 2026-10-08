@@ -1,7 +1,7 @@
 import { DiscoverGate } from "@/components/DiscoverGate";
 import { PublicDiscover } from "@/components/PublicDiscover";
 import { CANONICAL_ORIGIN } from "@/lib/constants";
-import { fetchPublicProblemPreviews, PUBLIC_DISCOVER_LIMIT } from "@/lib/public-catalog";
+import { fetchOfficialProblemPreviews, fetchPublicProblemPreviews, PUBLIC_DISCOVER_LIMIT } from "@/lib/public-catalog";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +24,13 @@ export const metadata: Metadata = {
 };
 
 export default async function DiscoverPage() {
-  const problems = await fetchPublicProblemPreviews(PUBLIC_DISCOVER_LIMIT);
+  const [officialProblems, problems] = await Promise.all([
+    fetchOfficialProblemPreviews(),
+    fetchPublicProblemPreviews(PUBLIC_DISCOVER_LIMIT),
+  ]);
   return (
     <DiscoverGate>
-      <PublicDiscover problems={problems} />
+      <PublicDiscover officialProblems={officialProblems} problems={problems} />
     </DiscoverGate>
   );
 }

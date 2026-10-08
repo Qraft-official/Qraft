@@ -2,6 +2,7 @@ import { userFromRequest, clip } from "@/lib/api-auth";
 import { adminSupabase } from "@/lib/admin-supabase";
 import { gradeProblemAnswerRecord, type ProblemGradeRecord } from "@/lib/problem-grading";
 import { NextResponse } from "next/server";
+import { gradeOfficialProblem } from "@/lib/official-problem-grading";
 
 export const runtime = "nodejs";
 
@@ -22,11 +23,6 @@ function gradePayload(data: GradeRow, answer: string) {
 }
 
 export async function POST(request: Request) {
-  const user = await userFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ error: "ログインしてください" }, { status: 401 });
-  }
-
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -41,6 +37,14 @@ export async function POST(request: Request) {
   }
   if (!answer.trim()) {
     return NextResponse.json({ error: "答えを入力してください" }, { status: 400 });
+  }
+
+  const officialGrade = gradeOfficialProblem(problemId, answer);
+  if (officialGrade) return NextResponse.json(officialGrade);
+
+  const user = await userFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: "ログインしてください" }, { status: 401 });
   }
 
   const admin = adminSupabase();

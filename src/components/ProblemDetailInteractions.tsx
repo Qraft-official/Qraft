@@ -3,6 +3,7 @@
 import { ProblemAnswerBox } from "@/components/ProblemAnswerBox";
 import { ProblemSetAddButton } from "@/components/ProblemSetAddButton";
 import { WrittenAnswerBox } from "@/components/WrittenAnswerBox";
+import { OfficialProblemAnswerBox } from "@/components/OfficialProblemAnswerBox";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/store";
 import type { Post } from "@/lib/types";
@@ -14,7 +15,7 @@ export function ProblemDetailInteractions({ preview }: { preview: PublicProblemP
   const [authorId, setAuthorId] = useState("");
 
   useEffect(() => {
-    if (!authenticated || preview.isSprint) return;
+    if (!authenticated || preview.isSprint || preview.isOfficial) return;
     let cancelled = false;
     void supabase
       .from("problems")
@@ -25,8 +26,15 @@ export function ProblemDetailInteractions({ preview }: { preview: PublicProblemP
         if (!cancelled) setAuthorId(typeof data?.author_id === "string" ? data.author_id : "");
       });
     return () => { cancelled = true; };
-  }, [authenticated, preview.id, preview.isSprint]);
+  }, [authenticated, preview.id, preview.isOfficial, preview.isSprint]);
 
+  if (preview.isOfficial) {
+    return (
+      <section className="border-b border-gray-800 px-4 py-4">
+        <OfficialProblemAnswerBox problemId={preview.id} answerUnit={preview.answerUnit} />
+      </section>
+    );
+  }
   if (!authenticated || preview.isSprint || !authorId) return null;
   const post: Post = {
     id: preview.id,

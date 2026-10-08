@@ -1,0 +1,167 @@
+[
+  {
+    "id": "grid-shortest-routes",
+    "correctAnswer": "20",
+    "acceptedAnswers": [],
+    "answerUnit": null
+  },
+  {
+    "id": "reverse-three-digit-number",
+    "correctAnswer": "643",
+    "acceptedAnswers": [],
+    "answerUnit": null
+  },
+  {
+    "id": "square-difference-sequence",
+    "correctAnswer": "56",
+    "acceptedAnswers": [],
+    "answerUnit": null
+  },
+  {
+    "id": "triangles-on-six-points",
+    "correctAnswer": "20",
+    "acceptedAnswers": [],
+    "answerUnit": null
+  },
+  {
+    "id": "midpoints-triangle-area",
+    "correctAnswer": "24",
+    "acceptedAnswers": [],
+    "answerUnit": "cm\u00b2"
+  },
+  {
+    "id": "fixed-base-moving-point-area",
+    "correctAnswer": "48",
+    "acceptedAnswers": [],
+    "answerUnit": "cm\u00b2"
+  },
+  {
+    "id": "rectangles-in-two-by-three-grid",
+    "correctAnswer": "18",
+    "acceptedAnswers": [],
+    "answerUnit": "\u500b"
+  },
+  {
+    "id": "count-digit-seven",
+    "correctAnswer": "20",
+    "acceptedAnswers": [],
+    "answerUnit": "\u56de"
+  },
+  {
+    "id": "cube-net-opposite-face",
+    "correctAnswer": "E",
+    "acceptedAnswers": [],
+    "answerUnit": null
+  },
+  {
+    "id": "isosceles-inner-segment-angle",
+    "correctAnswer": "40",
+    "acceptedAnswers": [],
+    "answerUnit": "\u00b0"
+  },
+  {
+    "id": "not-multiple-three-five",
+    "correctAnswer": "53",
+    "acceptedAnswers": [],
+    "answerUnit": "\u500b"
+  },
+  {
+    "id": "arrange-five-nonadjacent",
+    "correctAnswer": "72",
+    "acceptedAnswers": [],
+    "answerUnit": "\u901a\u308a"
+  },
+  {
+    "id": "three-digit-even-without-repeat",
+    "correctAnswer": "24",
+    "acceptedAnswers": [],
+    "answerUnit": "\u500b"
+  },
+  {
+    "id": "toggle-lamps-perfect-squares",
+    "correctAnswer": "10",
+    "acceptedAnswers": [],
+    "answerUnit": "\u500b"
+  },
+  {
+    "id": "nine-coins-two-weighings",
+    "correctAnswer": "2",
+    "acceptedAnswers": [],
+    "answerUnit": "\u56de"
+  },
+  {
+    "id": "one-less-than-lcm",
+    "correctAnswer": "59",
+    "acceptedAnswers": [],
+    "answerUnit": null
+  },
+  {
+    "id": "missing-score-from-average",
+    "correctAnswer": "53",
+    "acceptedAnswers": [],
+    "answerUnit": "\u70b9"
+  },
+  {
+    "id": "three-people-truth-liar",
+    "correctAnswer": "B",
+    "acceptedAnswers": [
+      "b",
+      "B\u3060\u3051",
+      "b\u3060\u3051"
+    ],
+    "answerUnit": null
+  },
+  {
+    "id": "choose-two-different-row-column",
+    "correctAnswer": "72",
+    "acceptedAnswers": [],
+    "answerUnit": "\u901a\u308a"
+  },
+  {
+    "id": "clock-angle-three-twenty",
+    "correctAnswer": "20",
+    "acceptedAnswers": [],
+    "answerUnit": "\u00b0"
+  },
+  {
+    "id": "painted-cube-two-faces",
+    "correctAnswer": "12",
+    "acceptedAnswers": [],
+    "answerUnit": "\u500b"
+  },
+  {
+    "id": "grid-path-avoid-center",
+    "correctAnswer": "34",
+    "acceptedAnswers": [],
+    "answerUnit": "\u901a\u308a"
+  },
+  {
+    "id": "odd-cycle-two-coloring",
+    "correctAnswer": "\u4e0d\u53ef\u80fd",
+    "acceptedAnswers": [
+      "\u3067\u304d\u306a\u3044",
+      "\u4e0d\u53ef",
+      "no"
+    ],
+    "answerUnit": null
+  },
+  {
+    "id": "make-twenty-four-four-cards",
+    "correctAnswer": "24",
+    "acceptedAnswers": [
+      "6/(1-3/4)",
+      "6\u00f7(1-3/4)",
+      "6/(1\u22123/4)"
+    ],
+    "answerUnit": null
+  },
+  {
+    "id": "move-one-matchstick-equation",
+    "correctAnswer": "9-3=6",
+    "acceptedAnswers": [
+      "9\u22123=6",
+      "9 - 3 = 6"
+    ],
+    "answerUnit": null
+  }
+]

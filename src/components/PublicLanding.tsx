@@ -1,8 +1,15 @@
 import { PublicProblemFeed } from "@/components/PublicProblemFeed";
+import { OfficialProblemCollection } from "@/components/OfficialProblemCollection";
 import type { PublicProblemPreview } from "@/lib/public-catalog";
 import Link from "next/link";
 
-export function PublicLanding({ problems }: { problems: PublicProblemPreview[] }) {
+export function PublicLanding({
+  officialProblems,
+  problems,
+}: {
+  officialProblems: PublicProblemPreview[];
+  problems: PublicProblemPreview[];
+}) {
   return (
     <main className="min-w-0 max-w-full overflow-x-hidden pb-10">
       <section className="border-b border-gray-800 px-4 py-8">
@@ -14,6 +21,8 @@ export function PublicLanding({ problems }: { problems: PublicProblemPreview[] }
           Qraftは、数学・物理・化学の面白い問題を見つけ、自分で解き、みんなの結果や解法を楽しむための場所です。タイムラインの感想ではなく、問題そのものが主役です。
         </p>
       </section>
+
+      <OfficialProblemCollection problems={officialProblems} />
 
       <section className="border-b border-gray-800 px-4 py-6">
         <h2 className="text-lg font-black">Qraftとは</h2>
@@ -55,7 +64,7 @@ export function PublicLanding({ problems }: { problems: PublicProblemPreview[] }
 
       <section className="px-4 pt-6">
         <div className="flex items-end justify-between gap-3">
-          <h2 className="text-lg font-black">公開中の問題</h2>
+          <h2 className="text-lg font-black">みんなの公開問題</h2>
           <Link href="/discover" className="text-sm font-bold text-sky-400">
             Discoverへ
           </Link>

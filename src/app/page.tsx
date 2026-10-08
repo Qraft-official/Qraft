@@ -1,7 +1,7 @@
 import { HomeGate } from "@/components/HomeGate";
 import { PublicLanding } from "@/components/PublicLanding";
 import { CANONICAL_ORIGIN, SITE_DESCRIPTION, SITE_TITLE } from "@/lib/constants";
-import { fetchPublicProblemPreviews, PUBLIC_HOME_LIMIT } from "@/lib/public-catalog";
+import { fetchOfficialProblemPreviews, fetchPublicProblemPreviews, PUBLIC_HOME_LIMIT } from "@/lib/public-catalog";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +22,13 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const problems = await fetchPublicProblemPreviews(PUBLIC_HOME_LIMIT);
+  const [officialProblems, problems] = await Promise.all([
+    fetchOfficialProblemPreviews(),
+    fetchPublicProblemPreviews(PUBLIC_HOME_LIMIT),
+  ]);
   return (
     <HomeGate>
-      <PublicLanding problems={problems} />
+      <PublicLanding officialProblems={officialProblems} problems={problems} />
     </HomeGate>
   );
 }

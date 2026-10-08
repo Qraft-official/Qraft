@@ -31,6 +31,11 @@ export function PublicProblemCard({
   return (
     <article className="min-w-0 max-w-full overflow-x-hidden border-b border-gray-800 px-4 py-4">
       <header className="flex min-w-0 flex-wrap items-center gap-1.5">
+        {preview.isOfficial ? (
+          <span className="rounded-full border border-aha/50 bg-aha/10 px-2 py-0.5 text-[10px] font-black text-aha">
+            Qraft公式厳選
+          </span>
+        ) : null}
         <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300">
           {SUBJECT_LABEL[preview.subject]}
         </span>
@@ -46,18 +51,21 @@ export function PublicProblemCard({
           {modeLabel(preview)}
         </span>
       </header>
+      {preview.isOfficial ? (
+        <p className="mt-2 text-xs font-bold text-[#c5cdd6]">Qraft <span className="text-muted">@qraft</span></p>
+      ) : null}
       <h2 className="mt-2 max-w-full break-words text-base font-black text-white">{title}</h2>
       {body ? (
         <div className="mt-2 min-w-0 max-w-full overflow-x-hidden text-sm leading-relaxed text-[#e7e9ea]">
           <LatexText text={body} />
         </div>
       ) : null}
-      {!compact && preview.photo && isDisplayImageSrc(preview.photo) ? (
+      {preview.photo && isDisplayImageSrc(preview.photo) && (!compact || preview.isOfficial) ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={preview.photo}
-          alt=""
-          className="mt-3 max-h-72 w-full max-w-full rounded-2xl object-contain"
+          alt={preview.imageAlt ?? ""}
+          className={`mt-3 w-full max-w-full rounded-2xl border border-gray-800 bg-[#0b1220] object-contain ${compact ? "max-h-56" : "max-h-80"}`}
         />
       ) : null}
       {!compact && preview.pages?.length ? (

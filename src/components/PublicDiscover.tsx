@@ -1,8 +1,15 @@
 import { PublicProblemFeed } from "@/components/PublicProblemFeed";
+import { OfficialProblemCollection } from "@/components/OfficialProblemCollection";
 import type { PublicProblemPreview } from "@/lib/public-catalog";
 import Link from "next/link";
 
-export function PublicDiscover({ problems }: { problems: PublicProblemPreview[] }) {
+export function PublicDiscover({
+  officialProblems,
+  problems,
+}: {
+  officialProblems: PublicProblemPreview[];
+  problems: PublicProblemPreview[];
+}) {
   return (
     <main className="min-w-0 max-w-full overflow-x-hidden pb-10">
       <header className="border-b border-gray-800 px-4 py-5">
@@ -12,6 +19,11 @@ export function PublicDiscover({ problems }: { problems: PublicProblemPreview[] 
           ひらめきを競う問題SNSの公開フィードです。数学・物理・化学の問題を見つけ、自分で解き、みんなの結果や解法を楽しめます。未ログインでも問題文を読めます。解く・保存・フォロー・リアクションにはログインが必要です。
         </p>
       </header>
+      <OfficialProblemCollection problems={officialProblems} />
+      <section className="border-b border-gray-800 px-4 py-5">
+        <h2 className="text-lg font-black text-white">みんなの公開問題</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted">Qraftに投稿された公開問題です。</p>
+      </section>
       {problems.length === 0 ? (
         <section className="px-4 py-8" aria-label="公開問題はありません">
           <p className="text-sm font-bold text-white">いま表示できる公開問題はありません</p>
